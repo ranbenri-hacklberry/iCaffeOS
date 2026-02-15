@@ -1,0 +1,88 @@
+
+import { createClient } from '@supabase/supabase-js';
+
+// Cloud Credentials
+const SUPABASE_URL = 'https://gxzsxvbercpkgxraiaex.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4enN4dmJlcmNwa2d4cmFpYWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NjMyNzAsImV4cCI6MjA3NzEzOTI3MH0.6sJ7PJ2imo9-mzuYdqRlhQty7PCQAzpSKfcQ5ve571g';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// List of Order IDs identified as missing transactions (from your previous check)
+const ORDERS_TO_FIX = [
+    "ac1b6476-30bb-4ce4-93b8-d147914886f3", // Maya 26/01
+    "e5402467-da03-4d95-a790-5d5c81ff4b3c", // Amit 25/01
+    "74dca79f-44c5-4d55-879f-179b5bc77eeb", // Amit 25/01
+    "497070a1-1824-4355-b34d-471b16b0bcea", // Maya 23/01
+    "913a88aa-193c-4e5c-9af8-764ef24cc14d", // Maya 22/01
+    "d15450bd-e035-4d66-bab5-067a148cea16", // Maya 22/01
+    "63d73da7-9e7f-47cd-9628-035ae7eb7f5f", // Maya 20/01
+    "e781a196-a7f7-4b0a-93c8-8df9da50a55e", // Maya 20/01
+    "0461226b-61e4-4d43-9468-f12fe1e56b23", // Maya 20/01
+    "9cf04246-0a8c-4a62-babf-6fcc63995aa4", // Maya 20/01
+    "043a9b1f-d563-42c3-a7d7-fe86a9a2919a", // Maya 20/01
+    "fd48e6a9-bd79-4703-a601-82f40608b5a8", // Maya 19/01
+    "6e87489b-3966-4cd3-bc78-59b12ab85a24"  // Maya 19/01
+];
+
+async function fixLoyalty() {
+    console.log(`🔧 Starting Fix for ${ORDERS_TO_FIX.length} orders...`);
+
+    for (const orderId of ORDERS_TO_FIX) {
+        // 1. Fetch Order Details to get phone and items count
+        const { data: order, error: orderErr } = await supabase
+            .from('orders')
+            .select('*') // Need all fields to be safe, specifically customer_phone and items count logic
+            .eq('id', orderId)
+            .single();
+
+        if (orderErr) {
+            console.error(`❌ Could not fetch order ${orderId}:`, orderErr.message);
+            continue;
+        }
+
+        if (!order.customer_phone) {
+            console.warn(`⚠️ Order ${orderId} has no phone. Skipping.`);
+            continue;
+        }
+
+        // Calculate items count manually from order_items
+        // (Assuming 1 coffee = 1 point roughly, but let's be accurate)
+        const { count: itemsCount, error: countErr } = await supabase
+            .from('order_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('order_id', orderId)
+            .neq('item_status', 'cancelled'); // Don't count cancelled items
+
+        if (countErr) {
+            console.error(`❌ Could not count items for ${orderId}:`, countErr.message);
+            continue;
+        }
+
+        const pointsToAdd = itemsCount || 1; // Default to 1 if count fails or is 0 (unlikely for valid order)
+
+        console.log(`Processing Order ${orderId.slice(0, 8)}...`);
+        console.log(`   Customer: ${order.customer_name} (${order.customer_phone})`);
+        console.log(`   Points to add: ${pointsToAdd}`);
+
+        // 2. Call the Safe RPC to add points
+        // It has internal check to prevent duplicates (Idempotency)
+        const { data: result, error: rpcErr } = await supabase.rpc('handle_loyalty_purchase', {
+            p_phone: order.customer_phone,
+            p_order_id: orderId,
+            p_items_count: pointsToAdd
+        });
+
+        if (rpcErr) {
+            console.error(`   ❌ RPC Failed:`, rpcErr.message);
+        } else {
+            console.log(`   ✅ Success! Messages:`, result);
+        }
+
+        // Small delay to be gentle on DB
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    console.log('🏁 Batch Fix Complete.');
+}
+
+fixLoyalty();

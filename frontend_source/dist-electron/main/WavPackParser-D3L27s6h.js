@@ -1,0 +1,154 @@
+import { f as l, d as D, j as I, F as u, B as f, H as z, c as B, M as S, b as d, C as w, m as x } from "./index-CfVcE9IC.js";
+import "electron";
+import "path";
+import "fs";
+import "child_process";
+import "net";
+import "url";
+import "crypto";
+import "fs/promises";
+import "zlib";
+import "stream/promises";
+import "stream";
+import "node:fs/promises";
+import "tty";
+import "util";
+import "os";
+const P = [
+  6e3,
+  8e3,
+  9600,
+  11025,
+  12e3,
+  16e3,
+  22050,
+  24e3,
+  32e3,
+  44100,
+  48e3,
+  64e3,
+  88200,
+  96e3,
+  192e3,
+  -1
+], c = {
+  len: 32,
+  get: (e, a) => {
+    const t = l.get(e, a + 24), i = {
+      // should equal 'wvpk'
+      BlockID: u.get(e, a),
+      //  0x402 to 0x410 are valid for decode
+      blockSize: l.get(e, a + 4),
+      //  0x402 (1026) to 0x410 are valid for decode
+      version: I.get(e, a + 8),
+      //  40-bit total samples for entire file (if block_index == 0 and a value of -1 indicates an unknown length)
+      totalSamples: (
+        /* replace with bigint? (Token.UINT8.get(buf, off + 11) << 32) + */
+        l.get(e, a + 12)
+      ),
+      // 40-bit block_index
+      blockIndex: (
+        /* replace with bigint? (Token.UINT8.get(buf, off + 10) << 32) + */
+        l.get(e, a + 16)
+      ),
+      // 40-bit total samples for entire file (if block_index == 0 and a value of -1 indicates an unknown length)
+      blockSamples: l.get(e, a + 20),
+      // various flags for id and decoding
+      flags: {
+        bitsPerSample: (1 + m(t, 0, 2)) * 8,
+        isMono: s(t, 2),
+        isHybrid: s(t, 3),
+        isJointStereo: s(t, 4),
+        crossChannel: s(t, 5),
+        hybridNoiseShaping: s(t, 6),
+        floatingPoint: s(t, 7),
+        samplingRate: P[m(t, 23, 4)],
+        isDSD: s(t, 31)
+      },
+      // crc for actual decoded data
+      crc: new D(4).get(e, a + 28)
+    };
+    return i.flags.isDSD && (i.totalSamples *= 8), i;
+  }
+}, k = {
+  len: 1,
+  get: (e, a) => ({
+    functionId: m(e[a], 0, 6),
+    // functionId overlaps with isOptional flag
+    isOptional: s(e[a], 5),
+    isOddSize: s(e[a], 6),
+    largeBlock: s(e[a], 7)
+  })
+};
+function s(e, a) {
+  return m(e, a, 1) === 1;
+}
+function m(e, a, t) {
+  return e >>> a & 4294967295 >>> 32 - t;
+}
+const n = B("music-metadata:parser:WavPack");
+class p extends x("WavPack") {
+}
+class N extends f {
+  constructor() {
+    super(...arguments), this.audioDataSize = 0;
+  }
+  async parse() {
+    return this.metadata.setAudioOnly(), this.audioDataSize = 0, await this.parseWavPackBlocks(), z(this.metadata, this.tokenizer, this.options);
+  }
+  async parseWavPackBlocks() {
+    do {
+      if (await this.tokenizer.peekToken(u) !== "wvpk")
+        break;
+      const t = await this.tokenizer.readToken(c);
+      if (t.BlockID !== "wvpk")
+        throw new p("Invalid WavPack Block-ID");
+      n(`WavPack header blockIndex=${t.blockIndex}, len=${c.len}`), t.blockIndex === 0 && !this.metadata.format.container && (this.metadata.setFormat("container", "WavPack"), this.metadata.setFormat("lossless", !t.flags.isHybrid), this.metadata.setFormat("bitsPerSample", t.flags.bitsPerSample), t.flags.isDSD || (this.metadata.setFormat("sampleRate", t.flags.samplingRate), this.metadata.setFormat("duration", t.totalSamples / t.flags.samplingRate)), this.metadata.setFormat("numberOfChannels", t.flags.isMono ? 1 : 2), this.metadata.setFormat("numberOfSamples", t.totalSamples), this.metadata.setFormat("codec", t.flags.isDSD ? "DSD" : "PCM"));
+      const i = t.blockSize - (c.len - 8);
+      await (t.blockIndex === 0 ? this.parseMetadataSubBlock(t, i) : this.tokenizer.ignore(i)), t.blockSamples > 0 && (this.audioDataSize += t.blockSize);
+    } while (!this.tokenizer.fileInfo.size || this.tokenizer.fileInfo.size - this.tokenizer.position >= c.len);
+    this.metadata.format.duration && this.metadata.setFormat("bitrate", this.audioDataSize * 8 / this.metadata.format.duration);
+  }
+  /**
+   * Ref: http://www.wavpack.com/WavPack5FileFormat.pdf, 3.0 Metadata Sub-blocks
+   * @param header Header
+   * @param remainingLength Remaining length
+   */
+  async parseMetadataSubBlock(a, t) {
+    let i = t;
+    for (; i > k.len; ) {
+      const o = await this.tokenizer.readToken(k), g = await this.tokenizer.readNumber(o.largeBlock ? S : d), r = new Uint8Array(g * 2 - (o.isOddSize ? 1 : 0));
+      switch (await this.tokenizer.readBuffer(r), n(`Metadata Sub-Blocks functionId=0x${o.functionId.toString(16)}, id.largeBlock=${o.largeBlock},data-size=${r.length}`), o.functionId) {
+        case 0:
+          break;
+        case 14: {
+          n("ID_DSD_BLOCK");
+          const b = 1 << d.get(r, 0), h = a.flags.samplingRate * b * 8;
+          if (!a.flags.isDSD)
+            throw new p("Only expect DSD block if DSD-flag is set");
+          this.metadata.setFormat("sampleRate", h), this.metadata.setFormat("duration", a.totalSamples / h);
+          break;
+        }
+        case 36:
+          n("ID_ALT_TRAILER: trailer for non-wav files");
+          break;
+        case 38:
+          this.metadata.setFormat("audioMD5", r);
+          break;
+        case 47:
+          n(`ID_BLOCK_CHECKSUM: checksum=${w(r)}`);
+          break;
+        default:
+          n(`Ignore unsupported meta-sub-block-id functionId=0x${o.functionId.toString(16)}`);
+          break;
+      }
+      i -= k.len + (o.largeBlock ? S.len : d.len) + g * 2, n(`remainingLength=${i}`), o.isOddSize && this.tokenizer.ignore(1);
+    }
+    if (i !== 0)
+      throw new p("metadata-sub-block should fit it remaining length");
+  }
+}
+export {
+  p as WavPackContentError,
+  N as WavPackParser
+};

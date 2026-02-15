@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - SUPABASE_URL=${VITE_SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${VITE_SUPABASE_ANON_KEY}
+      # Hybrid Mode Standartization
+      - LOCAL_SUPABASE_URL=http://supabase_kong_scarlet-zodiac:8000
+      - LOCAL_SUPABASE_SERVICE_KEY=${VITE_LOCAL_SERVICE_ROLE_KEY}
+      - IS_LOCAL_MODE=true
+      - BIOMETRIC_SCRAMBLE_KEY=${BIOMETRIC_SCRAMBLE_KEY}
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+    networks:
+      - default
+      - supabase
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "4028:4028"
+    environment:
+      - PORT=4028
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - default
+
+  frigate:
+    container_name: frigate
+    privileged: true
+    restart: unless-stopped
+    image: ghcr.io/blakeblackshear/frigate:stable
+    shm_size: "64mb"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./frigate.yml:/config/config.yml
+      - ./frigate_storage:/media/frigate
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "5050:5000"
+      - "8554:8554"
+      - "8555:8555"
+    networks:
+      - default
+
+networks:
+  default:
+    name: frontend_source_default
+  supabase:
+    external: true
+    name: supabase_network_scarlet-zodiac

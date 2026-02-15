@@ -1,0 +1,26 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, 'frontend_source/.env.local') });
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function checkAny() {
+    const { data: trans, error } = await supabase
+        .from('loyalty_transactions')
+        .select('created_at, points_earned, business_id')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+    if (error) { console.error(error); return; }
+    console.log('Recent loyalty transactions:', trans);
+}
+
+checkAny();

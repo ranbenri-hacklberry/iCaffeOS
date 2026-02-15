@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "dotenv": "^17.2.3",
+    "googleapis": "^144.0.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "scripts": {
+    "electron:dev": "electron ./n150-app/main.js"
+  },
+  "devDependencies": {
+    "electron": "^40.2.1"
+  }
+}

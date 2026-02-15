@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+docker-compose.yml
+Dockerfile*
+README*.md
+*.log
+encrypted_music_output
+remote_db_dump*.sql
+public/images/cache

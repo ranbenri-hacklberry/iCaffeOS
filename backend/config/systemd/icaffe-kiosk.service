@@ -1,0 +1,27 @@
+[Unit]
+Description=iCaffe Kiosk Interface
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+# Display configuration for HDMI-1 (Force 1080p)
+Environment=DISPLAY=:0
+ExecStartPre=/usr/bin/xrandr --newmode "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+ExecStartPre=/usr/bin/xrandr --addmode HDMI-1 "1920x1080_60.00"
+ExecStartPre=/usr/bin/xrandr --output HDMI-1 --mode "1920x1080_60.00"
+
+# Main Application
+# Using the start_kiosk script to handle cleanup and launching
+ExecStart=/bin/bash /Users/user/.gemini/antigravity/scratch/my_app/frontend_source/scripts/start_kiosk.sh
+
+Restart=always
+RestartSec=10
+User=user
+Group=user
+
+# Resource management
+CPUQuota=90%
+MemoryMax=8G
+
+[Install]
+WantedBy=graphical.target
