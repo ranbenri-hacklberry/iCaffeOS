@@ -1,0 +1,12 @@
+[Unit]
+Description=Rantunes mDNS Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/avahi-publish -s "rantunes" _http._tcp 8081
+Restart=always
+User=icaffe
+Group=icaffe
+
+[Install]
+WantedBy=multi-user.target

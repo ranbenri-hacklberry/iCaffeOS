@@ -1,0 +1,32 @@
+name: Sync to Grok Collection
+
+on:
+  push:
+    branches: [develop] # Trigger only on pushes to develop branch
+
+jobs:
+  sync_knowledge:
+    name: Sync Project Documentation to Grok
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run Sync Script
+        env:
+          # You need to add these to your GitHub Repository Secrets:
+          # Settings > Secrets and variables > Actions > New repository secret
+          GROK_MANAGEMENT_KEY: ${{ secrets.GROK_MANAGEMENT_KEY }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+        run: python scripts/sync_to_grok_collection.py

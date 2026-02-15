@@ -1,0 +1,25 @@
+mqtt:
+  enabled: false
+
+cameras:
+  esp32_cam:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: http://192.168.1.100/stream # REPLACE_WITH_ESP32_IP
+          roles:
+            - detect
+    detect:
+      enabled: true
+      width: 640
+      height: 480
+      fps: 5
+
+detectors:
+  ov:
+    type: cpu
+
+# Frigate 0.14+ config
+version: 0.16-0
+detect:
+  enabled: true

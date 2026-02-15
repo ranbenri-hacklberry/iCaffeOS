@@ -1,0 +1,96 @@
+{
+    "system_info": {
+        "project_name": "icaffeOS",
+        "base_path": "/home/icaffe/icaffeos",
+        "framework": "React + Vite",
+        "backend": "Node.js (Express)",
+        "database": "Supabase (Local Docker & Cloud Fallback)"
+    },
+    "environment_configuration": {
+        "env_files": [
+            {
+                "path": "/home/icaffe/icaffeos/.env",
+                "description": "Primary environment variables for local and backend configuration",
+                "variables": [
+                    "SUPABASE_URL",
+                    "SUPABASE_ANON_KEY",
+                    "SUPABASE_SERVICE_KEY",
+                    "LOCAL_SUPABASE_URL",
+                    "LOCAL_SUPABASE_SERVICE_KEY",
+                    "VITE_BACKEND_URL",
+                    "BUSINESS_ID"
+                ]
+            },
+            {
+                "path": "/home/icaffe/icaffeos/.env.local",
+                "description": "Local development overrides"
+            }
+        ]
+    },
+    "web_server_configuration": {
+        "vite_config": {
+            "path": "/home/icaffe/icaffeos/vite.config.mjs",
+            "port": 4028,
+            "proxy_target": "http://localhost:8081"
+        },
+        "backend_server": {
+            "path": "/home/icaffe/icaffeos/backend_server.js",
+            "port": 8081,
+            "description": "Main API server and request router"
+        },
+        "nginx_info": {
+            "description": "Integrated via Nginx Proxy Manager (Docker container)",
+            "dashboard_ports": [
+                80,
+                81,
+                443
+            ]
+        }
+    },
+    "superadmin_interface": {
+        "page_component": "/home/icaffe/icaffeos/src/pages/SuperAdmin.jsx",
+        "components_dir": "/home/icaffe/icaffeos/src/components/super-admin/",
+        "auth_mechanism": "Supabase Auth (implemented in FullAuthContext.jsx)",
+        "admin_routes": "/home/icaffe/icaffeos/backend/api/adminRoutes.js"
+    },
+    "kds_integration_points": {
+        "main_page": "/home/icaffe/icaffeos/src/pages/KDS.jsx",
+        "components": [
+            "/home/icaffe/icaffeos/src/components/KDS/KDSHeader.jsx",
+            "/home/icaffe/icaffeos/src/components/KDS/KDSOrderCard.jsx"
+        ],
+        "api_endpoints": [
+            "/api/admin/identity (Zero-Config discovery)",
+            "/health (System status check)"
+        ]
+    },
+    "directory_structure": {
+        "src": {
+            "components": "/home/icaffe/icaffeos/src/components/",
+            "pages": "/home/icaffe/icaffeos/src/pages/",
+            "services": "/home/icaffe/icaffeos/src/services/",
+            "context": "/home/icaffe/icaffeos/src/context/"
+        },
+        "backend": {
+            "api": "/home/icaffe/icaffeos/backend/api/",
+            "services": "/home/icaffe/icaffeos/backend/services/"
+        },
+        "public": "/home/icaffe/icaffeos/public/",
+        "scripts": "/home/icaffe/icaffeos/scripts/"
+    },
+    "supporting_files": {
+        "package_json": "/home/icaffe/icaffeos/package.json",
+        "main_entry": "/home/icaffe/icaffeos/src/main.jsx",
+        "app_base": "/home/icaffe/icaffeos/src/App.jsx",
+        "health_script": "/home/icaffe/icaffeos/verify_system.sh",
+        "systemd_services": [
+            "/home/icaffe/icaffeos/scripts/icaffeos.service",
+            "/home/icaffe/icaffeos/scripts/icaffeos-backend.service"
+        ],
+        "automation_scripts": [
+            "/home/icaffe/icaffeos/scripts/cleanup_ota_dirs.sh",
+            "/home/icaffe/icaffeos/scripts/restart_services.sh",
+            "/home/icaffe/icaffeos/scripts/install_services.sh"
+        ]
+    }
+}
