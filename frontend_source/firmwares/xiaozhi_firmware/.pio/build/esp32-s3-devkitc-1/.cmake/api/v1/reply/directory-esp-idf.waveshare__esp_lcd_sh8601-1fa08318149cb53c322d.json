@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/waveshare__esp_lcd_sh8601",
+		"source" : "managed_components/waveshare__esp_lcd_sh8601"
+	}
+}

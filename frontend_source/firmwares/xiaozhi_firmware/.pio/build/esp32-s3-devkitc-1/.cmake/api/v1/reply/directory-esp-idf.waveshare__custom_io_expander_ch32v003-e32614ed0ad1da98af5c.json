@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/waveshare__custom_io_expander_ch32v003",
+		"source" : "managed_components/waveshare__custom_io_expander_ch32v003"
+	}
+}

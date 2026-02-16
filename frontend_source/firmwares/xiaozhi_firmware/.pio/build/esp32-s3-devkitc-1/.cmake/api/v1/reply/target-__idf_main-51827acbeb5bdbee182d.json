@@ -1,0 +1,5896 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "esp-idf/main/libmain.a"
+		}
+	],
+	"backtrace" : 2,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"idf_component_register",
+			"set_property",
+			"__component_set_dependencies",
+			"__component_set_all_dependencies",
+			"add_compile_options",
+			"include",
+			"__build_process_project_includes",
+			"idf_build_process",
+			"project",
+			"target_compile_definitions",
+			"add_compile_definitions",
+			"include_directories",
+			"target_include_directories",
+			"__component_add_include_dirs",
+			"add_c_compile_options",
+			"add_cxx_compile_options",
+			"target_sources",
+			"target_add_binary_data"
+		],
+		"files" : 
+		[
+			"/Users/user/.platformio/packages/framework-espidf/tools/cmake/component.cmake",
+			"main/CMakeLists.txt",
+			"CMakeLists.txt",
+			"managed_components/espressif__cmake_utilities/project_include.cmake",
+			"/Users/user/.platformio/packages/framework-espidf/tools/cmake/build.cmake",
+			"/Users/user/.platformio/packages/framework-espidf/tools/cmake/project.cmake",
+			"/Users/user/.platformio/packages/framework-espidf/tools/cmake/utilities.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 862,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 491,
+				"parent" : 1
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 524,
+				"parent" : 1
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 362,
+				"parent" : 3
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"file" : 2
+			},
+			{
+				"command" : 5,
+				"file" : 2,
+				"line" : 6,
+				"parent" : 47
+			},
+			{
+				"command" : 9,
+				"file" : 2,
+				"line" : 13,
+				"parent" : 47
+			},
+			{
+				"command" : 8,
+				"file" : 5,
+				"line" : 740,
+				"parent" : 49
+			},
+			{
+				"command" : 7,
+				"file" : 4,
+				"line" : 718,
+				"parent" : 50
+			},
+			{
+				"command" : 6,
+				"file" : 4,
+				"line" : 467,
+				"parent" : 51
+			},
+			{
+				"file" : 3,
+				"parent" : 52
+			},
+			{
+				"command" : 5,
+				"file" : 3,
+				"line" : 4,
+				"parent" : 53
+			},
+			{
+				"command" : 5,
+				"file" : 0,
+				"line" : 476,
+				"parent" : 1
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 10,
+				"file" : 1,
+				"line" : 890,
+				"parent" : 0
+			},
+			{
+				"command" : 11,
+				"file" : 0,
+				"line" : 477,
+				"parent" : 1
+			},
+			{
+				"command" : 12,
+				"file" : 0,
+				"line" : 475,
+				"parent" : 1
+			},
+			{
+				"command" : 14,
+				"file" : 0,
+				"line" : 493,
+				"parent" : 1
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 320,
+				"parent" : 60
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 341,
+				"parent" : 4
+			},
+			{
+				"command" : 15,
+				"file" : 0,
+				"line" : 478,
+				"parent" : 1
+			},
+			{
+				"command" : 5,
+				"file" : 6,
+				"line" : 281,
+				"parent" : 85
+			},
+			{
+				"command" : 16,
+				"file" : 0,
+				"line" : 479,
+				"parent" : 1
+			},
+			{
+				"command" : 5,
+				"file" : 6,
+				"line" : 270,
+				"parent" : 87
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 89
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 91
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 93
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 95
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 97
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 99
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 101
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 103
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 105
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 107
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 109
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 111
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 113
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 115
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 117
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 119
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 121
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 123
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 125
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 127
+			},
+			{
+				"command" : 18,
+				"file" : 0,
+				"line" : 512,
+				"parent" : 1
+			},
+			{
+				"command" : 17,
+				"file" : 6,
+				"line" : 108,
+				"parent" : 129
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-mlongcalls  -fno-builtin-memcpy -fno-builtin-memset -fno-builtin-bzero -fno-builtin-stpcpy -fno-builtin-strncpy -fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 48,
+					"fragment" : "-Wno-missing-field-initializers"
+				},
+				{
+					"backtrace" : 54,
+					"fragment" : "-fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-ffunction-sections"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fdata-sections"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Werror=all"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-function"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-variable"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-but-set-variable"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=deprecated-declarations"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=extra"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-unused-parameter"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-sign-compare"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-enum-conversion"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-gdwarf-4"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-ggdb"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-mdisable-hardware-atomics"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Os"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-freorder-blocks"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fmacro-prefix-map=/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware=."
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fmacro-prefix-map=/Users/user/.platformio/packages/framework-espidf=/IDF"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fstrict-volatile-bitfields"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fno-jump-tables"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fno-tree-switch-conversion"
+				},
+				{
+					"backtrace" : 88,
+					"fragment" : "-std=gnu++2b"
+				},
+				{
+					"backtrace" : 88,
+					"fragment" : "-fexceptions"
+				},
+				{
+					"backtrace" : 88,
+					"fragment" : "-frtti"
+				},
+				{
+					"backtrace" : 88,
+					"fragment" : "-fuse-cxa-atexit"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_MINOR=5"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_MAJOR=4"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_MAJOR=2"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_MINOR=4"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_MINOR=5"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_MAJOR=3"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_PATCH=2"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 57,
+					"define" : "BOARD_NAME=\"xingzhi-cube-0.96oled-wifi\""
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BOARD_TYPE=\"xingzhi-cube-0.96oled-wifi\""
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BUILTIN_ICON_FONT=font_awesome_14_1"
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BUILTIN_TEXT_FONT=font_puhui_basic_14_1"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "ESP_PLATFORM"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "IDF_VER=\"5.5.2\""
+				},
+				{
+					"backtrace" : 37,
+					"define" : "LV_CONF_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 9,
+					"define" : "LV_LVGL_H_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 22,
+					"define" : "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\""
+				},
+				{
+					"backtrace" : 2,
+					"define" : "SOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "SOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GLIBCXX_HAVE_POSIX_SEMAPHORE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GLIBCXX_USE_POSIX_SEMAPHORE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GNU_SOURCE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_POSIX_READER_WRITER_LOCKS"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 59,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/.pio/build/esp32-s3-devkitc-1/config"
+				},
+				{
+					"backtrace" : 61,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main"
+				},
+				{
+					"backtrace" : 62,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display"
+				},
+				{
+					"backtrace" : 63,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display/lvgl_display"
+				},
+				{
+					"backtrace" : 64,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display/lvgl_display/jpg"
+				},
+				{
+					"backtrace" : 65,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/audio"
+				},
+				{
+					"backtrace" : 66,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/audio/demuxer"
+				},
+				{
+					"backtrace" : 67,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/protocols"
+				},
+				{
+					"backtrace" : 68,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/boards/common"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/newlib/platform_include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/include/freertos"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/esp_additions/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include/soc"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include/soc/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/dma/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/ldo/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/debug_probe/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/power_supply/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/port/esp32s3/."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/port/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/heap/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/heap/tlsf"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/log/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3/register"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/platform_port/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3/include/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_common/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/port/soc"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/port/include/private"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/deprecated_include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_timer/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include/apps"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include/apps/sntp"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/lwip/src/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/freertos/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include/arch"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include/sys"
+				},
+				{
+					"backtrace" : 69,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_pm/include"
+				},
+				{
+					"backtrace" : 70,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_psram/include"
+				},
+				{
+					"backtrace" : 70,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_psram/xip_impl/include"
+				},
+				{
+					"backtrace" : 71,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_netif/include"
+				},
+				{
+					"backtrace" : 71,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_event/include"
+				},
+				{
+					"backtrace" : 72,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_gpio/include"
+				},
+				{
+					"backtrace" : 73,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_uart/include"
+				},
+				{
+					"backtrace" : 73,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/vfs/include"
+				},
+				{
+					"backtrace" : 40,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_spi/include"
+				},
+				{
+					"backtrace" : 41,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_i2c/include"
+				},
+				{
+					"backtrace" : 42,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_i2s/include"
+				},
+				{
+					"backtrace" : 74,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_jpeg/include"
+				},
+				{
+					"backtrace" : 75,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ppa/include"
+				},
+				{
+					"backtrace" : 76,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_app_format/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/app_update/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/bootloader_support/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/bootloader_support/bootloader_flash/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_bootloader_format/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_partition/include"
+				},
+				{
+					"backtrace" : 78,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/spi_flash/include"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/console"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_vfs_console/include"
+				},
+				{
+					"backtrace" : 79,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/efuse/include"
+				},
+				{
+					"backtrace" : 79,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/efuse/esp32s3/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/include/local"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/wifi_apps/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/wifi_apps/nan_app/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_phy/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_phy/esp32s3/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__esp-wifi-connect/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_http_server/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/http_parser"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/nvs_flash/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/json/cJSON"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__esp_lcd_nv3023/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/interface"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/rgb/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/deprecated"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/i2c/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/touch_sensor/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/twai/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/touch_sensor/esp32s3/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_ringbuf/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_pcnt/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_gptimer/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_mcpwm/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ana_cmpr/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdmmc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/sdmmc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdspi/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdio/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_dac/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_rmt/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_tsens/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdm/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ledc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_parlio/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_usb_serial_jtag/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_twai/include"
+				},
+				{
+					"backtrace" : 9,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__xiaozhi-fonts/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__adc_battery_estimation/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/interface"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/esp32s3/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/deprecated/include"
+				},
+				{
+					"backtrace" : 23,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__adc_mic"
+				},
+				{
+					"backtrace" : 24,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__bmi270_sensor/include"
+				},
+				{
+					"backtrace" : 24,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__i2c_bus/include"
+				},
+				{
+					"backtrace" : 25,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__button/include"
+				},
+				{
+					"backtrace" : 25,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__button/interface"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/esp-tts/esp_tts_chinese/include"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/include/esp32s3"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/src/include"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/spiffs/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp32-camera/driver/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp32-camera/conversions/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_jpeg/include"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/decoder"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/decoder/impl"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/encoder"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/encoder/impl"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/simple_dec"
+				},
+				{
+					"backtrace" : 81,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_effects/include"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/include"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/interface"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/device/include"
+				},
+				{
+					"backtrace" : 83,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_image_effects/include"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander_tca9554/include"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander/include"
+				},
+				{
+					"backtrace" : 11,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander_tca95xx_16bit/include"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_axs15231b/include"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch/include"
+				},
+				{
+					"backtrace" : 26,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_gc9a01/include"
+				},
+				{
+					"backtrace" : 27,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_ili9341/include"
+				},
+				{
+					"backtrace" : 28,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_panel_io_additions/include"
+				},
+				{
+					"backtrace" : 46,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_spd2010/include"
+				},
+				{
+					"backtrace" : 29,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st7701/include"
+				},
+				{
+					"backtrace" : 30,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st77916/include"
+				},
+				{
+					"backtrace" : 31,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st7796/include"
+				},
+				{
+					"backtrace" : 32,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_cst816s/include"
+				},
+				{
+					"backtrace" : 33,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_ft5x06/include"
+				},
+				{
+					"backtrace" : 34,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_gt1151/include"
+				},
+				{
+					"backtrace" : 35,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_gt911/include"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_st7123/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lvgl_port/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/src"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/examples"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/demos"
+				},
+				{
+					"backtrace" : 38,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_mmap_assets/include"
+				},
+				{
+					"backtrace" : 84,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_new_jpeg/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_video/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_cam/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_cam/interface"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_isp/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_mm/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_cam_sensor/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/interface"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/sccb_i2c/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_rndis/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_eth/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_eth/interface"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_cdc"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_cdc/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/usb/include"
+				},
+				{
+					"backtrace" : 56,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__knob/include"
+				},
+				{
+					"backtrace" : 14,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__led_strip/include"
+				},
+				{
+					"backtrace" : 14,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__led_strip/interface"
+				},
+				{
+					"backtrace" : 15,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__esp_emote_expression/include"
+				},
+				{
+					"backtrace" : 15,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__esp_emote_gfx/include"
+				},
+				{
+					"backtrace" : 16,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__image_player/include"
+				},
+				{
+					"backtrace" : 17,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/tny-robotics__sh1106-esp-idf/include"
+				},
+				{
+					"backtrace" : 18,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/txp666__otto-emoji-gif-component/include"
+				},
+				{
+					"backtrace" : 19,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__custom_io_expander_ch32v003/include"
+				},
+				{
+					"backtrace" : 20,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__esp_lcd_sh8601/include"
+				},
+				{
+					"backtrace" : 21,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__esp_lcd_touch_cst9217/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/wvirgil123__sscma_client/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/wvirgil123__sscma_client/interface"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/port/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/library"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/esp_crt_bundle/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/everest/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/p256-m"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/p256-m/p256-m"
+				}
+			],
+			"language" : "CXX",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7,
+				8,
+				9,
+				10,
+				11,
+				12,
+				13,
+				14,
+				15,
+				16,
+				17,
+				18,
+				19,
+				20,
+				21,
+				22,
+				23,
+				25,
+				27,
+				28,
+				29,
+				30,
+				31,
+				32,
+				33,
+				34,
+				35,
+				36,
+				37,
+				38,
+				39,
+				40,
+				41,
+				42,
+				43,
+				44,
+				45,
+				46,
+				47,
+				48,
+				49,
+				50,
+				51,
+				52,
+				53,
+				54,
+				55,
+				56,
+				57,
+				58,
+				59,
+				60,
+				61
+			]
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-mlongcalls  -fno-builtin-memcpy -fno-builtin-memset -fno-builtin-bzero -fno-builtin-stpcpy -fno-builtin-strncpy -fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 48,
+					"fragment" : "-Wno-missing-field-initializers"
+				},
+				{
+					"backtrace" : 54,
+					"fragment" : "-fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-ffunction-sections"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fdata-sections"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Werror=all"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-function"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-variable"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-but-set-variable"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=deprecated-declarations"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=extra"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-unused-parameter"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-sign-compare"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-enum-conversion"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-gdwarf-4"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-ggdb"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-mdisable-hardware-atomics"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Os"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-freorder-blocks"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fmacro-prefix-map=/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware=."
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fmacro-prefix-map=/Users/user/.platformio/packages/framework-espidf=/IDF"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fstrict-volatile-bitfields"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fno-jump-tables"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fno-tree-switch-conversion"
+				},
+				{
+					"backtrace" : 86,
+					"fragment" : "-std=gnu17"
+				},
+				{
+					"backtrace" : 86,
+					"fragment" : "-Wno-old-style-declaration"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_MINOR=5"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_MAJOR=4"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_MAJOR=2"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_MINOR=4"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_MINOR=5"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_MAJOR=3"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_PATCH=2"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 57,
+					"define" : "BOARD_NAME=\"xingzhi-cube-0.96oled-wifi\""
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BOARD_TYPE=\"xingzhi-cube-0.96oled-wifi\""
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BUILTIN_ICON_FONT=font_awesome_14_1"
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BUILTIN_TEXT_FONT=font_puhui_basic_14_1"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "ESP_PLATFORM"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "IDF_VER=\"5.5.2\""
+				},
+				{
+					"backtrace" : 37,
+					"define" : "LV_CONF_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 9,
+					"define" : "LV_LVGL_H_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 22,
+					"define" : "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\""
+				},
+				{
+					"backtrace" : 2,
+					"define" : "SOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "SOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GLIBCXX_HAVE_POSIX_SEMAPHORE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GLIBCXX_USE_POSIX_SEMAPHORE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GNU_SOURCE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_POSIX_READER_WRITER_LOCKS"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 59,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/.pio/build/esp32-s3-devkitc-1/config"
+				},
+				{
+					"backtrace" : 61,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main"
+				},
+				{
+					"backtrace" : 62,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display"
+				},
+				{
+					"backtrace" : 63,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display/lvgl_display"
+				},
+				{
+					"backtrace" : 64,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display/lvgl_display/jpg"
+				},
+				{
+					"backtrace" : 65,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/audio"
+				},
+				{
+					"backtrace" : 66,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/audio/demuxer"
+				},
+				{
+					"backtrace" : 67,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/protocols"
+				},
+				{
+					"backtrace" : 68,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/boards/common"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/newlib/platform_include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/include/freertos"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/esp_additions/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include/soc"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include/soc/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/dma/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/ldo/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/debug_probe/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/power_supply/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/port/esp32s3/."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/port/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/heap/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/heap/tlsf"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/log/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3/register"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/platform_port/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3/include/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_common/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/port/soc"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/port/include/private"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/deprecated_include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_timer/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include/apps"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include/apps/sntp"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/lwip/src/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/freertos/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include/arch"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include/sys"
+				},
+				{
+					"backtrace" : 69,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_pm/include"
+				},
+				{
+					"backtrace" : 70,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_psram/include"
+				},
+				{
+					"backtrace" : 70,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_psram/xip_impl/include"
+				},
+				{
+					"backtrace" : 71,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_netif/include"
+				},
+				{
+					"backtrace" : 71,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_event/include"
+				},
+				{
+					"backtrace" : 72,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_gpio/include"
+				},
+				{
+					"backtrace" : 73,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_uart/include"
+				},
+				{
+					"backtrace" : 73,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/vfs/include"
+				},
+				{
+					"backtrace" : 40,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_spi/include"
+				},
+				{
+					"backtrace" : 41,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_i2c/include"
+				},
+				{
+					"backtrace" : 42,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_i2s/include"
+				},
+				{
+					"backtrace" : 74,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_jpeg/include"
+				},
+				{
+					"backtrace" : 75,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ppa/include"
+				},
+				{
+					"backtrace" : 76,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_app_format/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/app_update/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/bootloader_support/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/bootloader_support/bootloader_flash/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_bootloader_format/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_partition/include"
+				},
+				{
+					"backtrace" : 78,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/spi_flash/include"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/console"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_vfs_console/include"
+				},
+				{
+					"backtrace" : 79,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/efuse/include"
+				},
+				{
+					"backtrace" : 79,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/efuse/esp32s3/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/include/local"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/wifi_apps/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/wifi_apps/nan_app/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_phy/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_phy/esp32s3/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__esp-wifi-connect/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_http_server/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/http_parser"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/nvs_flash/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/json/cJSON"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__esp_lcd_nv3023/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/interface"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/rgb/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/deprecated"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/i2c/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/touch_sensor/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/twai/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/touch_sensor/esp32s3/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_ringbuf/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_pcnt/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_gptimer/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_mcpwm/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ana_cmpr/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdmmc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/sdmmc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdspi/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdio/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_dac/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_rmt/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_tsens/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdm/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ledc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_parlio/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_usb_serial_jtag/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_twai/include"
+				},
+				{
+					"backtrace" : 9,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__xiaozhi-fonts/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__adc_battery_estimation/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/interface"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/esp32s3/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/deprecated/include"
+				},
+				{
+					"backtrace" : 23,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__adc_mic"
+				},
+				{
+					"backtrace" : 24,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__bmi270_sensor/include"
+				},
+				{
+					"backtrace" : 24,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__i2c_bus/include"
+				},
+				{
+					"backtrace" : 25,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__button/include"
+				},
+				{
+					"backtrace" : 25,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__button/interface"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/esp-tts/esp_tts_chinese/include"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/include/esp32s3"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/src/include"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/spiffs/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp32-camera/driver/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp32-camera/conversions/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_jpeg/include"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/decoder"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/decoder/impl"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/encoder"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/encoder/impl"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/simple_dec"
+				},
+				{
+					"backtrace" : 81,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_effects/include"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/include"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/interface"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/device/include"
+				},
+				{
+					"backtrace" : 83,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_image_effects/include"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander_tca9554/include"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander/include"
+				},
+				{
+					"backtrace" : 11,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander_tca95xx_16bit/include"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_axs15231b/include"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch/include"
+				},
+				{
+					"backtrace" : 26,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_gc9a01/include"
+				},
+				{
+					"backtrace" : 27,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_ili9341/include"
+				},
+				{
+					"backtrace" : 28,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_panel_io_additions/include"
+				},
+				{
+					"backtrace" : 46,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_spd2010/include"
+				},
+				{
+					"backtrace" : 29,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st7701/include"
+				},
+				{
+					"backtrace" : 30,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st77916/include"
+				},
+				{
+					"backtrace" : 31,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st7796/include"
+				},
+				{
+					"backtrace" : 32,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_cst816s/include"
+				},
+				{
+					"backtrace" : 33,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_ft5x06/include"
+				},
+				{
+					"backtrace" : 34,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_gt1151/include"
+				},
+				{
+					"backtrace" : 35,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_gt911/include"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_st7123/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lvgl_port/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/src"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/examples"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/demos"
+				},
+				{
+					"backtrace" : 38,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_mmap_assets/include"
+				},
+				{
+					"backtrace" : 84,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_new_jpeg/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_video/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_cam/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_cam/interface"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_isp/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_mm/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_cam_sensor/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/interface"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/sccb_i2c/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_rndis/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_eth/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_eth/interface"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_cdc"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_cdc/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/usb/include"
+				},
+				{
+					"backtrace" : 56,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__knob/include"
+				},
+				{
+					"backtrace" : 14,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__led_strip/include"
+				},
+				{
+					"backtrace" : 14,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__led_strip/interface"
+				},
+				{
+					"backtrace" : 15,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__esp_emote_expression/include"
+				},
+				{
+					"backtrace" : 15,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__esp_emote_gfx/include"
+				},
+				{
+					"backtrace" : 16,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__image_player/include"
+				},
+				{
+					"backtrace" : 17,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/tny-robotics__sh1106-esp-idf/include"
+				},
+				{
+					"backtrace" : 18,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/txp666__otto-emoji-gif-component/include"
+				},
+				{
+					"backtrace" : 19,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__custom_io_expander_ch32v003/include"
+				},
+				{
+					"backtrace" : 20,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__esp_lcd_sh8601/include"
+				},
+				{
+					"backtrace" : 21,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__esp_lcd_touch_cst9217/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/wvirgil123__sscma_client/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/wvirgil123__sscma_client/interface"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/port/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/library"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/esp_crt_bundle/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/everest/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/p256-m"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/p256-m/p256-m"
+				}
+			],
+			"language" : "C",
+			"sourceIndexes" : 
+			[
+				24,
+				26
+			]
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-mlongcalls "
+				},
+				{
+					"backtrace" : 48,
+					"fragment" : "-Wno-missing-field-initializers"
+				},
+				{
+					"backtrace" : 54,
+					"fragment" : "-fdiagnostics-color=always"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-ffunction-sections"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fdata-sections"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wall"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Werror=all"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-function"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-variable"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=unused-but-set-variable"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=deprecated-declarations"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wextra"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-error=extra"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-unused-parameter"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-sign-compare"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Wno-enum-conversion"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-gdwarf-4"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-ggdb"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-mdisable-hardware-atomics"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-Os"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-freorder-blocks"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fmacro-prefix-map=/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware=."
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fmacro-prefix-map=/Users/user/.platformio/packages/framework-espidf=/IDF"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fstrict-volatile-bitfields"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fno-jump-tables"
+				},
+				{
+					"backtrace" : 55,
+					"fragment" : "-fno-tree-switch-conversion"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 8,
+					"fragment" : "-DESP_LCD_NV3023_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-DADC_BATTERY_ESTIMATION_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 23,
+					"fragment" : "-DADC_MIC_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_MINOR=5"
+				},
+				{
+					"backtrace" : 24,
+					"fragment" : "-DI2C_BUS_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_MAJOR=4"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 25,
+					"fragment" : "-DBUTTON_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 10,
+					"fragment" : "-DESP_LCD_AXS15231B_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_MAJOR=2"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 26,
+					"fragment" : "-DESP_LCD_GC9A01_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_MINOR=2"
+				},
+				{
+					"backtrace" : 27,
+					"fragment" : "-DESP_LCD_ILI9341_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 28,
+					"fragment" : "-DESP_LCD_PANEL_IO_ADDITIONS_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 46,
+					"fragment" : "-DESP_LCD_SPD2010_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 29,
+					"fragment" : "-DESP_LCD_ST7701_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 30,
+					"fragment" : "-DESP_LCD_ST77916_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 31,
+					"fragment" : "-DESP_LCD_ST7796_VER_PATCH=5"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 36,
+					"fragment" : "-DESP_LCD_TOUCH_ST7123_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_MINOR=4"
+				},
+				{
+					"backtrace" : 38,
+					"fragment" : "-DESP_MMAP_ASSETS_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_VIDEO_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_MINOR=5"
+				},
+				{
+					"backtrace" : 7,
+					"fragment" : "-DESP_CAM_SENSOR_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_MINOR=3"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_RNDIS_VER_PATCH=1"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_ETH_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_MAJOR=3"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 39,
+					"fragment" : "-DIOT_USBH_CDC_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 56,
+					"fragment" : "-DKNOB_VER_PATCH=2"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_MAJOR=0"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_MINOR=1"
+				},
+				{
+					"backtrace" : 15,
+					"fragment" : "-DESP_EMOTE_EXPRESSION_VER_PATCH=0"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_MAJOR=1"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_MINOR=0"
+				},
+				{
+					"backtrace" : 20,
+					"fragment" : "-DESP_LCD_SH8601_VER_PATCH=2"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 57,
+					"define" : "BOARD_NAME=\"xingzhi-cube-0.96oled-wifi\""
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BOARD_TYPE=\"xingzhi-cube-0.96oled-wifi\""
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BUILTIN_ICON_FONT=font_awesome_14_1"
+				},
+				{
+					"backtrace" : 57,
+					"define" : "BUILTIN_TEXT_FONT=font_puhui_basic_14_1"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "ESP_PLATFORM"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "IDF_VER=\"5.5.2\""
+				},
+				{
+					"backtrace" : 37,
+					"define" : "LV_CONF_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 9,
+					"define" : "LV_LVGL_H_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 22,
+					"define" : "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\""
+				},
+				{
+					"backtrace" : 2,
+					"define" : "SOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "SOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GLIBCXX_HAVE_POSIX_SEMAPHORE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GLIBCXX_USE_POSIX_SEMAPHORE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_GNU_SOURCE"
+				},
+				{
+					"backtrace" : 58,
+					"define" : "_POSIX_READER_WRITER_LOCKS"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 59,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/.pio/build/esp32-s3-devkitc-1/config"
+				},
+				{
+					"backtrace" : 61,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main"
+				},
+				{
+					"backtrace" : 62,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display"
+				},
+				{
+					"backtrace" : 63,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display/lvgl_display"
+				},
+				{
+					"backtrace" : 64,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/display/lvgl_display/jpg"
+				},
+				{
+					"backtrace" : 65,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/audio"
+				},
+				{
+					"backtrace" : 66,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/audio/demuxer"
+				},
+				{
+					"backtrace" : 67,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/protocols"
+				},
+				{
+					"backtrace" : 68,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/main/boards/common"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/newlib/platform_include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/include/freertos"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/config/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/freertos/esp_additions/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include/soc"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/include/soc/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/dma/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/ldo/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/debug_probe/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/power_supply/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/port/esp32s3/."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/port/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/heap/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/heap/tlsf"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/log/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/soc/esp32s3/register"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/platform_port/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/hal/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3/include/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_rom/esp32s3"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_common/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/port/soc"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_system/port/include/private"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/esp32s3/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/xtensa/deprecated_include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_timer/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include/apps"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/include/apps/sntp"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/lwip/src/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/freertos/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include/arch"
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/lwip/port/esp32xx/include/sys"
+				},
+				{
+					"backtrace" : 69,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_pm/include"
+				},
+				{
+					"backtrace" : 70,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_psram/include"
+				},
+				{
+					"backtrace" : 70,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_psram/xip_impl/include"
+				},
+				{
+					"backtrace" : 71,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_netif/include"
+				},
+				{
+					"backtrace" : 71,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_event/include"
+				},
+				{
+					"backtrace" : 72,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_gpio/include"
+				},
+				{
+					"backtrace" : 73,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_uart/include"
+				},
+				{
+					"backtrace" : 73,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/vfs/include"
+				},
+				{
+					"backtrace" : 40,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_spi/include"
+				},
+				{
+					"backtrace" : 41,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_i2c/include"
+				},
+				{
+					"backtrace" : 42,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_i2s/include"
+				},
+				{
+					"backtrace" : 74,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_jpeg/include"
+				},
+				{
+					"backtrace" : 75,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ppa/include"
+				},
+				{
+					"backtrace" : 76,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_app_format/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/app_update/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/bootloader_support/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/bootloader_support/bootloader_flash/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_bootloader_format/include"
+				},
+				{
+					"backtrace" : 77,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_partition/include"
+				},
+				{
+					"backtrace" : 78,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/spi_flash/include"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/console"
+				},
+				{
+					"backtrace" : 43,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_vfs_console/include"
+				},
+				{
+					"backtrace" : 79,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/efuse/include"
+				},
+				{
+					"backtrace" : 79,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/efuse/esp32s3/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/include/local"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/wifi_apps/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_wifi/wifi_apps/nan_app/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_phy/include"
+				},
+				{
+					"backtrace" : 80,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_phy/esp32s3/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__esp-wifi-connect/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_http_server/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/http_parser"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/nvs_flash/include"
+				},
+				{
+					"backtrace" : 44,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/json/cJSON"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__esp_lcd_nv3023/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/interface"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_lcd/rgb/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/deprecated"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/i2c/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/touch_sensor/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/twai/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/driver/touch_sensor/esp32s3/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_ringbuf/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_pcnt/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_gptimer/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_mcpwm/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ana_cmpr/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdmmc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/sdmmc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdspi/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdio/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_dac/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_rmt/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_tsens/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_sdm/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_ledc/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_parlio/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_usb_serial_jtag/include"
+				},
+				{
+					"backtrace" : 8,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_twai/include"
+				},
+				{
+					"backtrace" : 9,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/78__xiaozhi-fonts/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__adc_battery_estimation/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/interface"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/esp32s3/include"
+				},
+				{
+					"backtrace" : 5,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_adc/deprecated/include"
+				},
+				{
+					"backtrace" : 23,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__adc_mic"
+				},
+				{
+					"backtrace" : 24,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__bmi270_sensor/include"
+				},
+				{
+					"backtrace" : 24,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__i2c_bus/include"
+				},
+				{
+					"backtrace" : 25,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__button/include"
+				},
+				{
+					"backtrace" : 25,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__button/interface"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/esp-tts/esp_tts_chinese/include"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/include/esp32s3"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp-sr/src/include"
+				},
+				{
+					"backtrace" : 12,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/spiffs/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp32-camera/driver/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp32-camera/conversions/include"
+				},
+				{
+					"backtrace" : 13,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_jpeg/include"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/decoder"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/decoder/impl"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/encoder"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/encoder/impl"
+				},
+				{
+					"backtrace" : 45,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_codec/include/simple_dec"
+				},
+				{
+					"backtrace" : 81,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_audio_effects/include"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/include"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/interface"
+				},
+				{
+					"backtrace" : 82,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_codec_dev/device/include"
+				},
+				{
+					"backtrace" : 83,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_image_effects/include"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander_tca9554/include"
+				},
+				{
+					"backtrace" : 6,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander/include"
+				},
+				{
+					"backtrace" : 11,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_io_expander_tca95xx_16bit/include"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_axs15231b/include"
+				},
+				{
+					"backtrace" : 10,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch/include"
+				},
+				{
+					"backtrace" : 26,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_gc9a01/include"
+				},
+				{
+					"backtrace" : 27,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_ili9341/include"
+				},
+				{
+					"backtrace" : 28,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_panel_io_additions/include"
+				},
+				{
+					"backtrace" : 46,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_spd2010/include"
+				},
+				{
+					"backtrace" : 29,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st7701/include"
+				},
+				{
+					"backtrace" : 30,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st77916/include"
+				},
+				{
+					"backtrace" : 31,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_st7796/include"
+				},
+				{
+					"backtrace" : 32,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_cst816s/include"
+				},
+				{
+					"backtrace" : 33,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_ft5x06/include"
+				},
+				{
+					"backtrace" : 34,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_gt1151/include"
+				},
+				{
+					"backtrace" : 35,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_gt911/include"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lcd_touch_st7123/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_lvgl_port/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/src"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/examples"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/lvgl__lvgl/demos"
+				},
+				{
+					"backtrace" : 38,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_mmap_assets/include"
+				},
+				{
+					"backtrace" : 84,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_new_jpeg/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_video/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_cam/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_cam/interface"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_driver_isp/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/esp_mm/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_cam_sensor/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/include"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/interface"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__esp_sccb_intf/sccb_i2c/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_rndis/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_eth/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_eth/interface"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_cdc"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__iot_usbh_cdc/include"
+				},
+				{
+					"backtrace" : 39,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/usb/include"
+				},
+				{
+					"backtrace" : 56,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__knob/include"
+				},
+				{
+					"backtrace" : 14,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__led_strip/include"
+				},
+				{
+					"backtrace" : 14,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif__led_strip/interface"
+				},
+				{
+					"backtrace" : 15,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__esp_emote_expression/include"
+				},
+				{
+					"backtrace" : 15,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__esp_emote_gfx/include"
+				},
+				{
+					"backtrace" : 16,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/espressif2022__image_player/include"
+				},
+				{
+					"backtrace" : 17,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/tny-robotics__sh1106-esp-idf/include"
+				},
+				{
+					"backtrace" : 18,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/txp666__otto-emoji-gif-component/include"
+				},
+				{
+					"backtrace" : 19,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__custom_io_expander_ch32v003/include"
+				},
+				{
+					"backtrace" : 20,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__esp_lcd_sh8601/include"
+				},
+				{
+					"backtrace" : 21,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/waveshare__esp_lcd_touch_cst9217/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/wvirgil123__sscma_client/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.gemini/antigravity/scratch/my_app/xiaozhi_firmware/managed_components/wvirgil123__sscma_client/interface"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/port/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/library"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/esp_crt_bundle/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/everest/include"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/p256-m"
+				},
+				{
+					"backtrace" : 22,
+					"path" : "/Users/user/.platformio/packages/framework-espidf/components/mbedtls/mbedtls/3rdparty/p256-m/p256-m"
+				}
+			],
+			"language" : "ASM",
+			"sourceIndexes" : 
+			[
+				62,
+				63,
+				64,
+				65,
+				66,
+				67,
+				68,
+				69,
+				70,
+				71,
+				72,
+				73,
+				74,
+				75,
+				76,
+				77,
+				78,
+				79,
+				80,
+				81,
+				82
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 5,
+			"id" : "__idf_espressif__adc_battery_estimation::@6ac760e3867ef60a22d4"
+		},
+		{
+			"backtrace" : 6,
+			"id" : "__idf_espressif__esp_io_expander::@8eeddd892c3ac919c82f"
+		},
+		{
+			"backtrace" : 7,
+			"id" : "__idf_espressif__esp_sccb_intf::@a28af93d7a6ace75780b"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_78__esp_lcd_nv3023::@01f3879fa9d9388af5d6"
+		},
+		{
+			"backtrace" : 9,
+			"id" : "__idf_lvgl__lvgl::@7baf6209f13c88c0bab5"
+		},
+		{
+			"backtrace" : 9,
+			"id" : "__idf_78__xiaozhi-fonts::@f0c79123bdd87aa463de"
+		},
+		{
+			"backtrace" : 5,
+			"id" : "__idf_esp_adc::@847b8318c687ffb50ebb"
+		},
+		{
+			"backtrace" : 10,
+			"id" : "__idf_espressif__esp_lcd_touch::@5111c41c88dc1197816c"
+		},
+		{
+			"backtrace" : 10,
+			"id" : "__idf_espressif__esp_lcd_axs15231b::@0692c477bb54f2f33cd3"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_mcpwm::@48ac72772582b222889a"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_sdmmc::@89ed5bca1750ffbc7db6"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_sdmmc::@6ccb6c8602dfb90db4d7"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_sdspi::@c293af58c49fe790ac32"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_rmt::@0efb206e593213c2b54a"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_tsens::@dad043442c4ac9e51f1a"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_sdm::@601b6ef28d63f823a7b4"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_ledc::@9a01f21f38f01238ca77"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_twai::@0c7b27fa84c4efa2b2b9"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_driver::@76403182dd99a02c203e"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_lcd::@d5a84597e1633c9ab0d3"
+		},
+		{
+			"backtrace" : 6,
+			"id" : "__idf_espressif__esp_io_expander_tca9554::@654b0434bd7b26bf321c"
+		},
+		{
+			"backtrace" : 11,
+			"id" : "__idf_espressif__esp_io_expander_tca95xx_16bit::@2ba6c49d3f6511136eaa"
+		},
+		{
+			"backtrace" : 12,
+			"id" : "__idf_espressif__esp-sr::@6171f978ca351fd99ba3"
+		},
+		{
+			"backtrace" : 13,
+			"id" : "__idf_espressif__esp_jpeg::@efb06e33c62a1e402fed"
+		},
+		{
+			"backtrace" : 13,
+			"id" : "__idf_espressif__esp32-camera::@c110fc73d8f332e45b65"
+		},
+		{
+			"backtrace" : 14,
+			"id" : "__idf_espressif__led_strip::@d894ad21b59de47c274a"
+		},
+		{
+			"backtrace" : 15,
+			"id" : "freetype::@b727c058c019f6396d33"
+		},
+		{
+			"backtrace" : 15,
+			"id" : "__idf_laride__heatshrink::@d5ce154a638f11345e3c"
+		},
+		{
+			"backtrace" : 15,
+			"id" : "__idf_espressif2022__esp_emote_gfx::@c0f08ca6ac72a2f58bf9"
+		},
+		{
+			"backtrace" : 15,
+			"id" : "__idf_espressif2022__esp_emote_expression::@11987000b7c18c288395"
+		},
+		{
+			"backtrace" : 16,
+			"id" : "__idf_espressif2022__image_player::@1a83e953c76d329174d4"
+		},
+		{
+			"backtrace" : 17,
+			"id" : "__idf_tny-robotics__sh1106-esp-idf::@27d367dd79ab6a0b7c8d"
+		},
+		{
+			"backtrace" : 18,
+			"id" : "__idf_txp666__otto-emoji-gif-component::@26d29da545efff347ad7"
+		},
+		{
+			"backtrace" : 19,
+			"id" : "__idf_waveshare__custom_io_expander_ch32v003::@872856030406463895a2"
+		},
+		{
+			"backtrace" : 20,
+			"id" : "__idf_waveshare__esp_lcd_sh8601::@2f28a9e6bb01d2e9867a"
+		},
+		{
+			"backtrace" : 21,
+			"id" : "__idf_waveshare__esp_lcd_touch_cst9217::@5f5c53d9a6e6b024b11a"
+		},
+		{
+			"backtrace" : 22,
+			"id" : "__idf_wvirgil123__sscma_client::@891e0526df5f01b3f7e2"
+		},
+		{
+			"backtrace" : 2,
+			"id" : "__idf_xtensa::@1daaaad7abe597e030f9"
+		},
+		{
+			"backtrace" : 23,
+			"id" : "__idf_espressif__esp_codec_dev::@baec3fd64d4ef7018c55"
+		},
+		{
+			"backtrace" : 23,
+			"id" : "__idf_espressif__adc_mic::@7d1b7f14e4e40691cd1d"
+		},
+		{
+			"backtrace" : 24,
+			"id" : "__idf_espressif__i2c_bus::@dfb921c473f3fd5364a6"
+		},
+		{
+			"backtrace" : 25,
+			"id" : "__idf_espressif__button::@ee0e5988f5003e3bfd20"
+		},
+		{
+			"backtrace" : 12,
+			"id" : "__idf_spiffs::@df881b71474064c86689"
+		},
+		{
+			"backtrace" : 12,
+			"id" : "__idf_espressif__dl_fft::@3ccf17c791098cd2e665"
+		},
+		{
+			"backtrace" : 12,
+			"id" : "__idf_espressif__esp-dsp::@173cdc30d8d2ec42511f"
+		},
+		{
+			"backtrace" : 26,
+			"id" : "__idf_espressif__esp_lcd_gc9a01::@f0a1d6d94395dc08ee79"
+		},
+		{
+			"backtrace" : 27,
+			"id" : "__idf_espressif__esp_lcd_ili9341::@bbc5a9082872ac936ffd"
+		},
+		{
+			"backtrace" : 28,
+			"id" : "__idf_espressif__esp_lcd_panel_io_additions::@d3fde65a4c935eb793ef"
+		},
+		{
+			"backtrace" : 29,
+			"id" : "__idf_espressif__esp_lcd_st7701::@e0f0f3c855233e4e300e"
+		},
+		{
+			"backtrace" : 30,
+			"id" : "__idf_espressif__esp_lcd_st77916::@f5c89c2b7d60ce706346"
+		},
+		{
+			"backtrace" : 31,
+			"id" : "__idf_espressif__esp_lcd_st7796::@a80b1b576939147ec700"
+		},
+		{
+			"backtrace" : 32,
+			"id" : "__idf_espressif__esp_lcd_touch_cst816s::@1ff0b3a38c908711a6cc"
+		},
+		{
+			"backtrace" : 33,
+			"id" : "__idf_espressif__esp_lcd_touch_ft5x06::@9a1fdf48775373404821"
+		},
+		{
+			"backtrace" : 34,
+			"id" : "__idf_espressif__esp_lcd_touch_gt1151::@6bb2816b1cac8492e50d"
+		},
+		{
+			"backtrace" : 35,
+			"id" : "__idf_espressif__esp_lcd_touch_gt911::@00fb63a146259bd71404"
+		},
+		{
+			"backtrace" : 36,
+			"id" : "__idf_espressif__esp_lcd_touch_st7123::@acdf48278c4f9c25ece9"
+		},
+		{
+			"backtrace" : 37,
+			"id" : "lvgl_port_lib::@85ab997cbe8039c1121c"
+		},
+		{
+			"backtrace" : 38,
+			"id" : "__idf_espressif__esp_mmap_assets::@75e95dfb1811100c46f1"
+		},
+		{
+			"backtrace" : 7,
+			"id" : "__idf_esp_driver_cam::@d005630ea6316acc7c7d"
+		},
+		{
+			"backtrace" : 39,
+			"id" : "__idf_espressif__iot_usbh_cdc::@9b83b508c7f0d26eb206"
+		},
+		{
+			"backtrace" : 40,
+			"id" : "__idf_esp_driver_spi::@a108b58494cdd93e678c"
+		},
+		{
+			"backtrace" : 41,
+			"id" : "__idf_esp_driver_i2c::@823c83e66a2d740aac64"
+		},
+		{
+			"backtrace" : 42,
+			"id" : "__idf_esp_driver_i2s::@5dbaceb9cb1526e2b88d"
+		},
+		{
+			"backtrace" : 43,
+			"id" : "__idf_console::@4311ed8d271cc0ee1422"
+		},
+		{
+			"backtrace" : 44,
+			"id" : "__idf_json::@c78a8bdc820334f01148"
+		},
+		{
+			"backtrace" : 44,
+			"id" : "__idf_78__esp-wifi-connect::@b24c9293a03fb17ba9ee"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_pcnt::@7f5d6483ec7c43d22871"
+		},
+		{
+			"backtrace" : 8,
+			"id" : "__idf_esp_driver_gptimer::@b8628cd9d7b32710339f"
+		},
+		{
+			"backtrace" : 45,
+			"id" : "__idf_espressif__esp_audio_codec::@6518f7e5fd26c8a120be"
+		},
+		{
+			"backtrace" : 46,
+			"id" : "__idf_espressif__esp_lcd_spd2010::@e0468b72d2f19134ba60"
+		},
+		{
+			"backtrace" : 7,
+			"id" : "__idf_espressif__esp_cam_sensor::@101658c0266276755199"
+		},
+		{
+			"backtrace" : 7,
+			"id" : "__idf_usb::@4a2418067d0bb57af462"
+		},
+		{
+			"backtrace" : 7,
+			"id" : "__idf_espressif__usb_host_uvc::@04dfe81153a5417e76c2"
+		},
+		{
+			"backtrace" : 7,
+			"id" : "__idf_espressif__esp_video::@b7cc7726ffb6df0865af"
+		},
+		{
+			"backtrace" : 39,
+			"id" : "__idf_espressif__iot_eth::@336a487ce7cc60fb3efa"
+		},
+		{
+			"backtrace" : 39,
+			"id" : "__idf_espressif__iot_usbh_rndis::@92a00e8bf0a5b2ccb1a6"
+		},
+		{
+			"backtrace" : 37,
+			"id" : "__idf_espressif__knob::@dbce5702c8e491296069"
+		}
+	],
+	"id" : "__idf_main::@7368607ed66887415643",
+	"name" : "__idf_main",
+	"nameOnDisk" : "libmain.a",
+	"paths" : 
+	{
+		"build" : "esp-idf/main",
+		"source" : "main"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3,
+				4,
+				5,
+				6,
+				7,
+				8,
+				9,
+				10,
+				11,
+				12,
+				13,
+				14,
+				15,
+				16,
+				17,
+				18,
+				19,
+				20,
+				21,
+				22,
+				23,
+				24,
+				25,
+				26,
+				27,
+				28,
+				29,
+				30,
+				31,
+				32,
+				33,
+				34,
+				35,
+				36,
+				37,
+				38,
+				39,
+				40,
+				41,
+				42,
+				43,
+				44,
+				45,
+				46,
+				47,
+				48,
+				49,
+				50,
+				51,
+				52,
+				53,
+				54,
+				55,
+				56,
+				57,
+				58,
+				59,
+				60,
+				61
+			]
+		},
+		{
+			"name" : "",
+			"sourceIndexes" : 
+			[
+				62,
+				63,
+				64,
+				65,
+				66,
+				67,
+				68,
+				69,
+				70,
+				71,
+				72,
+				73,
+				74,
+				75,
+				76,
+				77,
+				78,
+				79,
+				80,
+				81,
+				82,
+				83,
+				84,
+				85,
+				86,
+				87,
+				88,
+				89,
+				90,
+				91,
+				92,
+				93,
+				94,
+				95,
+				96,
+				97,
+				98,
+				99,
+				100,
+				101,
+				102,
+				103
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/audio_service.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/demuxer/ogg_demuxer.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/no_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/box_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/es8311_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/es8374_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/es8388_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/es8389_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/codecs/dummy_audio_codec.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/processors/audio_debugger.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/led/single_led.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/led/circular_strip.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/led/gpio_led.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/display.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lcd_display.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/oled_display.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/lvgl_display.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/emote_display.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/emoji_collection.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/lvgl_theme.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/lvgl_font.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/lvgl_image.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/gif/lvgl_gif.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 1,
+			"path" : "main/display/lvgl_display/gif/gifdec.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/display/lvgl_display/jpg/image_to_jpeg.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 1,
+			"path" : "main/display/lvgl_display/jpg/jpeg_to_image.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/protocols/protocol.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/protocols/mqtt_protocol.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/protocols/websocket_protocol.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/mcp_server.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/system_info.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/application.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/ota.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/settings.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/device_state_machine.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/assets.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/main.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/board.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/wifi_board.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/ml307_board.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/nt26_board.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/dual_network_board.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/adc_battery_monitor.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/afsk_demod.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/axp2101.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/backlight.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/button.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/i2c_device.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/knob.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/power_save_timer.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/press_to_talk_mcp_tool.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/sleep_timer.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/sy6970.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/system_reset.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/xingzhi-cube-0.96oled-wifi/xingzhi-cube-0.96oled-wifi.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/processors/afe_audio_processor.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/wake_words/afe_wake_word.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/audio/wake_words/custom_wake_word.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/esp_video.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/rndis_board.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 2,
+			"compileGroupIndex" : 0,
+			"path" : "main/boards/common/esp32_camera.cc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 90,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/0.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 92,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/1.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 94,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/2.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 96,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/3.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 98,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/4.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 100,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/5.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 102,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/6.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 104,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/7.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 106,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/8.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 108,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/9.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 110,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/activation.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 112,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/err_pin.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 114,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/err_reg.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 116,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/upgrade.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 118,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/welcome.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 120,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/wificonfig.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 122,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/exclamation.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 124,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/low_battery.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 126,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/popup.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 128,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/success.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 130,
+			"compileGroupIndex" : 2,
+			"isGenerated" : true,
+			"path" : ".pio/build/esp32-s3-devkitc-1/vibration.ogg.S",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/0.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/1.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/2.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/3.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/4.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/5.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/6.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/7.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/8.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/9.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/activation.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/err_pin.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/err_reg.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/upgrade.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/welcome.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/locales/zh-CN/wificonfig.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/common/exclamation.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/common/low_battery.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/common/popup.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/common/success.ogg",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"path" : "main/assets/common/vibration.ogg",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}
