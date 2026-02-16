@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/78__esp_lcd_nv3023",
+		"source" : "managed_components/78__esp_lcd_nv3023"
+	}
+}

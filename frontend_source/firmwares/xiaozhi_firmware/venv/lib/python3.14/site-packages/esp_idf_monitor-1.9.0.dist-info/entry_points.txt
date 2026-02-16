@@ -1,0 +1,2 @@
+[console_scripts]
+idf-monitor = esp_idf_monitor.idf_monitor:main

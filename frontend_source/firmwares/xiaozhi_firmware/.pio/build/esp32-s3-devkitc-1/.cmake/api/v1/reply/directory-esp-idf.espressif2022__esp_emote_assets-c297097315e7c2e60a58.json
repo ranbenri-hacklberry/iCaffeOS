@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/espressif2022__esp_emote_assets",
+		"source" : "managed_components/espressif2022__esp_emote_assets"
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/tny-robotics__sh1106-esp-idf",
+		"source" : "managed_components/tny-robotics__sh1106-esp-idf"
+	}
+}
