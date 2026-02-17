@@ -1,15 +1,15 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 const MusicContext = createContext(null);
 
 // Get base URL for music files from backend - Use relative paths on localhost to leverage Vite proxy
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { getBackendApiUrl } from '../utils/apiUtils';
 const MUSIC_API_URL = getBackendApiUrl();
 
-import { MusicCacheManager } from '@/services/musicCacheManager';
-import { MusicQueueManager } from '@/services/musicQueueManager';
+import { MusicCacheManager } from '../services/musicCacheManager';
+import { MusicQueueManager } from '../services/musicQueueManager';
 
 export const MusicProvider = ({ children }) => {
     const { currentUser } = useAuth();

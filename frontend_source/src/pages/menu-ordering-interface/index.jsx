@@ -1,25 +1,25 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import MenuCategoryFilter from '@/pages/menu-ordering-interface/components/MenuCategoryFilter';
-import MenuGrid from '@/pages/menu-ordering-interface/components/MenuGrid';
-import SmartCart from '@/pages/menu-ordering-interface/components/SmartCart';
-import CheckoutButton from '@/pages/menu-ordering-interface/components/CheckoutButton';
-import PaymentSelectionModal from '@/pages/menu-ordering-interface/components/PaymentSelectionModal';
-import ModifierModal from '@/pages/menu-ordering-interface/components/ModifierModal';
-import SaladPrepDecision from '@/pages/menu-ordering-interface/components/SaladPrepDecision';
-import MTOQuickNotesModal from '@/pages/menu-ordering-interface/components/MTOQuickNotesModal';
-import DeliveryAddressModal from '@/pages/menu-ordering-interface/components/DeliveryAddressModal';
-import OrderConfirmationModal from '@/components/ui/OrderConfirmationModal';
-import CustomerInfoModal from '@/components/CustomerInfoModal';
-import { addCoffeePurchase, getLoyaltyCount, handleLoyaltyAdjustment, getLoyaltyRedemptionForOrder } from "@/lib/loyalty";
-import { supabase } from '@/lib/supabase';
-import { useAuth, APP_VERSION } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
-import UnifiedHeader from '@/components/UnifiedHeader';
-import Icon from '@/components/AppIcon';
+import MenuCategoryFilter from './components/MenuCategoryFilter';
+import MenuGrid from './components/MenuGrid';
+import SmartCart from './components/SmartCart';
+import CheckoutButton from './components/CheckoutButton';
+import PaymentSelectionModal from './components/PaymentSelectionModal';
+import ModifierModal from './components/ModifierModal';
+import SaladPrepDecision from './components/SaladPrepDecision';
+import MTOQuickNotesModal from './components/MTOQuickNotesModal';
+import DeliveryAddressModal from './components/DeliveryAddressModal';
+import OrderConfirmationModal from '../../components/ui/OrderConfirmationModal';
+import CustomerInfoModal from '../../components/CustomerInfoModal';
+import { addCoffeePurchase, getLoyaltyCount, handleLoyaltyAdjustment, getLoyaltyRedemptionForOrder } from "../../lib/loyalty";
+import { supabase } from '../../lib/supabase';
+import { useAuth, APP_VERSION } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import UnifiedHeader from '../../components/UnifiedHeader';
+import Icon from '../../components/AppIcon';
 // Custom hooks
-import { useMenuItems, useLoyalty, useCart } from '@/pages/menu-ordering-interface/hooks';
+import { useMenuItems, useLoyalty, useCart } from './hooks';
 
 const ORDER_ORIGIN_STORAGE_KEY = 'order_origin';
 

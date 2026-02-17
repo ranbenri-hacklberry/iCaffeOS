@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
-import { loginEmployee, clockEvent } from '@/lib/employees/employeeService';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { loginEmployee, clockEvent } from '../../lib/employees/employeeService';
 import { Loader2, User, KeyRound, ArrowRight, CheckCircle, AlertTriangle, Eye, EyeOff, Building2, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import VirtualKeyboard from '@/components/ui/VirtualKeyboard';
+import VirtualKeyboard from '../../components/ui/VirtualKeyboard';
 
 // Remove BrandLogo import since we're not using it anymore
 

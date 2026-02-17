@@ -7,18 +7,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { useDashboardLiveData } from '@/hooks/useDashboardLiveData';
+import { useAuth } from '../../context/AuthContext';
+import { useDashboardLiveData } from '../../hooks/useDashboardLiveData';
 import { motion } from 'framer-motion';
 import {
     Coffee, Monitor, ChefHat, Package, BarChart3, Palette,
     Lock, ShieldAlert, Settings, LogOut, AlertTriangle, UserCircle,
     Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music
 } from 'lucide-react';
-import HeroCard from '@/components/HeroCard';
-import { PosWireframe, KdsWireframe } from '@/components/DashboardWireframes';
-import PinCodeModal from '@/components/PinCodeModal';
-import SmsBalanceWidget from '@/components/SmsBalanceWidget';
+import HeroCard from '../../components/HeroCard';
+import { PosWireframe, KdsWireframe } from '../../components/DashboardWireframes';
+import PinCodeModal from '../../components/PinCodeModal';
+import SmsBalanceWidget from '../../components/SmsBalanceWidget';
 
 const HierarchicalDashboard = () => {
     const navigate = useNavigate();

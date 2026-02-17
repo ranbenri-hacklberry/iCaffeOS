@@ -1,54 +1,54 @@
 import React from "react";
 import { BrowserRouter, HashRouter, Routes as RouterRoutes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import ScrollToTop from "@/components/ScrollToTop";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import NotFound from "@/pages/NotFound";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { MayaAuthProvider, useMayaAuth } from "@/context/MayaAuthContext";
-import { MusicProvider } from "@/context/MusicContext";
-import SyncStatusModal from "@/components/SyncStatusModal";
-import ConnectivityStatus from "@/components/ConnectivityStatus";
-import MiniMusicBar from '@/components/music/MiniMusicBar';
+import ScrollToTop from "./components/ScrollToTop";
+import ErrorBoundary from "./components/ErrorBoundary";
+import NotFound from "./pages/NotFound";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { MayaAuthProvider, useMayaAuth } from "./context/MayaAuthContext";
+import { MusicProvider } from "./context/MusicContext";
+import SyncStatusModal from "./components/SyncStatusModal";
+import ConnectivityStatus from "./components/ConnectivityStatus";
+import MiniMusicBar from './components/music/MiniMusicBar';
 // SyncManager removed as per user request
-import LoginGateway from '@/components/LoginGateway';
-import { isElectron } from "@/utils/apiUtils";
+import LoginGateway from './components/LoginGateway';
+import { isElectron } from "./utils/apiUtils";
 
 // Pages
-import LoginScreen from "@/pages/login/LoginScreen";
-import ModeSelectionScreen from "@/pages/login/ModeSelectionScreen";
-import HierarchicalDashboard from "@/pages/login/HierarchicalDashboard";
-import MenuOrderingInterface from '@/pages/menu-ordering-interface';
-import KdsScreen from '@/pages/kds';
-import DataManagerInterface from '@/pages/data-manager-interface';
-import SuperAdminDashboard from '@/pages/super-admin';
-import SuperAdminPortal from '@/pages/super-admin/SuperAdminPortal';
-import DatabaseExplorer from '@/pages/super-admin/DatabaseExplorer';
-import ManagerKDS from '@/components/manager/ManagerKDS';
-import InventoryPage from '@/pages/inventory';
-import PrepPage from '@/pages/prep';
-import MusicPage from '@/pages/music';
-import DexieAdminPanel from '@/pages/dexie-admin';
-import MayaAssistant from '@/pages/maya';
+import LoginScreen from "./pages/login/LoginScreen";
+import ModeSelectionScreen from "./pages/login/ModeSelectionScreen";
+import HierarchicalDashboard from "./pages/login/HierarchicalDashboard";
+import MenuOrderingInterface from './pages/menu-ordering-interface';
+import KdsScreen from './pages/kds';
+import DataManagerInterface from './pages/data-manager-interface';
+import SuperAdminDashboard from './pages/super-admin';
+import SuperAdminPortal from './pages/super-admin/SuperAdminPortal';
+import DatabaseExplorer from './pages/super-admin/DatabaseExplorer';
+import ManagerKDS from './components/manager/ManagerKDS';
+import InventoryPage from './pages/inventory';
+import PrepPage from './pages/prep';
+import MusicPage from './pages/music';
+import DexieAdminPanel from './pages/dexie-admin';
+import MayaAssistant from './pages/maya';
 
-import DexieTestPage from '@/pages/DexieTestPage';
-import KanbanPage from '@/pages/kanban';
-import DriverPage from '@/pages/driver';
-import OrderTrackingPage from '@/pages/order-tracking';
-import CompleteProfile from '@/pages/login/CompleteProfile';
-import GoogleCallback from '@/pages/auth/GoogleCallback';
-import OwnerSettings from '@/pages/owner-settings';
-import IPadMenuEditor from '@/pages/ipad-menu-editor';
-import WizardLayout from '@/pages/onboarding/components/WizardLayout';
-import MenuReviewDashboard from '@/pages/onboarding/components/MenuReviewDashboard';
-import IPadInventoryPage from '@/pages/ipad_inventory/IPadInventoryPage';
-import FaceScannerTest from '@/pages/FaceScannerTest';
-import EnrollFace from '@/pages/EnrollFace';
-import VideoCreator from '@/pages/VideoCreator';
-import AdGenerator from '@/components/marketing/AdGenerator';
-import ProfileSettings from '@/pages/profile-settings';
-import AdminFixSuperAdmin from '@/pages/admin-fix-superadmin';
-import SMSDashboard from '@/components/SMSDashboard';
+import DexieTestPage from './pages/DexieTestPage';
+import KanbanPage from './pages/kanban';
+import DriverPage from './pages/driver';
+import OrderTrackingPage from './pages/order-tracking';
+import CompleteProfile from './pages/login/CompleteProfile';
+import GoogleCallback from './pages/auth/GoogleCallback';
+import OwnerSettings from './pages/owner-settings';
+import IPadMenuEditor from './pages/ipad-menu-editor';
+import WizardLayout from './pages/onboarding/components/WizardLayout';
+import MenuReviewDashboard from './pages/onboarding/components/MenuReviewDashboard';
+import IPadInventoryPage from './pages/ipad_inventory/IPadInventoryPage';
+import FaceScannerTest from './pages/FaceScannerTest';
+import EnrollFace from './pages/EnrollFace';
+import VideoCreator from './pages/VideoCreator';
+import AdGenerator from './components/marketing/AdGenerator';
+import ProfileSettings from './pages/profile-settings';
+import AdminFixSuperAdmin from './pages/admin-fix-superadmin';
+import SMSDashboard from './components/SMSDashboard';
 
 // Wrapper for AdGenerator to provide props
 const AdGeneratorWrapper = () => {
@@ -82,7 +82,7 @@ const PageTransition = ({ children }) => (
   </motion.div>
 );
 
-import LoadingFallback from '@/components/LoadingFallback';
+import LoadingFallback from './components/LoadingFallback';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
