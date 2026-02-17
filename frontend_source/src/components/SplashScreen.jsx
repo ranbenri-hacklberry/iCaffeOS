@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import '@/components/SplashScreen.css';
+import './SplashScreen.css';
 import { supabase } from '@/lib/supabase';
 import { initialLoad } from '@/services/syncService';
 import { getBackendApiUrl } from '@/utils/apiUtils';
