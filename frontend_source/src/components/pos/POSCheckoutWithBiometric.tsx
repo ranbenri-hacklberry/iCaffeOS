@@ -1,15 +1,8 @@
 // @ts-nocheck
 /**
  * POS Checkout with Biometric Verification
- *
- * Example integration of QuickFaceLog for zero-friction cashier accountability
- *
- * Flow:
- * 1. Customer checkout screen shows "Biometric Active" indicator
- * 2. When "Complete Order" clicked → QuickFaceLog captures 1-2 frames
- * 3. Embedding sent to backend with order data
- * 4. Order saved with cashier_id + face_match_confidence
- * 5. Success feedback shown to cashier (customer doesn't see)
+ * @abra-table orders, employees
+ * @abra-dexie orders
  */
 
 import React, { useState } from 'react';

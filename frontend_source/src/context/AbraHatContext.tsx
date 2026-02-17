@@ -16,10 +16,16 @@ export const AbraHatProvider: React.FC<{ children: React.ReactNode, realSDK: ICa
     const [mockSDK, setMockSDK] = useState<ICaffeSDK | null>(null);
 
     const wearHat = (spell: AbraManifesto) => {
-        console.log('🎩 Putting on the Abra Hat:', spell.incantation);
-        setCurrentSpell(spell);
-        // In the future, this is where we isolate the SDK
-        setMockSDK(realSDK);
+        // Gates (V-003): Manager+ required for Sandbox (8)
+        realSDK.auth.identify().then(profile => {
+            if (profile.access_level < 8) {
+                console.error(`🚫 Spell Refused: [${profile.name}] lacks magical rank (${profile.access_level} < 8)`);
+                return;
+            }
+            console.log('🎩 Putting on the Abra Hat:', spell.spell_id);
+            setCurrentSpell(spell);
+            setMockSDK(realSDK);
+        });
     };
 
     const takeOffHat = () => {
