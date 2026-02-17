@@ -47,7 +47,8 @@ export const useDashboardLiveData = (businessId) => {
                     .from('orders')
                     .select('id, order_status')
                     .eq('business_id', businessId)
-                    .in('order_status', ['new', 'preparing', 'ready', 'fired', 'in_progress']);
+                    .in('order_status', ['new', 'preparing', 'ready', 'fired', 'in_progress'])
+                    .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
                 if (ordErr) {
                     console.error('⚠️ [Orders] Supabase error:', ordErr);
@@ -165,7 +166,12 @@ export const useDashboardLiveData = (businessId) => {
 
                 const lowStockItems = (inventoryItems || []).filter(item => {
                     const currentStock = Number(item.current_stock) || 0;
-                    const minStock = Number(item.low_stock_alert !== undefined ? item.low_stock_alert : 5); // Default to 5 if col missing
+                    // FIX: Only alert if low_stock_alert is explicitly set (not null/undefined)
+                    // If undefined/null, treat as 0 (no alert)
+                    const minStock = (item.low_stock_alert !== null && item.low_stock_alert !== undefined)
+                        ? Number(item.low_stock_alert)
+                        : 0;
+
                     const isBelowMin = minStock > 0 && currentStock < minStock;
                     if (isBelowMin) {
                         console.log(`  ⚠️ ${item.name}: ${currentStock} < ${minStock}`);
@@ -202,7 +208,8 @@ export const useDashboardLiveData = (businessId) => {
                     .equals(businessId)
                     .and(order => {
                         const status = order.order_status?.toLowerCase();
-                        return status === 'new' || status === 'preparing' || status === 'ready' || status === 'fired' || status === 'in_progress';
+                        const isRecent = new Date(order.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000);
+                        return isRecent && (status === 'new' || status === 'preparing' || status === 'ready' || status === 'fired' || status === 'in_progress');
                     })
                     .toArray();
 
@@ -248,7 +255,9 @@ export const useDashboardLiveData = (businessId) => {
 
                 const lowStockItems = inventoryItems.filter(item => {
                     const currentStock = Number(item.current_stock) || 0;
-                    const minStock = Number(item.low_stock_alert !== undefined ? item.low_stock_alert : 5);
+                    const minStock = (item.low_stock_alert !== null && item.low_stock_alert !== undefined)
+                        ? Number(item.low_stock_alert)
+                        : 0;
                     return minStock > 0 && currentStock < minStock;
                 });
 

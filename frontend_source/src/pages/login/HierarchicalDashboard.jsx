@@ -80,7 +80,7 @@ const HierarchicalDashboard = () => {
                 {/* Header */}
                 <div className="text-center mb-4 sm:mb-8">
                     <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">
-                        שלום, {currentUser?.name || 'עובד'} 👋
+                        שלום, {currentUser?.full_name || currentUser?.name || 'עובד'} 👋
                     </h1>
                     <SmsBalanceWidget />
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-full">
