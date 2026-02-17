@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './SplashScreen.css';
-import { supabase } from '@/lib/supabase';
-import { initialLoad } from '@/services/syncService';
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { supabase } from '../lib/supabase';
+import { initialLoad } from '../services/syncService';
+import { getBackendApiUrl } from '../utils/apiUtils';
 const API_URL = getBackendApiUrl();
 
 const SplashScreen = ({ onFinish }) => {
@@ -87,7 +87,7 @@ const SplashScreen = ({ onFinish }) => {
                         const machineId = await window.electron.auth.getMachineId();
                         if (machineId) {
                             console.log('🔑 Hardware ID:', machineId);
-                            const { cloudSupabase } = await import('@/lib/supabase');
+                            const { cloudSupabase } = await import('../lib/supabase');
                             const { data, error } = await cloudSupabase.rpc('verify_kiosk_device', {
                                 p_machine_id_hash: machineId
                             });
@@ -122,7 +122,7 @@ const SplashScreen = ({ onFinish }) => {
 
                     if (businessId) {
                         setTargetProgress(45);
-                        const { db } = await import('@/db/database');
+                        const { db } = await import('../db/database');
                         const localItemCount = await db.menu_items.count();
 
                         if (localItemCount > 20) {
