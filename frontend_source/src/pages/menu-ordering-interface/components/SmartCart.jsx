@@ -5,10 +5,10 @@ import {
     Plus, Minus, Clock, Check, AlertCircle,
     RotateCcw, Edit2, RefreshCw, CreditCard
 } from 'lucide-react';
-import Button from '@/components/ui/Button';
-import Icon from '@/components/AppIcon';
-import { useTheme } from '@/context/ThemeContext';
-import { getShortName, getModColorClass } from '@/config/modifierShortNames';
+import Button from '../../../components/ui/Button';
+import Icon from '../../../components/AppIcon';
+import { useTheme } from '../../../context/ThemeContext';
+import { getShortName, getModColorClass } from '../../../config/modifierShortNames';
 
 /**
  * ⚠️⚠️⚠️ WARNING - DO NOT EDIT ⚠️⚠️⚠️
