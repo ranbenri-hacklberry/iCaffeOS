@@ -1,9 +1,9 @@
 import React, { useEffect, useState, lazy, Suspense } from "react";
-import { ConnectionProvider } from "@/context/ConnectionContext";
-import { ThemeProvider } from "@/context/ThemeContext";
-import SplashScreen from "@/components/SplashScreen";
+import { ConnectionProvider } from "./context/ConnectionContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import SplashScreen from "./components/SplashScreen";
 
-import LoadingFallback from "@/components/LoadingFallback";
+import LoadingFallback from "./components/LoadingFallback";
 import MayaOverlay from "./components/maya/MayaOverlay";
 
 // Lazy Load Routes to ensure tree-shaking works for LITE mode
@@ -16,7 +16,7 @@ function App() {
 
   useEffect(() => {
     // 🌍 Pre-warm the Active URL Resolver cache
-    import("@/utils/apiUtils").then(({ resolveUrl }) => {
+    import("./utils/apiUtils").then(({ resolveUrl }) => {
       resolveUrl().catch(err => console.warn("Failed to pre-warm URL cache:", err));
     });
   }, []);
