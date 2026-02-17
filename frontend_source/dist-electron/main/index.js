@@ -1,10 +1,11 @@
 import "electron";
 import "path";
 import "fs";
+import "os";
 import "child_process";
 import "net";
 import "url";
-import "./index-BYXwvfa2.js";
+import "./index-D1Wu771f.js";
 import "crypto";
 import "fs/promises";
 import "zlib";
@@ -13,4 +14,3 @@ import "stream";
 import "node:fs/promises";
 import "tty";
 import "util";
-import "os";

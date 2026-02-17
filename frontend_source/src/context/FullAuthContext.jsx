@@ -100,10 +100,11 @@ export const AuthProvider = ({ children }) => {
                             };
 
                             setCurrentUser(deviceUser);
-                            setDeviceMode('kiosk');
+                            // POLICY: No auto-mode. User must pick from Dashboard/Portal.
+                            setDeviceMode(null);
                             localStorage.setItem('kiosk_user', JSON.stringify(deviceUser));
                             localStorage.setItem('kiosk_auth_time', Date.now().toString());
-                            localStorage.setItem('kiosk_mode', 'kiosk');
+                            localStorage.removeItem('kiosk_mode');
                             setIsLoading(false);
                             return;
                         } else {
@@ -190,7 +191,11 @@ export const AuthProvider = ({ children }) => {
                 // If no session exists, try to discover who we are from the local backend
                 try {
                     console.log('🔍 [Auth] Attempting Zero-Config auto-discovery...');
-                    const res = await fetch(`${API_URL}/api/admin/identity`);
+                    // Add timeout to prevent infinite loading if backend is down
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+                    const res = await fetch(`${API_URL}/api/admin/identity`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
                     if (res.ok) {
                         const { businesses, count } = await res.json();
                         if (count === 1) {
@@ -198,14 +203,24 @@ export const AuthProvider = ({ children }) => {
                             console.log(`🚀 [Auth] Auto-discovered unique business: ${biz.name}. Fetching identity...`);
 
                             // 👤 PRE-FETCH: Find the primary owner to use as the session identity
+                            // First, try to find super admins (regardless of access_level)
+                            const { data: superAdmins } = await supabase
+                                .from('employees')
+                                .select('*')
+                                .eq('business_id', biz.id)
+                                .eq('is_super_admin', true)
+                                .limit(1);
+
+                            // Then get owners/admins as fallback
                             const { data: owners } = await supabase
                                 .from('employees')
                                 .select('*')
                                 .eq('business_id', biz.id)
                                 .in('access_level', ['owner', 'admin']);
 
-                            // Prioritize finding a Super Admin, then "Netanel", then any owner
-                            const primaryEmployee = owners?.find(e => e.is_super_admin) ||
+                            // Prioritize: Super Admin first, then owner named "Netanel/Nati", then any owner
+                            const primaryEmployee = superAdmins?.[0] ||
+                                owners?.find(e => e.is_super_admin) ||
                                 owners?.find(e => e.name?.includes('נתנאל') || e.name?.includes('נתי')) ||
                                 owners?.[0];
 
@@ -216,7 +231,7 @@ export const AuthProvider = ({ children }) => {
                                 business_name: biz.name,
                                 access_level: primaryEmployee?.access_level || 'staff',
                                 pin_code: primaryEmployee?.pin_code || null,
-                                is_super_admin: primaryEmployee?.is_super_admin || false,
+                                is_super_admin: primaryEmployee?.is_super_admin || primaryEmployee?.isSuperAdmin || false,
                                 is_device: true
                             };
 
@@ -239,7 +254,7 @@ export const AuthProvider = ({ children }) => {
                         }
                     }
                 } catch (discoveryErr) {
-                    console.warn('ℹ️ [Auth] Auto-discovery skipped (not on local server or API down)');
+                    console.warn('ℹ️ [Auth] Auto-discovery skipped (not on local server or API down):', discoveryErr.message);
                 }
             }
 
@@ -247,7 +262,24 @@ export const AuthProvider = ({ children }) => {
             console.log('🏁 [AuthContext] checkAuth complete (isLoading -> false)');
         };
 
-        checkAuth();
+        // Run checkAuth with a safety timeout
+        checkAuth().catch(err => {
+            console.error('❌ [Auth] checkAuth failed:', err);
+            setIsLoading(false); // Ensure loading ends even on error
+        });
+
+        // Safety fallback: Force loading to end after 10 seconds no matter what
+        const safetyTimeout = setTimeout(() => {
+            setIsLoading(prev => {
+                if (prev) {
+                    console.warn('⏰ [Auth] Safety timeout - forcing loading to end');
+                    return false;
+                }
+                return prev;
+            });
+        }, 10000);
+
+        return () => clearTimeout(safetyTimeout);
     }, []);
 
     // Auto-sync queue when coming back online
@@ -440,7 +472,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('kiosk_auth_time');
         localStorage.removeItem('kiosk_mode');
         localStorage.removeItem('last_sync_time');
-        window.location.href = '/';
+        window.location.href = '/mode-selection';
     };
 
     const setMode = (mode) => {

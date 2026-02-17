@@ -80,8 +80,36 @@ const SplashScreen = ({ onFinish }) => {
                 const { APP_VERSION } = await import('../version');
                 localStorage.setItem('app_version', APP_VERSION);
 
+                // 🤖 ELECTRON AUTO-LOGIN (Hardware ID)
+                if (window.electron?.auth) {
+                    setStatusText('מאמת חומרה...');
+                    try {
+                        const machineId = await window.electron.auth.getMachineId();
+                        if (machineId) {
+                            console.log('🔑 Hardware ID:', machineId);
+                            const { cloudSupabase } = await import('@/lib/supabase');
+                            const { data, error } = await cloudSupabase.rpc('verify_kiosk_device', {
+                                p_machine_id_hash: machineId
+                            });
+
+                            if (data?.success) {
+                                console.log('✅ Hardware ID Verified:', data.user.name);
+                                // Store in localStorage for AuthContext to pick up immediately
+                                localStorage.setItem('kiosk_user', JSON.stringify({ ...data.user, is_device: true }));
+                                localStorage.setItem('kiosk_auth_time', Date.now().toString());
+                                setTargetProgress(60);
+                                setStatusText('התחברות אוטומטית...');
+                            } else {
+                                console.warn('⚠️ Hardware ID Unregistered:', data?.reason);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('❌ Hardware Auth Failed:', e);
+                    }
+                }
+
                 const { data: { user } } = await supabase.auth.getUser();
-                setTargetProgress(30);
+                setTargetProgress(40);
 
                 if (user) {
                     setStatusText('מחבר פרופיל...');

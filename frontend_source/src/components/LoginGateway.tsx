@@ -3,12 +3,27 @@
  * מנתב בין MayaGateway (רשת מקומית) ל-LoginScreen (גישה מרחוק)
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { isLocalNetworkAccess } from '@/utils/networkDetection';
 import MayaGateway from '@/components/maya/MayaGatewayComplete';
 import LoginScreen from '@/pages/login/LoginScreen';
+import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export const LoginGateway: React.FC = () => {
+  const { currentUser, deviceMode } = useAuth();
+  const navigate = useNavigate();
+
+  // If already logged in (e.g. via Machine ID auto-login), bypass login gateway
+  useEffect(() => {
+    if (currentUser) {
+      console.log('🚀 [LoginGateway] User already authenticated, redirecting...', currentUser.name);
+      if (deviceMode === 'music') navigate('/music');
+      else if (deviceMode === 'kds') navigate('/kds');
+      else navigate('/');
+    }
+  }, [currentUser, deviceMode, navigate]);
+
   const isLocalNetwork = isLocalNetworkAccess();
   // אם אנחנו ב-Electron, אנחנו תמיד רוצים כניסת PIN כברירת מחדל
   const isElectronApp = window.navigator.userAgent.toLowerCase().includes('electron') ||

@@ -102,13 +102,15 @@ const ProtectedRoute = ({ children }) => {
   const isMayaAuthenticated = mayaAuth.authState === 'AUTHORIZED' && mayaAuth.employee;
 
   // CRITICAL: If no user and not Maya authenticated, redirect to login
+  // Also clear any stale deviceMode that might be in localStorage
   if (!currentUser && !isMayaAuthenticated) {
+    // Clear stale mode to prevent auto-redirect to POS on next login
+    localStorage.removeItem('kiosk_mode');
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // SUPER ADMIN PATHS: Allow access without device mode
+  const isSuperAdmin = currentUser?.is_super_admin || currentUser?.role === 'super_admin' || currentUser?.isSuperAdmin || mayaAuth.employee?.isSuperAdmin;
   const isSuperAdminPath = location.pathname.startsWith('/super-admin');
-  const isSuperAdmin = currentUser?.is_super_admin || currentUser?.role === 'super_admin' || mayaAuth.employee?.isSuperAdmin;
 
   // 👑 SUPER ADMIN REDIRECT: If super admin lands on root '/', send them to their portal
   if (isSuperAdmin && location.pathname === '/' && !currentUser?.is_impersonating) {
@@ -124,20 +126,21 @@ const ProtectedRoute = ({ children }) => {
   // User is logged in - check mode
   if (!deviceMode) {
     // Super Admin without device mode should go to their portal, not mode selection
-    // Check both regular auth and Maya auth
-    const isSuperAdminRedir = currentUser?.is_super_admin || currentUser?.role === 'super_admin' || mayaAuth.employee?.isSuperAdmin;
-    const isImpersonating = currentUser?.is_impersonating;
-
-    if (isSuperAdminRedir && !isImpersonating) {
+    if (isSuperAdmin && !currentUser?.is_impersonating) {
       return <Navigate to="/super-admin" replace />;
     }
 
-    // If no mode selected and not already on selection screen, redirect there
-    if (location.pathname !== '/mode-selection') {
+    // Explicitly check for POS path (/) when no mode is set
+    if (location.pathname === '/' || location.pathname === '/menu-ordering-interface') {
       return <Navigate to="/mode-selection" replace />;
     }
+
+    // If no mode selected and not already on selection screen or login, redirect to mode selection
+    if (location.pathname !== '/mode-selection' && location.pathname !== '/login') {
+      return <Navigate to="/mode-selection" replace />;
+    }
+
     // If on mode selection, allow access
-    // FIX: Don't use PageTransition for mode-selection to avoid animation freezes
     return children;
   }
 

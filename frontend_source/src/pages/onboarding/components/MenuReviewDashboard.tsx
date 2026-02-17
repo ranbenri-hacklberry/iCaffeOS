@@ -13,7 +13,7 @@ import { normalizeCategory } from '@/pages/onboarding/logic/onboardingLogic';
 import HumorousLoader from '@/pages/onboarding/components/menu-editor/shared/HumorousLoader';
 import CategoryDesignModal from '@/pages/onboarding/components/menu-editor/editor/CategoryDesignModal';
 import MenuItemEditModal from '@/pages/onboarding/components/menu-editor/editor/MenuItemEditModal';
-import ManagerAuthModal from '@/components/ManagerAuthModal';
+// ManagerAuthModal removed - PIN is checked in HierarchicalDashboard before navigation
 import UnifiedHeader from '@/components/UnifiedHeader';
 
 const MenuReviewDashboard = () => {
@@ -32,24 +32,10 @@ const MenuReviewDashboard = () => {
     const [showApiSettings, setShowApiSettings] = useState(false);
     const [tempApiKey, setTempApiKey] = useState(geminiApiKey || '');
 
-    // 🔒 Entry Protection State
-    const [isAuthorized, setIsAuthorized] = useState(false);
-    const [showEntryAuth, setShowEntryAuth] = useState(false);
-
-    // Check access on mount
-    useEffect(() => {
-        if (!currentUser) return;
-
-        const role = (currentUser.role || '').toLowerCase();
-        const accessLevel = (currentUser.access_level || '').toLowerCase();
-        const isAdmin = role === 'admin' || role === 'owner' || accessLevel === 'admin' || accessLevel === 'owner' || currentUser.is_super_admin === true;
-
-        if (isAdmin) {
-            setIsAuthorized(true);
-        } else {
-            setShowEntryAuth(true);
-        }
-    }, [currentUser]);
+    // 🔒 Entry Protection - REMOVED DUPLICATE PIN CHECK
+    // PIN is already checked in HierarchicalDashboard before navigation
+    // Users reaching this page have already been authorized
+    const isAuthorized = true;
 
     // Initialize Session
     useEffect(() => {
@@ -111,36 +97,24 @@ const MenuReviewDashboard = () => {
     };
 
 
-    if (isLoading || !isAuthorized) {
+    if (isLoading) {
         return (
-            <>
-                <div className="h-full flex flex-col items-center justify-center bg-slate-900 gap-8" dir="rtl">
-                    <div className="relative w-24 h-24">
-                        {/* Outer Pulse */}
-                        <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping" />
-                        {/* Middle Pulse */}
-                        <div className="absolute inset-4 bg-indigo-500/40 rounded-full animate-pulse" />
-                        {/* Core Logo/Icon Placeholder */}
-                        <div className="absolute inset-8 bg-indigo-600 rounded-full border-2 border-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.5)] flex items-center justify-center">
-                            <RefreshCw className="text-white animate-spin duration-[3000ms]" size={20} />
-                        </div>
-                    </div>
-                    <div className="text-center space-y-2">
-                        <p className="text-white text-xl font-black tracking-tighter uppercase">{isLoading ? 'מסנכרן נתונים...' : 'מאמת גישה...'}</p>
-                        <p className="text-indigo-400/60 text-[10px] font-mono animate-pulse uppercase tracking-[0.2em]">iCaffeOS Cloud Sync v5.2</p>
+            <div className="h-full flex flex-col items-center justify-center bg-slate-900 gap-8" dir="rtl">
+                <div className="relative w-24 h-24">
+                    {/* Outer Pulse */}
+                    <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping" />
+                    {/* Middle Pulse */}
+                    <div className="absolute inset-4 bg-indigo-500/40 rounded-full animate-pulse" />
+                    {/* Core Logo/Icon Placeholder */}
+                    <div className="absolute inset-8 bg-indigo-600 rounded-full border-2 border-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.5)] flex items-center justify-center">
+                        <RefreshCw className="text-white animate-spin duration-[3000ms]" size={20} />
                     </div>
                 </div>
-                {/* Ensure Auth Modal is visible even when loading/blocking */}
-                <ManagerAuthModal
-                    isOpen={showEntryAuth}
-                    actionDescription="כניסה לעריכת תפריט"
-                    onSuccess={() => {
-                        setIsAuthorized(true);
-                        setShowEntryAuth(false);
-                    }}
-                    onCancel={() => navigate('/mode-selection')}
-                />
-            </>
+                <div className="text-center space-y-2">
+                    <p className="text-white text-xl font-black tracking-tighter uppercase">מסנכרן נתונים...</p>
+                    <p className="text-indigo-400/60 text-[10px] font-mono animate-pulse uppercase tracking-[0.2em]">iCaffeOS Cloud Sync v5.2</p>
+                </div>
+            </div>
         );
     }
 
@@ -334,17 +308,6 @@ const MenuReviewDashboard = () => {
             {/* Modals */}
             {editItem && <MenuItemEditModal item={editItem} onClose={() => setEditItem(null)} />}
             {editCategory && <CategoryDesignModal category={editCategory} onClose={() => setEditCategory(null)} />}
-
-            {/* Entry Protection Modal */}
-            <ManagerAuthModal
-                isOpen={showEntryAuth}
-                actionDescription="כניסה לעריכת תפריט"
-                onSuccess={() => {
-                    setIsAuthorized(true);
-                    setShowEntryAuth(false);
-                }}
-                onCancel={() => navigate('/mode-selection')}
-            />
 
             {showApiSettings && (
                 <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">

@@ -20,7 +20,7 @@ export const resolveUrl = async () => {
     if (envUrl) return envUrl.replace(/\/$/, '');
 
     if (isElectron()) {
-        return 'http://localhost:8081';
+        return 'http://127.0.0.1:8081';
     }
 
     // 2. Identify if LAN/Local
@@ -33,9 +33,9 @@ export const resolveUrl = async () => {
         hostname.startsWith('100.') ||
         hostname.startsWith('172.');
 
-    // For browser development, return empty string for relative paths to use Vite proxy
+    // For browser development, return direct Backend URL to avoid Vite Proxy issues with /music routes
     if (isLocalOrLan && protocol.startsWith('http')) {
-        return '';
+        return 'http://127.0.0.1:8081'; // Direct connection
     }
 
     // 3. Remote/Cloud Access (e.g. external management)
@@ -57,6 +57,6 @@ export const getBackendApiUrl = () => {
         hostname.startsWith('100.') ||
         hostname.startsWith('172.');
 
-    // For browser development, return empty string for relative paths to use Vite proxy
-    return (isLocalOrLan && protocol.startsWith('http')) ? '' : CLOUD_URL;
+    // For browser development, return direct Backend URL to avoid Vite Proxy issues with /music routes
+    return (isLocalOrLan && protocol.startsWith('http')) ? 'http://localhost:8081' : CLOUD_URL;
 };

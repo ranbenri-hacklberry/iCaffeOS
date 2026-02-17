@@ -5,6 +5,7 @@ import {
     Heart
 } from 'lucide-react';
 import { useMusic } from '@/context/MusicContext';
+import VinylTurntable from './VinylTurntable';
 import '@/styles/music.css';
 
 /**
@@ -109,22 +110,14 @@ const MusicPlayer = ({ onMinimize, showPlaylist = false }) => {
                 </button>
             </div>
 
-            {/* Album art */}
-            <div className="flex-1 flex items-center justify-center p-8">
-                <div className="relative w-72 h-72 md:w-96 md:h-96">
-                    {currentSong.album?.cover_url ? (
-                        <img
-                            src={currentSong.album.cover_url}
-                            alt={currentSong.album?.name}
-                            className={`w-full h-full object-cover rounded-2xl shadow-2xl
-                         ${isPlaying ? 'animate-pulse' : ''}`}
-                        />
-                    ) : (
-                        <div className="w-full h-full rounded-2xl music-glass flex items-center justify-center">
-                            <Music className="w-32 h-32 text-white/30" />
-                        </div>
-                    )}
-                </div>
+            {/* Album art / Turntable */}
+            <div className="flex-1 flex items-center justify-center p-4">
+                <VinylTurntable
+                    song={currentSong}
+                    isPlaying={isPlaying}
+                    albumArt={currentSong.cover_url || currentSong.album?.cover_url}
+                    onTogglePlay={togglePlay}
+                />
             </div>
 
             {/* Song info */}

@@ -57,7 +57,10 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     .eq('user_email', businessEmail)
                     .maybeSingle();
 
-                if (data) setPlayback(data);
+                if (data) {
+                    setPlayback(data);
+                    setIsPlaying(data.is_playing);
+                }
             } catch (err) {
                 console.error('Error fetching playback:', err);
             }
@@ -182,28 +185,34 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
     return (
         <div
             className={`flex items-center gap-3 rounded-xl px-4 py-2 transition-all max-w-[340px] min-w-[220px] border transition-colors duration-300 ${isDarkMode
-                ? 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 shadow-black/20'
+                ? 'music-gradient-wood border-white/10 shadow-black/20 text-white'
                 : 'bg-gray-100 hover:bg-gray-50 border-gray-200 shadow-sm'
                 } ${className}`}
             dir="rtl"
         >
-            {/* Album Art - Right side in RTL */}
+            {/* Mini Vinyl Record */}
             <div
-                className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 cursor-pointer shadow-sm ${isDarkMode ? 'bg-slate-700' : 'bg-gray-200'
-                    }`}
+                className={`w-8 h-8 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20
+                    ${playback.is_playing ? 'animate-[spin_4s_linear_infinite]' : ''}`}
                 onClick={openRanTunes}
             >
-                {playback.cover_url ? (
-                    <img
-                        src={playback.cover_url}
-                        alt={playback.album_name || 'Album'}
-                        className="w-full h-full object-cover"
-                    />
-                ) : (
-                    <div className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                        <Music className="w-5 h-5" />
-                    </div>
-                )}
+                {/* Vinyl Grooves */}
+                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_transparent_30%,_rgba(255,255,255,0.1)_35%,_transparent_40%,_rgba(255,255,255,0.1)_45%,_transparent_50%)]" />
+
+                <div className="w-4 h-4 rounded-full overflow-hidden border border-black/20 flex items-center justify-center bg-white z-10">
+                    {playback.cover_url ? (
+                        <img
+                            src={playback.cover_url}
+                            alt={playback.album_name || 'Album'}
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                            <Music className="w-2 h-2 text-gray-400" />
+                        </div>
+                    )}
+                    <div className="w-1 h-1 rounded-full bg-black absolute z-30" />
+                </div>
             </div>
 
             {/* Song & Artist */}
@@ -211,7 +220,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                 <p className={`text-sm font-semibold truncate leading-tight ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                     {playback.song_title}
                 </p>
-                <p className={`text-xs truncate leading-tight ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                <p className={`text-xs truncate leading-tight ${isDarkMode ? 'text-white/60' : 'text-gray-500'}`}>
                     {playback.artist_name}
                 </p>
             </div>

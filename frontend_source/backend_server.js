@@ -14,9 +14,30 @@ import { Bonjour } from 'bonjour-service';
 import net from 'net';
 import * as mm from 'music-metadata';
 import fetch from 'node-fetch';
+import musicCoverRouter from './backend/api/musicCoverRoute.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * 🖼️ Helper to find the best cover art file in a set of directories
+ */
+function findBestCoverArt(searchDirs) {
+    const coverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'album.jpg', 'front.jpg', 'artwork.jpg', 'folder.png', 'thumb.jpg'];
+    for (const dir of searchDirs) {
+        if (!dir || !fs.existsSync(dir)) continue;
+        try {
+            const files = fs.readdirSync(dir);
+            for (const name of coverNames) {
+                const match = files.find(f => f.toLowerCase() === name);
+                if (match) return path.join(dir, match);
+            }
+        } catch (e) {
+            // Skip inaccessible dirs
+        }
+    }
+    return null;
+}
 
 const app = express();
 app.set('trust proxy', 1);
@@ -78,7 +99,12 @@ const startDiscovery = () => {
 };
 
 // Start discovery after a short delay to ensure port is bound
-setTimeout(startDiscovery, 3000);
+// setTimeout(startDiscovery, 3000);
+
+// ...
+
+// Start Docker Monitoring (Checks every 60s)
+// startDockerWatchdog(60000);
 
 // Configure multer for file uploads (memory storage)
 // Configure multer for file uploads (memory storage)
@@ -126,6 +152,7 @@ import { startDockerWatchdog } from './backend/services/dockerWatchdog.js';
 
 app.use('/api/maya', mayaRoutes);
 app.use('/api/marketing', marketingRoutes);
+app.use('/music/cover', musicCoverRouter);
 // app.use('/api/admin', adminRoutes); // Disabled: Outdated redundancy. Logic moved to backend_server.js
 
 // Start Docker Monitoring (Checks every 60s)
@@ -415,7 +442,7 @@ app.post("/music/youtube/download", async (req, res) => {
     const isSingle = !album || album === 'Single' || album === '';
 
     // Determine download path
-    const MUSIC_ROOT = process.platform === 'darwin' ? '/Volumes/Ran1/Music' : '/mnt/music_ssd';
+    const MUSIC_ROOT = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
     const folderName = isSingle ? `${safeArtist} - Singles` : safeAlbum;
     const outputPath = path.join(MUSIC_ROOT, folderName, `${safeTitle}.%(ext)s`);
     const dirPath = path.join(MUSIC_ROOT, folderName);
@@ -522,7 +549,7 @@ app.post("/music/youtube/download", async (req, res) => {
 
 // Helper to get Archive Root
 const getArchiveRoot = () => {
-    return process.platform === 'darwin' ? '/Volumes/Ran1/MusicArchive' : '/mnt/music_ssd/MusicArchive';
+    return process.platform === 'darwin' ? '/Volumes/RANTUNES/MusicArchive' : '/mnt/music_ssd/MusicArchive';
 };
 
 // 1. Delete Song
@@ -1455,13 +1482,13 @@ const processSyncQueue = async () => {
     global.isProcessingSyncQueue = true;
 
     try {
-        // Fetch up to 100 pending or failed items
+        // Fetch up to 50 pending or failed items, ordered by ID for better index performance
         const { data: items, error: fetchError } = await localSupabase
             .from('sync_queue')
             .select('*')
             .or('status.eq.PENDING,status.eq.FAILED')
-            .order('created_at', { ascending: true })
-            .limit(100);
+            .order('id', { ascending: true })
+            .limit(50);
 
         if (fetchError) throw fetchError;
         if (!items || items.length === 0) {
@@ -1615,9 +1642,11 @@ const processSyncQueue = async () => {
 
         console.log(`✅ [SyncWorker] Batch complete. Success: ${successCount}, Failed: ${failCount}`);
 
-        // If we hit the limit, there might be more. Trigger another run shortly.
-        if (items.length === 100) {
-            setTimeout(processSyncQueue, 1000);
+        // If we hit a significant batch size, there might be more. Trigger another run shortly.
+        // Throttled: Process smaller batches (50) to keep server responsive.
+        // Wait 5 seconds between batches to allow other requests (like /health) to be served.
+        if (items.length >= 50) {
+            setTimeout(processSyncQueue, 5000);
         }
 
     } catch (e) {
@@ -1628,7 +1657,7 @@ const processSyncQueue = async () => {
 };
 
 // Polling interval: every 30 seconds for higher responsiveness
-setInterval(processSyncQueue, 30 * 1000);
+// setInterval(processSyncQueue, 30 * 1000);
 
 // TRUSTED STATS API: Bypass RLS to show true counts in DatabaseExplorer
 app.post("/api/admin/purge-docker-table", async (req, res) => {
@@ -2463,7 +2492,7 @@ const setupRealtimeBridge = () => {
 };
 
 // Start the bridge after a short delay to ensure DBs are connected
-setTimeout(setupRealtimeBridge, 5000);
+// setTimeout(setupRealtimeBridge, 5000);
 
 // RAPID POLL: Sync recent orders every 1 minute as a safety net
 setInterval(async () => {
@@ -3438,14 +3467,21 @@ app.get("/music/stream", (req, res) => {
             return res.status(403).json({ error: 'Invalid path' });
         }
 
-        // For demo purposes, try to serve from project public/music directory first
-        let actualPath = filePath;
-        const projectMusicPath = path.join(process.cwd(), 'public', 'music', path.basename(filePath));
+        // 1. Try serving from project public/music directory (internal cache) FIRST
+        let actualPath = null;
+        const fileName = path.basename(filePath);
+        const projectMusicPath = path.join(MUSIC_CACHE_DIR, fileName);
 
         if (fs.existsSync(projectMusicPath)) {
             actualPath = projectMusicPath;
-        } else if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found' });
+        } else if (fs.existsSync(filePath)) {
+            // 2. Fallback to external path
+            actualPath = filePath;
+        }
+
+        if (!actualPath) {
+            console.warn(`📂 [Stream] File not found anywhere: ${filePath}`);
+            return res.status(404).json({ error: 'File not found locally or on drive' });
         }
 
         // Determine content type based on extension
@@ -3455,7 +3491,9 @@ app.get("/music/stream", (req, res) => {
             '.flac': 'audio/flac',
             '.m4a': 'audio/mp4',
             '.wav': 'audio/wav',
-            '.ogg': 'audio/ogg'
+            '.ogg': 'audio/ogg',
+            '.aac': 'audio/aac',
+            '.m4p': 'audio/mp4'
         };
         const contentType = contentTypes[ext] || 'audio/mpeg';
 
@@ -3487,6 +3525,82 @@ app.get("/music/stream", (req, res) => {
         }
     } catch (err) {
         console.error('Music stream error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+// Local Cache Directory
+const MUSIC_CACHE_DIR = path.join(__dirname, 'public', 'music');
+if (!fs.existsSync(MUSIC_CACHE_DIR)) {
+    fs.mkdirSync(MUSIC_CACHE_DIR, { recursive: true });
+}
+
+// Cache a song locally (Copy from external to internal)
+app.post("/music/cache", async (req, res) => {
+    const { songId, filePath, coverPath } = req.body;
+    if (!songId || !filePath) {
+        return res.status(400).json({ error: 'Missing songId or filePath' });
+    }
+
+    try {
+        const fileName = path.basename(filePath);
+        const destPath = path.join(MUSIC_CACHE_DIR, fileName);
+
+        if (!fs.existsSync(filePath) && !fs.existsSync(destPath)) {
+            return res.status(404).json({ error: 'Source file not found' });
+        }
+
+        if (!fs.existsSync(destPath)) {
+            console.log(`📦 [Cache] Copying to internal storage: ${fileName}...`);
+            fs.copyFileSync(filePath, destPath);
+        }
+
+        const stats = fs.statSync(destPath);
+
+        // Also cache cover if provided
+        if (coverPath && !coverPath.startsWith('http') && fs.existsSync(coverPath)) {
+            const coverName = path.basename(coverPath);
+            const destCover = path.join(MUSIC_CACHE_DIR, coverName);
+            if (!fs.existsSync(destCover)) {
+                console.log(`🖼️ [Cache] Copying cover: ${coverName}`);
+                fs.copyFileSync(coverPath, destCover);
+            }
+        }
+
+        res.json({ success: true, size: stats.size });
+    } catch (err) {
+        console.error('❌ Cache Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Remove from local cache
+app.delete("/music/cache/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+        // We need to find the filename. Since we don't have a DB lookup here easily without extra query,
+        // we might rely on the client providing the path or we search the directory for the ID-named file 
+        // if we named it that way. 
+        // For now, let's assume we use the filename from the DB in a future version.
+        // BUT wait, MusicCacheManager.js calls it with songId only.
+
+        // Strategy: Seek file in cache that matches basename of original if we had it, 
+        // or just delete EVERYTHING that isn't in the current queue if we want to be aggressive.
+        // Actually, let's check if we can get the song from Supabase.
+
+        if (!supabase) return res.status(500).json({ error: 'DB not ready' });
+
+        const { data: song } = await supabase.from('music_songs').select('file_path').eq('id', id).single();
+        if (song?.file_path) {
+            const fileName = path.basename(song.file_path);
+            const cachePath = path.join(MUSIC_CACHE_DIR, fileName);
+            if (fs.existsSync(cachePath)) {
+                fs.unlinkSync(cachePath);
+                console.log(`🗑️ [Cache] Evicted: ${fileName}`);
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
@@ -4032,15 +4146,26 @@ app.post("/music/albums/fix-covers", ensureSupabase, async (req, res) => {
 
 app.get("/music/library/albums", ensureSupabase, async (req, res) => {
     try {
-        const { data, error } = await supabase
+        // Use a join or separate query to get song counts
+        const { data: albums, error } = await supabase
             .from('music_albums')
             .select(`
                 *,
-                artist:music_artists(id, name, image_url)
+                artist:music_artists(id, name, image_url),
+                songs:music_songs(id)
             `)
             .order('name');
+
         if (error) throw error;
-        res.json({ success: true, albums: data || [] });
+
+        // Map to include song_count
+        const formatted = (albums || []).map(a => {
+            const song_count = a.songs?.length || 0;
+            delete a.songs;
+            return { ...a, song_count };
+        });
+
+        res.json({ success: true, albums: formatted });
     } catch (err) {
         console.error('Error fetching albums (library):', err);
         res.status(500).json({ success: false, message: err.message, albums: [] });
@@ -4386,23 +4511,41 @@ app.post("/music/rate", ensureSupabase, async (req, res) => {
 });
 
 // Get album cover image
-app.get("/music/cover", (req, res) => {
-    try {
-        const filePath = decodeURIComponent(req.query.path || '');
+// app.get("/music/cover", (req, res) => {
+//     try {
+//         const filePath = decodeURIComponent(req.query.path || '');
+//         const id = req.query.id;
 
-        if (!filePath || filePath.includes('..') || !fs.existsSync(filePath)) {
-            return res.status(404).send('Not found');
-        }
+//         // 1. Try serving from PROVIDED PATH first
+//         if (filePath && !filePath.includes('..') && fs.existsSync(filePath)) {
+//             const ext = path.extname(filePath).toLowerCase();
+//             const contentType = ext === '.png' ? 'image/png' : 'image/jpeg';
+//             res.setHeader('Content-Type', contentType);
+//             return fs.createReadStream(filePath).pipe(res);
+//         }
 
-        const ext = path.extname(filePath).toLowerCase();
-        const contentType = ext === '.png' ? 'image/png' : 'image/jpeg';
+//         // 2. FALLBACK: Check internal cache if provided path is missing (external drive disconnected)
+//         if (filePath) {
+//             const fileName = path.basename(filePath);
+//             const cachePath = path.join(MUSIC_CACHE_DIR, fileName);
+//             if (fs.existsSync(cachePath)) {
+//                 console.log(`🎯 [Cover] Serving from internal cache: ${fileName}`);
+//                 const ext = path.extname(cachePath).toLowerCase();
+//                 const contentType = ext === '.png' ? 'image/png' : 'image/jpeg';
+//                 res.setHeader('Content-Type', contentType);
+//                 return fs.createReadStream(cachePath).pipe(res);
+//             }
+//         }
 
-        res.setHeader('Content-Type', contentType);
-        fs.createReadStream(filePath).pipe(res);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+//         // 3. SECOND FALLBACK: If we have an ID, try to get it from Supabase
+//         // (This handles cases where the path might have changed or was never provided)
+//         return res.status(404).send('Not found');
+
+//     } catch (err) {
+//         console.error('Cover fetch error:', err);
+//         res.status(500).json({ error: err.message });
+//     }
+// });
 
 // List available volumes/drives
 app.get("/music/volumes", (req, res) => {
@@ -4429,12 +4572,11 @@ app.get("/music/volumes", (req, res) => {
         const homePath = process.env.HOME || '/Users';
         const musicPath = path.join(homePath, 'Music');
         const ssdPath = '/mnt/music_ssd';
-        const ran1Path = '/Volumes/Ran1/Music';
-
-        if (fs.existsSync(ran1Path)) {
+        const rantunesPath = '/Volumes/RANTUNES';
+        if (fs.existsSync(rantunesPath)) {
             volumes.push({
-                name: 'דיסק Ran1',
-                path: ran1Path
+                name: 'דיסק RANTUNES',
+                path: rantunesPath
             });
         }
 
@@ -4693,7 +4835,7 @@ app.post("/music/ingest/download", async (req, res) => {
 
     // 1. Validate Disk Space (Must have > 1GB free for safe conversion)
     const MIN_FREE_BYTES = 1024 * 1024 * 1024; // 1GB (Architecture Recommendation)
-    const MOUNT_POINT = process.platform === 'darwin' ? '/Volumes/Ran1/Music' : '/mnt/music_ssd';
+    const MOUNT_POINT = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
 
     // Quick check if mount point exists (skip if dev/mac)
     if (process.platform === 'linux' && fs.existsSync(MOUNT_POINT)) {

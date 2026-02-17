@@ -10,7 +10,7 @@ import db from '@/db/database';
  * Displays the current business name, connection status, and last sync time.
  * Refined Layout: Status Pill and Sync Time are on the same line (Sync left of Pill).
  */
-const ConnectivityStatus = ({ mode = 'fixed', className = '' }) => {
+const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false, className = '' }) => {
     const location = useLocation();
     const { currentUser } = useAuth();
     const [isLocal, setIsLocal] = useState(false);
@@ -28,6 +28,9 @@ const ConnectivityStatus = ({ mode = 'fixed', className = '' }) => {
         location.pathname.startsWith('/kds') ||
         location.pathname.startsWith('/inventory') ||
         location.pathname === '/' ||
+        location.pathname === '/music' ||
+        location.pathname.startsWith('/music') ||
+        location.pathname.startsWith('/mode-selection') ||
         location.pathname.startsWith('/menu-ordering') ||
         location.pathname.startsWith('/menu-editor') ||
         location.pathname.startsWith('/ipad-menu-editor'); // Uses UnifiedHeader
@@ -42,7 +45,7 @@ const ConnectivityStatus = ({ mode = 'fixed', className = '' }) => {
                 try {
                     const baseUrl = await resolveUrl();
                     const controller = new AbortController();
-                    const id = setTimeout(() => controller.abort(), 1500);
+                    const id = setTimeout(() => controller.abort(), 5000);
 
                     const healthResp = await fetch(`${baseUrl}/health`, { signal: controller.signal });
                     clearTimeout(id);
@@ -99,6 +102,11 @@ const ConnectivityStatus = ({ mode = 'fixed', className = '' }) => {
         const interval = setInterval(checkStatus, 5000);
         return () => clearInterval(interval);
     }, []);
+
+    // If we're on a page that should hide the status, and forceShow isn't true, return null
+    if (!forceShow && isManagerPage) {
+        return null;
+    }
 
     if (mode === 'fixed' && isManagerPage) return null;
 

@@ -42,33 +42,69 @@ export const useDashboardLiveData = (businessId) => {
         const fetchFromSupabase = async () => {
             try {
                 // 1. KDS Orders - Count active vs ready
+                // Also include 'new' status for orders waiting to be prepared
                 const { data: orders, error: ordErr } = await supabase
                     .from('orders')
                     .select('id, order_status')
                     .eq('business_id', businessId)
-                    .in('order_status', ['preparing', 'ready', 'fired', 'in_progress']);
+                    .in('order_status', ['new', 'preparing', 'ready', 'fired', 'in_progress']);
 
-                if (ordErr) throw ordErr;
+                if (ordErr) {
+                    console.error('⚠️ [Orders] Supabase error:', ordErr);
+                    throw ordErr;
+                }
+
+                console.log(`🍳 [Orders] Fetched ${(orders || []).length} active orders:`,
+                    (orders || []).map(o => o.order_status));
 
                 const activeOrders = (orders || []).filter(o => {
                     const s = o.order_status?.toLowerCase();
-                    return s === 'preparing' || s === 'fired' || s === 'in_progress';
+                    return s === 'new' || s === 'preparing' || s === 'fired' || s === 'in_progress';
                 }).length;
 
                 const readyOrders = (orders || []).filter(o =>
                     o.order_status?.toLowerCase() === 'ready'
                 ).length;
 
+                console.log(`🍳 [Orders] Active: ${activeOrders}, Ready: ${readyOrders}`);
+
                 // 2. Tasks - Count incomplete recurring tasks (not completed today)
                 const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-                const { data: allTasks, error: taskErr } = await supabase
-                    .from('recurring_tasks')
-                    .select('id, name, category, is_active')
-                    .eq('business_id', businessId)
-                    .neq('is_active', false);
+                // Note: recurring_tasks may or may not have business_id column
+                // Try with business_id first, fallback to all tasks if column doesn't exist
+                let allTasks = [];
+                let taskErr = null;
 
-                if (taskErr) throw taskErr;
+                try {
+                    const result = await supabase
+                        .from('recurring_tasks')
+                        .select('id, name, category, is_active, business_id')
+                        .eq('business_id', businessId)
+                        .neq('is_active', false);
+
+                    allTasks = result.data || [];
+                    taskErr = result.error;
+
+                    // If business_id column doesn't exist, fallback to all tasks
+                    if (taskErr?.message?.includes('column') || taskErr?.code === '42703') {
+                        console.warn('⚠️ [Tasks] business_id column not found, fetching all tasks');
+                        const fallbackResult = await supabase
+                            .from('recurring_tasks')
+                            .select('id, name, category, is_active')
+                            .neq('is_active', false);
+                        allTasks = fallbackResult.data || [];
+                        taskErr = fallbackResult.error;
+                    }
+                } catch (e) {
+                    console.error('⚠️ [Tasks] Query failed:', e);
+                }
+
+                if (taskErr) {
+                    console.error('⚠️ [Tasks] Supabase error:', taskErr);
+                }
+
+                console.log(`📋 [Tasks] Found ${allTasks.length} active tasks`);
 
                 // Get today's completions
                 const todayStart = new Date(today + 'T00:00:00.000Z').toISOString();
@@ -94,18 +130,50 @@ export const useDashboardLiveData = (businessId) => {
                 const preps = tasksNotCompleted.filter(t => t.category?.includes('הכנה') || t.category?.toLowerCase().includes('prep')).length;
 
                 // 3. Inventory - Check for low stock alerts
-                const { data: inventoryItems, error: invErr } = await supabase
-                    .from('inventory_items')
-                    .select('id, name, current_stock, low_stock_alert')
-                    .eq('business_id', businessId);
+                // Some older schemas might not have low_stock_alert column yet
+                let inventoryItems = [];
+                let invErr = null;
 
-                if (invErr) throw invErr;
+                try {
+                    const result = await supabase
+                        .from('inventory_items')
+                        .select('id, name, current_stock, low_stock_alert')
+                        .eq('business_id', businessId);
+
+                    if (result.error?.code === '42703' || result.error?.message?.includes('low_stock_alert')) {
+                        console.warn('⚠️ [Inventory] low_stock_alert column missing, falling back to id, name, current_stock');
+                        const fallback = await supabase
+                            .from('inventory_items')
+                            .select('id, name, current_stock')
+                            .eq('business_id', businessId);
+                        inventoryItems = fallback.data || [];
+                        invErr = fallback.error;
+                    } else {
+                        inventoryItems = result.data || [];
+                        invErr = result.error;
+                    }
+                } catch (e) {
+                    console.error('⚠️ [Inventory] Fetch failed:', e);
+                }
+
+                if (invErr) {
+                    console.error('⚠️ [Inventory] Supabase error:', invErr);
+                    throw invErr;
+                }
+
+                console.log(`📦 [Inventory] Fetched ${(inventoryItems || []).length} items from Supabase`);
 
                 const lowStockItems = (inventoryItems || []).filter(item => {
-                    const currentStock = item.current_stock || 0;
-                    const minStock = item.low_stock_alert || 0;
-                    return minStock > 0 && currentStock <= minStock;
+                    const currentStock = Number(item.current_stock) || 0;
+                    const minStock = Number(item.low_stock_alert !== undefined ? item.low_stock_alert : 5); // Default to 5 if col missing
+                    const isBelowMin = minStock > 0 && currentStock < minStock;
+                    if (isBelowMin) {
+                        console.log(`  ⚠️ ${item.name}: ${currentStock} < ${minStock}`);
+                    }
+                    return isBelowMin;
                 });
+
+                console.log(`📦 [Inventory] Found ${lowStockItems.length} items below minimum`);
 
                 setData({
                     kds: { activeOrders, readyOrders },
@@ -134,13 +202,13 @@ export const useDashboardLiveData = (businessId) => {
                     .equals(businessId)
                     .and(order => {
                         const status = order.order_status?.toLowerCase();
-                        return status === 'preparing' || status === 'ready' || status === 'fired' || status === 'in_progress';
+                        return status === 'new' || status === 'preparing' || status === 'ready' || status === 'fired' || status === 'in_progress';
                     })
                     .toArray();
 
                 const activeOrders = orders.filter(o => {
                     const s = o.order_status?.toLowerCase();
-                    return s === 'preparing' || s === 'fired' || s === 'in_progress';
+                    return s === 'new' || s === 'preparing' || s === 'fired' || s === 'in_progress';
                 }).length;
 
                 const readyOrders = orders.filter(o =>
@@ -179,9 +247,9 @@ export const useDashboardLiveData = (businessId) => {
                     .toArray();
 
                 const lowStockItems = inventoryItems.filter(item => {
-                    const currentStock = item.current_stock || 0;
-                    const minStock = item.low_stock_alert || item.low_stock_threshold_units || item.min_stock || 0;
-                    return minStock > 0 && currentStock <= minStock;
+                    const currentStock = Number(item.current_stock) || 0;
+                    const minStock = Number(item.low_stock_alert !== undefined ? item.low_stock_alert : 5);
+                    return minStock > 0 && currentStock < minStock;
                 });
 
                 setData({

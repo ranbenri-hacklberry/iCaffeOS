@@ -10,9 +10,11 @@ const MUSIC_API_URL = getBackendApiUrl();
 /**
  * Directory scanner modal - input path to music folder on external drive
  */
-const DirectoryScanner = ({ onClose, onScan }) => {
+const DirectoryScanner = ({ isOpen, onClose, onScan }) => {
+    if (!isOpen) return null;
+
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    const [directoryPath, setDirectoryPath] = useState(isMac ? '/Volumes/Ran1/Music' : '/mnt/music_ssd/');
+    const [directoryPath, setDirectoryPath] = useState(isMac ? '/Volumes/RANTUNES' : '/mnt/music_ssd/');
     const [isScanning, setIsScanning] = useState(false);
     const [result, setResult] = useState(null);
     const [availableVolumes, setAvailableVolumes] = useState([]);
@@ -39,7 +41,7 @@ const DirectoryScanner = ({ onClose, onScan }) => {
 
     // Common paths suggestions
     const suggestions = [
-        { path: '/Volumes/Ran1/Music', label: 'דיסק Ran1' },
+        { path: '/Volumes/RANTUNES', label: 'דיסק RANTUNES' },
         { path: '/mnt/music_ssd/', label: 'SSD חיצוני' },
         { path: '/Volumes/', label: 'דיסקים אחרים' },
         { path: '/Users/Shared/Music/', label: 'מוזיקה משותפת' },
@@ -56,6 +58,13 @@ const DirectoryScanner = ({ onClose, onScan }) => {
         try {
             const scanResult = await onScan(directoryPath.trim(), forceClean, setProgress);
             setResult(scanResult);
+
+            // 🚀 AUTO-CLOSE: If successful, close after a brief moment so user can see the "Done" state
+            if (scanResult && scanResult.success) {
+                setTimeout(() => {
+                    onClose();
+                }, 1500);
+            }
         } catch (error) {
             setResult({ success: false, message: error.message });
         } finally {

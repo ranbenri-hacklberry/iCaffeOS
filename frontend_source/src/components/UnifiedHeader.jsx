@@ -3,7 +3,6 @@ import { House } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import MiniMusicPlayer from '@/components/music/MiniMusicPlayer';
 import ConnectivityStatus from '@/components/ConnectivityStatus';
-import ConnectionStatusBar from '@/components/ConnectionStatusBar';
 
 const UnifiedHeader = ({
     title,
@@ -20,68 +19,65 @@ const UnifiedHeader = ({
         else navigate('/mode-selection');
     };
 
-    const headerBg = forceMusicDark ? 'bg-black/60 !text-white border-white/10' : 'bg-white/95 border-slate-100 text-slate-800';
+    const headerBg = forceMusicDark ? 'music-gradient-dark !text-white border-white/5' : 'bg-white/95 border-slate-100 text-slate-800';
     const titleColor = forceMusicDark ? 'text-white' : 'text-slate-800';
-    const subtitleColor = forceMusicDark ? 'text-white/60' : 'text-slate-400';
+    const subtitleColor = forceMusicDark ? 'text-white/40' : 'text-slate-400';
     const clockColor = forceMusicDark ? 'text-white' : 'text-slate-800';
 
     return (
-        <header className={`${headerBg} backdrop-blur-md border-b px-6 py-3 flex items-center justify-between z-50 shrink-0 sticky top-0 ${className}`}>
+        <header className={`${headerBg} backdrop-blur-2xl border-b px-6 py-2.5 z-50 shrink-0 sticky top-0 ${className}`}>
+            <div className="grid grid-cols-3 items-center w-full">
+                {/* RIGHT: Home & Title */}
+                <div className="flex items-center gap-4 min-w-0">
+                    <button
+                        onClick={handleHome}
+                        className={`shrink-0 w-10 h-10 flex items-center justify-center border rounded-2xl transition-all active:scale-95 shadow-sm ${forceMusicDark ? 'bg-white/5 text-white border-white/10 hover:bg-white/10' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'}`}
+                        title="חזרה למסך ראשי"
+                    >
+                        <House size={20} strokeWidth={2.5} />
+                    </button>
 
-            {/* RIGHT SIDE: Navigation & Title */}
-            <div className="flex items-center gap-6 z-10">
-                {/* Home Button */}
-                <button
-                    onClick={handleHome}
-                    className={`w-10 h-10 flex items-center justify-center border rounded-xl transition-all active:scale-95 shadow-sm ${forceMusicDark ? 'bg-white/10 text-white border-white/20 hover:bg-white/20' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'}`}
-                    title="חזרה למסך ראשי"
-                >
-                    <House size={20} strokeWidth={2} />
-                </button>
-
-                {/* Title Block */}
-                <div className="flex flex-col">
-                    <h1 className={`text-xl font-black tracking-tight leading-none ${titleColor}`}>
-                        {title}
-                    </h1>
-                    {subtitle && (
-                        <span className={`text-[11px] font-bold mt-0.5 ${subtitleColor}`}>
-                            {subtitle}
-                        </span>
-                    )}
+                    <div className="flex flex-col shrink-0">
+                        <h1 className={`text-lg font-black tracking-tight leading-none ${titleColor}`}>
+                            {title}
+                        </h1>
+                        {subtitle && (
+                            <span className={`text-[10px] font-bold mt-1 ${subtitleColor} truncate max-w-[150px]`}>
+                                {subtitle}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
-                {/* Divider & Children (Tabs) */}
-                {children && (
-                    <>
-                        <div className={`w-px h-8 mx-2 ${forceMusicDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                        {/* Translate Right significantly to clear the central clock */}
-                        <div className="translate-x-12">
+                {/* CENTER: CLOCK */}
+                <div className="flex justify-center pointer-events-none">
+                    <div className={`px-4 py-1.5 rounded-2xl border border-white/5 shadow-inner bg-white/5`}>
+                        <span className={`text-2xl font-black tracking-tighter tabular-nums leading-none ${clockColor}`}>
+                            {new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    </div>
+                </div>
+
+                {/* LEFT: Tools & Status & Player */}
+                <div className="flex items-center gap-4 justify-end min-w-0">
+                    {/* Tools (passed via children) */}
+                    {children && (
+                        <div className="flex items-center gap-2 pr-4 ml-2 border-r border-white/10">
                             {children}
                         </div>
-                    </>
-                )}
-            </div>
+                    )}
 
-            {/* CENTER: CLOCK & STATUS (Absolute) */}
-            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden xl:flex items-center gap-6">
-                {/* Clock */}
-                <span className={`text-3xl font-black tracking-tight tabular-nums leading-none ${clockColor}`}>
-                    {new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                    {/* Status Pill */}
+                    <div className="hidden lg:block shrink-0">
+                        <ConnectivityStatus mode="inline" invert={forceMusicDark} forceShow={true} />
+                    </div>
 
-                {/* Status - Attached to the left of the clock */}
-                <div className="mt-1">
-                    <ConnectivityStatus mode="inline" invert={forceMusicDark} />
-                </div>
-            </div>
+                    <div className={`shrink-0 w-px h-6 ${forceMusicDark ? 'bg-white/10' : 'bg-slate-100'}`} />
 
-            {/* LIGHT LEFT SIDE: Music Only */}
-            <div className="flex items-center gap-4 z-10">
-                <div className="flex items-center gap-4">
-                    <div className={`w-px h-8 ${forceMusicDark ? 'bg-white/10' : 'bg-slate-100'}`} />
                     {/* Music Player */}
-                    <MiniMusicPlayer forceDark={forceMusicDark} />
+                    <div className="shrink-0 scale-95 origin-left">
+                        <MiniMusicPlayer forceDark={forceMusicDark} />
+                    </div>
                 </div>
             </div>
         </header>

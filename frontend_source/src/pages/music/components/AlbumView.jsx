@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Play, Clock, Music } from 'lucide-react';
+import { ArrowRight, Play, Clock, Music, Sparkles, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
 import { useAlbums } from '@/hooks/useAlbums';
 import SongRow from '@/components/music/SongRow';
+import QueueModeModal from '@/components/music/QueueModeModal';
 import '@/styles/music.css';
 
 import { getBackendApiUrl } from '@/utils/apiUtils';
@@ -11,21 +12,26 @@ import { getBackendApiUrl } from '@/utils/apiUtils';
 const MUSIC_API_URL = getBackendApiUrl();
 
 // Helper to convert local path to backend URL
-const getCoverUrl = (localPath) => {
-    if (!localPath) return null;
-    if (localPath.startsWith('http')) return localPath;
-    return `${MUSIC_API_URL}/music/cover?path=${encodeURIComponent(localPath)}`;
+const getCoverUrl = (localPath, id) => {
+    if (!localPath && !id) return null;
+    if (localPath?.startsWith('http')) return localPath;
+
+    let url = `${MUSIC_API_URL}/music/cover?`;
+    if (localPath) url += `path=${encodeURIComponent(localPath)}`;
+    if (id) url += `${localPath ? '&' : ''}id=${id}`;
+    return url;
 };
 
 /**
  * Album view component - shows album details and song list
  */
 const AlbumView = ({ album, onBack }) => {
-    const { playSong, currentSong, isPlaying, rateSong } = useMusic();
+    const { playSong, currentSong, isPlaying, rateSong, addToQueue, addPlaylistToQueue } = useMusic();
     const { fetchAlbumSongs } = useAlbums();
 
     const [songs, setSongs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [queueContext, setQueueContext] = useState(null); // { item, type: 'song'|'album' }
 
     // Fetch album songs on mount
     useEffect(() => {
@@ -44,18 +50,30 @@ const AlbumView = ({ album, onBack }) => {
     // Handle play all
     const handlePlayAll = () => {
         if (songs.length > 0) {
-            playSong(songs[0], songs);
+            playSong(songs[0], songs, true);
         }
     };
 
-    // Handle song play
+    // Handle song play - opens modal for singles/album tracks
     const handleSongPlay = (song) => {
-        playSong(song, songs);
+        setQueueContext({ item: song, type: 'song' });
     };
 
     // Handle rating
     const handleRate = async (songId, rating) => {
         await rateSong(songId, rating);
+    };
+
+    // Handle add to queue selection
+    const handleQueueSelect = (mode) => {
+        if (!queueContext) return;
+
+        if (queueContext.type === 'album') {
+            addPlaylistToQueue(songs, mode);
+        } else {
+            addToQueue(queueContext.item, mode);
+        }
+        setQueueContext(null);
     };
 
 
@@ -70,14 +88,14 @@ const AlbumView = ({ album, onBack }) => {
         return `${mins} דקות`;
     };
 
-    // Generate gradient based on album name
+    // Generate gradient based on album name - Wood Tones
     const getGradient = () => {
         const gradients = [
-            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
+            'linear-gradient(135deg, #4e342e 0%, #3e2723 100%)', // Wood 1
+            'linear-gradient(135deg, #5d4037 0%, #4e342e 100%)', // Wood 2
+            'linear-gradient(135deg, #3e2723 0%, #1a0f0e 100%)', // Wood 3
+            'linear-gradient(135deg, #795548 0%, #5d4037 100%)', // Wood 4
+            'linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)'  // Wood 5
         ];
         const index = (album.name?.charCodeAt(0) || 0) % gradients.length;
         return gradients[index];
@@ -109,7 +127,7 @@ const AlbumView = ({ album, onBack }) => {
                     >
                         {album.cover_url ? (
                             <img
-                                src={getCoverUrl(album.cover_url)}
+                                src={getCoverUrl(album.cover_url, album.id)}
                                 alt={album.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -124,9 +142,21 @@ const AlbumView = ({ album, onBack }) => {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                         <p className="text-white/70 text-sm font-medium mb-1">אלבום</p>
-                        <h1 className="text-white text-4xl font-black mb-2 truncate">
-                            {album.name}
-                        </h1>
+                        <div className="flex items-center gap-4 mb-2">
+                            <h1 className="text-white text-5xl font-black truncate drop-shadow-lg">
+                                {album.name}
+                            </h1>
+                            <button
+                                onClick={() => setQueueContext({ item: album, type: 'album' })}
+                                className="group relative"
+                                title="הוסף אלבום לתור"
+                            >
+                                <div className="absolute inset-0 bg-white/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="relative w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center transition-all group-hover:scale-110 group-hover:bg-white/20 group-active:scale-95 shadow-2xl">
+                                    <Plus className="w-7 h-7 text-white" />
+                                </div>
+                            </button>
+                        </div>
                         <p className="text-white/80 text-lg mb-4">
                             {album.artist?.name || 'אמן לא ידוע'}
                         </p>
@@ -183,11 +213,20 @@ const AlbumView = ({ album, onBack }) => {
                                 isCurrentSong={currentSong?.id === song.id}
                                 onPlay={handleSongPlay}
                                 onRate={handleRate}
+                                onQueue={(item) => setQueueContext({ item, type: 'song' })}
                             />
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* Queue Modal */}
+            <QueueModeModal
+                isOpen={!!queueContext}
+                onClose={() => setQueueContext(null)}
+                onSelect={handleQueueSelect}
+                title={queueContext?.type === 'album' ? album.name : (queueContext?.item?.main || queueContext?.item?.title)}
+            />
         </div>
     );
 };

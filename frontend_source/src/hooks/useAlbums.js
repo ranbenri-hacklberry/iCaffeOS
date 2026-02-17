@@ -69,12 +69,17 @@ export const useAlbums = () => {
             // Check for saved music path in localStorage, or find external drive
             const savedMusicPath = localStorage.getItem('music_drive_path');
 
-            // Look for: saved path, Ran1 drive, or any external volume (not Macintosh HD)
-            const externalDrive = data.volumes?.find(v =>
-                (savedMusicPath && v.path === savedMusicPath) ||
-                v.name === 'Ran1' ||
-                (v.path.startsWith('/Volumes/') && v.name !== 'Macintosh HD')
-            );
+            // Look for: saved path, RANTUNES drive, or any external volume (not Macintosh HD)
+            const externalDrive = data.volumes?.find(v => {
+                const name = (v.name || '').toLowerCase();
+                const path = (v.path || '').toLowerCase();
+                const savedPath = (savedMusicPath || '').toLowerCase();
+
+                return (savedPath && path === savedPath) ||
+                    name.includes('rantunes') ||
+                    path.includes('rantunes') ||
+                    (v.path.startsWith('/Volumes/') && !name.includes('macintosh hd'));
+            });
 
             const isConnected = !!externalDrive;
             setIsMusicDriveConnected(isConnected);
@@ -99,25 +104,31 @@ export const useAlbums = () => {
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch artists');
             const list = json.artists || [];
-            if (list.length === 0 && scanLibrary?.artists?.length) {
-                setArtists(scanLibrary.artists);
-            } else {
-                setArtists(list);
-                // Trigger background fetch for missing artist images
-                const missingImages = list.filter(a => !a.image_url);
-                if (missingImages.length > 0) {
-                    fetch(`${MUSIC_API_URL}/music/artists/fetch-images`, { method: 'POST' })
-                        .then(r => r.json())
-                        .then(result => {
-                            if (result.updated > 0) {
-                                // Re-fetch artists with updated images
-                                fetch(`${MUSIC_API_URL}/music/library/artists`)
-                                    .then(r => r.json())
-                                    .then(j => { if (j.success) setArtists(j.artists); });
-                            }
-                        })
-                        .catch(() => { /* silent fail for image fetch */ });
-                }
+
+            // Merge with scan library to avoid "empty" UI during background save
+            const merged = [...list];
+            if (scanLibrary?.artists) {
+                scanLibrary.artists.forEach(sa => {
+                    if (!merged.some(m => m.name === sa.name)) {
+                        merged.push(sa);
+                    }
+                });
+            }
+            setArtists(merged);
+            // Trigger background fetch for missing artist images
+            const missingImages = list.filter(a => !a.image_url);
+            if (missingImages.length > 0) {
+                fetch(`${MUSIC_API_URL}/music/artists/fetch-images`, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(result => {
+                        if (result.updated > 0) {
+                            // Re-fetch artists with updated images
+                            fetch(`${MUSIC_API_URL}/music/library/artists`)
+                                .then(r => r.json())
+                                .then(j => { if (j.success) setArtists(j.artists); });
+                        }
+                    })
+                    .catch(() => { /* silent fail for image fetch */ });
             }
         } catch (err) {
             console.error('Error fetching artists:', err);
@@ -132,30 +143,36 @@ export const useAlbums = () => {
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch albums');
             const list = json.albums || [];
-            if (list.length === 0 && scanLibrary?.albums?.length) {
-                setAlbums(scanLibrary.albums);
-            } else {
-                setAlbums(list);
 
-                // Auto-fix missing covers in background
-                const missingCovers = list.filter(a => !a.cover_url);
-                if (missingCovers.length > 0) {
-                    console.log(`🖼️ [Albums] ${missingCovers.length} albums missing covers, fixing...`);
-                    fetch(`${MUSIC_API_URL}/music/albums/fix-covers`, { method: 'POST' })
-                        .then(r => r.json())
-                        .then(result => {
-                            if (result.updated > 0) {
-                                console.log(`🖼️ [Albums] Fixed ${result.updated} covers, refreshing...`);
-                                // Re-fetch to get updated cover URLs
-                                fetch(`${MUSIC_API_URL}/music/library/albums`)
-                                    .then(r => r.json())
-                                    .then(json2 => {
-                                        if (json2?.albums) setAlbums(json2.albums);
-                                    });
-                            }
-                        })
-                        .catch(err => console.warn('Cover fix failed:', err.message));
-                }
+            // Merge with scan library to avoid "empty" UI during background save
+            const merged = [...list];
+            if (scanLibrary?.albums) {
+                scanLibrary.albums.forEach(sa => {
+                    if (!merged.some(m => m.name === sa.name && m.artist?.name === sa.artist?.name)) {
+                        merged.push(sa);
+                    }
+                });
+            }
+            setAlbums(merged);
+
+            // Auto-fix missing covers in background
+            const missingCovers = list.filter(a => !a.cover_url);
+            if (missingCovers.length > 0) {
+                console.log(`🖼️ [Albums] ${missingCovers.length} albums missing covers, fixing...`);
+                fetch(`${MUSIC_API_URL}/music/albums/fix-covers`, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(result => {
+                        if (result.updated > 0) {
+                            console.log(`🖼️ [Albums] Fixed ${result.updated} covers, refreshing...`);
+                            // Re-fetch to get updated cover URLs
+                            fetch(`${MUSIC_API_URL}/music/library/albums`)
+                                .then(r => r.json())
+                                .then(json2 => {
+                                    if (json2?.albums) setAlbums(json2.albums);
+                                });
+                        }
+                    })
+                    .catch(err => console.warn('Cover fix failed:', err.message));
             }
         } catch (err) {
             console.error('Error fetching albums:', err);
@@ -421,13 +438,21 @@ export const useAlbums = () => {
                 folder_path: a.folder_path || null
             }));
 
-            const mappedAlbums = rawAlbums.map(a => ({
-                id: a.folder_path, // folder path is unique and lets us resolve songs locally
-                name: a.name,
-                cover_url: a.cover_path || null,
-                folder_path: a.folder_path || null,
-                artist: { name: a.artist_name }
-            }));
+            const mappedAlbums = rawAlbums.map(a => {
+                // Calculate song count for this album from the scan results
+                const albumSongs = rawSongs.filter(s =>
+                    s.file_path && a.folder_path && s.file_path.startsWith(a.folder_path)
+                );
+
+                return {
+                    id: a.folder_path, // folder path is unique and lets us resolve songs locally
+                    name: a.name,
+                    cover_url: a.cover_path || null,
+                    folder_path: a.folder_path || null,
+                    artist: { name: a.artist_name },
+                    song_count: albumSongs.length // Add song_count so UI filters work
+                };
+            });
 
             const albumByFolder = new Map(mappedAlbums.map(a => [a.id, a]));
             const mappedSongs = rawSongs.map(s => {
