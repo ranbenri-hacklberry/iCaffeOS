@@ -25,11 +25,22 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
     // If no song is actively playing, show the first song in queue as preview
     const displaySong = song || (queue.length > 0 ? queue[0] : null);
 
-    // Determine cover URL
-    let coverUrl = albumArt;
-    if (!coverUrl && displaySong) {
-        coverUrl = displaySong.album?.cover_url || displaySong.cover_url || displaySong.thumbnail_url;
-    }
+    // Determine cover URL with robust fallback
+    const resolveCover = () => {
+        if (albumArt) return albumArt;
+        if (!displaySong) return null;
+
+        const possibleCover = displaySong.album?.cover_url || displaySong.cover_url || displaySong.thumbnail_url;
+        if (!possibleCover) return null;
+
+        // If it's a local file path (not http), prepend the backend URL
+        if (!possibleCover.startsWith('http') && !possibleCover.startsWith('blob:')) {
+            return `${MUSIC_API_URL}${possibleCover.startsWith('/') ? '' : '/'}${possibleCover}`;
+        }
+        return possibleCover;
+    };
+
+    const coverUrl = resolveCover();
     // Fallback to API resolver if needed (simplified here, usually passed down or resolved in context)
     // We'll trust the passed albumArt or the song object's standard fields.
 
