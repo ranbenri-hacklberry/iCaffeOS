@@ -1,15 +1,9 @@
 /**
  * ⚠️ CRITICAL FILE - DO NOT MODIFY DESIGN! ⚠️
- * 
- * This OrderCard component is used in KDS (Kitchen Display System).
- * The design has been carefully tuned and approved.
- * 
- * DO NOT change styling, colors, layout, or card dimensions
- * without explicit approval!
- * 
- * Source: main branch @ GitHub
- * Last synced: 2026-01-02
+ * @abra-table orders, order_items
+ * @abra-dexie orders, order_items
  */
+
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { Clock, Edit, RotateCcw, Flame, Truck, Phone, MapPin, Package, Check, CheckCircle, Box } from 'lucide-react';

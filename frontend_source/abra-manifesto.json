@@ -1,0 +1,1497 @@
+{
+  "generated_at": "2026-02-17T14:21:09.629Z",
+  "stats": {
+    "total_components": 211,
+    "cast_ready_components": 2
+  },
+  "components": {
+    "components-appicon": {
+      "file_path": "components/AppIcon.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-appimage": {
+      "file_path": "components/AppImage.jsx",
+      "last_modified": "2025-12-30T19:30:36.935Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-brandlogo": {
+      "file_path": "components/BrandLogo.jsx",
+      "last_modified": "2026-02-13T14:50:59.888Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-businessinfobar": {
+      "file_path": "components/BusinessInfoBar.jsx",
+      "last_modified": "2026-01-11T07:56:59.004Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-connectionstatusbar": {
+      "file_path": "components/ConnectionStatusBar.jsx",
+      "last_modified": "2026-02-04T10:34:55.578Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-connectivitystatus": {
+      "file_path": "components/ConnectivityStatus.jsx",
+      "last_modified": "2026-02-17T14:01:41.157Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-customerinfomodal": {
+      "file_path": "components/CustomerInfoModal.jsx",
+      "last_modified": "2026-02-04T10:34:55.581Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-dashboardwireframes": {
+      "file_path": "components/DashboardWireframes.jsx",
+      "last_modified": "2026-02-11T03:46:22.758Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-errorboundary": {
+      "file_path": "components/ErrorBoundary.jsx",
+      "last_modified": "2026-01-28T04:40:17.386Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-errorboundary.test": {
+      "file_path": "components/ErrorBoundary.test.jsx",
+      "last_modified": "2026-02-04T10:34:55.584Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-googleconnectbutton": {
+      "file_path": "components/GoogleConnectButton.tsx",
+      "last_modified": "2026-01-14T09:46:31.975Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-herocard": {
+      "file_path": "components/HeroCard.jsx",
+      "last_modified": "2026-02-11T03:49:15.985Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-loadingfallback": {
+      "file_path": "components/LoadingFallback.jsx",
+      "last_modified": "2026-02-17T13:32:55.327Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-logingateway": {
+      "file_path": "components/LoginGateway.tsx",
+      "last_modified": "2026-02-16T14:17:30.993Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-loyaltypopup": {
+      "file_path": "components/LoyaltyPopup.tsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-managerauthmodal": {
+      "file_path": "components/ManagerAuthModal.jsx",
+      "last_modified": "2026-02-04T10:33:55.560Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-numerickeypad": {
+      "file_path": "components/NumericKeypad.jsx",
+      "last_modified": "2026-02-04T10:33:55.562Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-pincodemodal": {
+      "file_path": "components/PinCodeModal.jsx",
+      "last_modified": "2026-02-10T16:51:30.449Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-smsdashboard-smsdashboard": {
+      "file_path": "components/SMSDashboard/SMSDashboard.jsx",
+      "last_modified": "2026-02-13T11:19:06.177Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-scrolltotop": {
+      "file_path": "components/ScrollToTop.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-seedcontainerpicker": {
+      "file_path": "components/SeedContainerPicker.jsx",
+      "last_modified": "2026-02-04T10:33:55.559Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-smsbalancewidget": {
+      "file_path": "components/SmsBalanceWidget.jsx",
+      "last_modified": "2026-02-04T10:33:55.557Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-splashscreen": {
+      "file_path": "components/SplashScreen.jsx",
+      "last_modified": "2026-02-17T14:15:49.779Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-staffquickaccessmodal": {
+      "file_path": "components/StaffQuickAccessModal.jsx",
+      "last_modified": "2026-02-04T10:33:55.563Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-syncstatusmodal": {
+      "file_path": "components/SyncStatusModal.jsx",
+      "last_modified": "2026-02-14T05:00:55.726Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-unifiedheader": {
+      "file_path": "components/UnifiedHeader.jsx",
+      "last_modified": "2026-02-17T14:00:53.628Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-whatsnewmodal": {
+      "file_path": "components/WhatsNewModal.jsx",
+      "last_modified": "2026-02-04T10:34:55.583Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-abrakadabra-shared-abrapreviewdrawer": {
+      "file_path": "components/abrakadabra/shared/AbraPreviewDrawer.tsx",
+      "last_modified": "2026-02-17T14:01:47.414Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-admin-systemhealth": {
+      "file_path": "components/admin/SystemHealth.jsx",
+      "last_modified": "2026-02-10T10:38:41.934Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-draggableordercard": {
+      "file_path": "components/kanban/DraggableOrderCard.jsx",
+      "last_modified": "2026-02-04T10:34:55.612Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-kanbanboard": {
+      "file_path": "components/kanban/KanbanBoard.jsx",
+      "last_modified": "2026-02-04T10:34:55.615Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-kanbancolumn": {
+      "file_path": "components/kanban/KanbanColumn.jsx",
+      "last_modified": "2026-02-04T10:34:55.613Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-kanbanordercard": {
+      "file_path": "components/kanban/KanbanOrderCard.jsx",
+      "last_modified": "2026-02-04T10:32:44.527Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-orderpackingsidebar": {
+      "file_path": "components/kanban/OrderPackingSidebar.jsx",
+      "last_modified": "2026-02-04T10:33:55.584Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-smsmodal": {
+      "file_path": "components/kanban/SMSModal.jsx",
+      "last_modified": "2026-01-04T04:45:30.276Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kanban-shipmentmodal": {
+      "file_path": "components/kanban/ShipmentModal.jsx",
+      "last_modified": "2026-01-12T05:54:16.239Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-kds-taskmanagementview": {
+      "file_path": "components/kds/TaskManagementView.jsx",
+      "last_modified": "2026-01-31T14:06:53.086Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-categorymanager": {
+      "file_path": "components/manager/CategoryManager.jsx",
+      "last_modified": "2026-01-11T07:56:59.007Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-deploymentchecklist": {
+      "file_path": "components/manager/DeploymentChecklist.jsx",
+      "last_modified": "2026-02-14T05:00:31.424Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-employeemanager": {
+      "file_path": "components/manager/EmployeeManager.jsx",
+      "last_modified": "2026-01-12T12:24:08.238Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-employeemanagerenhanced": {
+      "file_path": "components/manager/EmployeeManagerEnhanced.jsx",
+      "last_modified": "2026-02-09T05:55:14.868Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-errorboundary": {
+      "file_path": "components/manager/ErrorBoundary.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-imageuploader": {
+      "file_path": "components/manager/ImageUploader.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-inventoryitemcard": {
+      "file_path": "components/manager/InventoryItemCard.jsx",
+      "last_modified": "2026-02-09T09:36:27.596Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-inventoryscreen": {
+      "file_path": "components/manager/InventoryScreen.jsx",
+      "last_modified": "2026-02-09T09:39:03.510Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-itemdetails": {
+      "file_path": "components/manager/ItemDetails.tsx",
+      "last_modified": "2026-02-04T10:34:55.598Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-magicimagemodal": {
+      "file_path": "components/manager/MagicImageModal.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-managerheader": {
+      "file_path": "components/manager/ManagerHeader.jsx",
+      "last_modified": "2026-02-01T16:31:39.878Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-managerkds": {
+      "file_path": "components/manager/ManagerKDS.jsx",
+      "last_modified": "2026-02-05T22:57:19.026Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menudisplay": {
+      "file_path": "components/manager/MenuDisplay.jsx",
+      "last_modified": "2026-02-04T10:34:55.607Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menueditmodal": {
+      "file_path": "components/manager/MenuEditModal.jsx",
+      "last_modified": "2026-02-05T22:33:22.151Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menumanagercard": {
+      "file_path": "components/manager/MenuManagerCard.jsx",
+      "last_modified": "2026-02-14T04:29:56.870Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menuoptionseditor": {
+      "file_path": "components/manager/MenuOptionsEditor.tsx",
+      "last_modified": "2026-02-04T10:34:55.596Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-modifiergroup": {
+      "file_path": "components/manager/ModifierGroup.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-priceadjuster": {
+      "file_path": "components/manager/PriceAdjuster.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-productdetailmobile": {
+      "file_path": "components/manager/ProductDetailMobile.jsx",
+      "last_modified": "2026-02-04T10:34:55.606Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-salesdashboard": {
+      "file_path": "components/manager/SalesDashboard.jsx",
+      "last_modified": "2026-02-01T16:24:17.719Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-searchbar": {
+      "file_path": "components/manager/SearchBar.jsx",
+      "last_modified": "2025-12-11T13:23:01.000Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-systemdiagnostics": {
+      "file_path": "components/manager/SystemDiagnostics.jsx",
+      "last_modified": "2026-02-15T14:30:50.230Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-tasksmanager": {
+      "file_path": "components/manager/TasksManager.jsx",
+      "last_modified": "2026-02-04T18:49:02.507Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-tasksscreen": {
+      "file_path": "components/manager/TasksScreen.jsx",
+      "last_modified": "2025-12-14T07:39:12.149Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-triplecheckcard": {
+      "file_path": "components/manager/TripleCheckCard.jsx",
+      "last_modified": "2026-02-01T15:28:31.049Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menu-editor-animatedsection": {
+      "file_path": "components/manager/menu-editor/AnimatedSection.jsx",
+      "last_modified": "2026-01-04T04:45:30.280Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menu-editor-modifierssection": {
+      "file_path": "components/manager/menu-editor/ModifiersSection.jsx",
+      "last_modified": "2026-02-04T10:34:55.609Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menu-editor-sections-basicinfosection": {
+      "file_path": "components/manager/menu-editor/sections/BasicInfoSection.jsx",
+      "last_modified": "2026-01-04T04:45:30.281Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menu-editor-sections-pricingsection": {
+      "file_path": "components/manager/menu-editor/sections/PricingSection.jsx",
+      "last_modified": "2026-02-04T10:34:55.611Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-manager-menu-editor-sections-recipesection": {
+      "file_path": "components/manager/menu-editor/sections/RecipeSection.jsx",
+      "last_modified": "2026-02-04T10:34:55.610Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-marketing-adgenerator": {
+      "file_path": "components/marketing/AdGenerator.jsx",
+      "last_modified": "2026-02-09T13:27:45.252Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-marketing-postcreator": {
+      "file_path": "components/marketing/PostCreator.jsx",
+      "last_modified": "2026-02-09T05:55:14.869Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-clockinmodal": {
+      "file_path": "components/maya/ClockInModal.tsx",
+      "last_modified": "2026-02-14T11:07:08.727Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-clockinmodalinline": {
+      "file_path": "components/maya/ClockInModalInline.tsx",
+      "last_modified": "2026-02-10T05:37:16.299Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-facescanner": {
+      "file_path": "components/maya/FaceScanner.tsx",
+      "last_modified": "2026-02-10T06:43:40.038Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-facescannercompact": {
+      "file_path": "components/maya/FaceScannerCompact.tsx",
+      "last_modified": "2026-02-08T16:45:27.398Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-facescannerreusable": {
+      "file_path": "components/maya/FaceScannerReusable.tsx",
+      "last_modified": "2026-02-10T06:49:50.120Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-mayagateway": {
+      "file_path": "components/maya/MayaGateway.tsx",
+      "last_modified": "2026-02-11T12:42:35.029Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-mayagatewaycomplete": {
+      "file_path": "components/maya/MayaGatewayComplete.tsx",
+      "last_modified": "2026-02-14T11:16:11.485Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-mayaoverlay": {
+      "file_path": "components/maya/MayaOverlay.tsx",
+      "last_modified": "2026-02-14T15:43:31.076Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-pinpad": {
+      "file_path": "components/maya/PINPad.tsx",
+      "last_modified": "2026-02-13T09:14:39.664Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-pinpadcompact": {
+      "file_path": "components/maya/PINPadCompact.tsx",
+      "last_modified": "2026-02-09T05:55:14.865Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-quickfacelog": {
+      "file_path": "components/maya/QuickFaceLog.tsx",
+      "last_modified": "2026-02-08T17:04:40.972Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-startscreen": {
+      "file_path": "components/maya/StartScreen.tsx",
+      "last_modified": "2026-02-08T16:46:25.299Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-teammessagemodal": {
+      "file_path": "components/maya/TeamMessageModal.jsx",
+      "last_modified": "2026-02-09T04:29:37.659Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-maya-usersettingsmodal": {
+      "file_path": "components/maya/UserSettingsModal.tsx",
+      "last_modified": "2026-02-09T05:45:23.195Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-addmusiccard": {
+      "file_path": "components/music/AddMusicCard.jsx",
+      "last_modified": "2026-02-16T18:05:58.170Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-albumcard": {
+      "file_path": "components/music/AlbumCard.jsx",
+      "last_modified": "2026-02-17T06:16:51.327Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-minimusicbar": {
+      "file_path": "components/music/MiniMusicBar.jsx",
+      "last_modified": "2026-02-17T06:23:38.176Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-minimusicplayer": {
+      "file_path": "components/music/MiniMusicPlayer.jsx",
+      "last_modified": "2026-02-17T14:01:52.532Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-musicminibar": {
+      "file_path": "components/music/MusicMiniBar.jsx",
+      "last_modified": "2025-12-23T05:11:57.977Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-musicplayer": {
+      "file_path": "components/music/MusicPlayer.jsx",
+      "last_modified": "2026-02-17T06:09:35.409Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-musicqueue": {
+      "file_path": "components/music/MusicQueue.jsx",
+      "last_modified": "2026-02-17T10:12:51.122Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-queuemodemodal": {
+      "file_path": "components/music/QueueModeModal.jsx",
+      "last_modified": "2026-02-17T06:24:13.324Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-songrow": {
+      "file_path": "components/music/SongRow.jsx",
+      "last_modified": "2026-02-17T06:21:46.333Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-music-vinylturntable": {
+      "file_path": "components/music/VinylTurntable.jsx",
+      "last_modified": "2026-02-17T14:19:52.416Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-pos-biometricindicator": {
+      "file_path": "components/pos/BiometricIndicator.tsx",
+      "last_modified": "2026-02-08T17:06:09.735Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-pos-poscheckoutwithbiometric": {
+      "file_path": "components/pos/POSCheckoutWithBiometric.tsx",
+      "last_modified": "2026-02-17T14:20:54.589Z",
+      "supabase_tables": [
+        "orders",
+        "employees"
+      ],
+      "dexie_tables": [
+        "orders"
+      ],
+      "is_cast_ready": true
+    },
+    "components-settings-accountantaccess": {
+      "file_path": "components/settings/AccountantAccess.jsx",
+      "last_modified": "2026-01-14T13:12:39.453Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-settings-apivalidationsettings": {
+      "file_path": "components/settings/ApiValidationSettings.jsx",
+      "last_modified": "2026-02-15T13:59:38.030Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-settings-securitysettings": {
+      "file_path": "components/settings/SecuritySettings.tsx",
+      "last_modified": "2026-02-11T06:31:22.028Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-settings-whatsappconnect": {
+      "file_path": "components/settings/WhatsAppConnect.jsx",
+      "last_modified": "2026-02-09T05:19:06.828Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-super-admin-kdsobservability": {
+      "file_path": "components/super-admin/KDSObservability.jsx",
+      "last_modified": "2026-02-15T14:30:41.874Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-super-admin-systemmap": {
+      "file_path": "components/super-admin/SystemMap.jsx",
+      "last_modified": "2026-01-13T08:39:04.929Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-button": {
+      "file_path": "components/ui/Button.jsx",
+      "last_modified": "2026-02-04T10:34:55.589Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-cartsummarypanel": {
+      "file_path": "components/ui/CartSummaryPanel.jsx",
+      "last_modified": "2026-02-04T10:34:55.589Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-categorynavigationbar": {
+      "file_path": "components/ui/CategoryNavigationBar.jsx",
+      "last_modified": "2026-02-04T10:34:55.587Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-checkbox": {
+      "file_path": "components/ui/Checkbox.jsx",
+      "last_modified": "2026-02-04T10:32:44.512Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-confirmationmodal": {
+      "file_path": "components/ui/ConfirmationModal.jsx",
+      "last_modified": "2025-12-18T07:44:04.556Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-employeeclockstatus": {
+      "file_path": "components/ui/EmployeeClockStatus.jsx",
+      "last_modified": "2026-02-04T10:34:55.588Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-header": {
+      "file_path": "components/ui/Header.jsx",
+      "last_modified": "2026-02-04T10:34:55.586Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-input": {
+      "file_path": "components/ui/Input.jsx",
+      "last_modified": "2026-02-04T10:32:44.511Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-menuitemgrid": {
+      "file_path": "components/ui/MenuItemGrid.jsx",
+      "last_modified": "2026-02-04T10:34:55.589Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-orderconfirmationmodal": {
+      "file_path": "components/ui/OrderConfirmationModal.jsx",
+      "last_modified": "2026-01-04T12:19:19.137Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-paymentactionbutton": {
+      "file_path": "components/ui/PaymentActionButton.jsx",
+      "last_modified": "2026-02-04T10:34:55.590Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-select": {
+      "file_path": "components/ui/Select.jsx",
+      "last_modified": "2026-02-04T10:34:55.588Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-smartstepper": {
+      "file_path": "components/ui/SmartStepper.jsx",
+      "last_modified": "2026-01-04T04:45:30.282Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "components-ui-virtualkeyboard": {
+      "file_path": "components/ui/VirtualKeyboard.jsx",
+      "last_modified": "2026-02-04T11:01:03.973Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-dexietestpage": {
+      "file_path": "pages/DexieTestPage.jsx",
+      "last_modified": "2026-02-04T10:33:55.594Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-enrollface": {
+      "file_path": "pages/EnrollFace.tsx",
+      "last_modified": "2026-02-10T07:45:13.038Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-facescannertest": {
+      "file_path": "pages/FaceScannerTest.tsx",
+      "last_modified": "2026-02-08T15:08:33.368Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-notfound": {
+      "file_path": "pages/NotFound.jsx",
+      "last_modified": "2026-01-28T04:43:41.650Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-testmayagateway": {
+      "file_path": "pages/TestMayaGateway.tsx",
+      "last_modified": "2026-02-09T05:55:14.871Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-videocreator": {
+      "file_path": "pages/VideoCreator.jsx",
+      "last_modified": "2026-02-09T10:35:05.123Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-admin-fix-superadmin": {
+      "file_path": "pages/admin-fix-superadmin.tsx",
+      "last_modified": "2026-02-10T07:51:11.731Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-auth-googlecallback": {
+      "file_path": "pages/auth/GoogleCallback.tsx",
+      "last_modified": "2026-01-14T11:38:36.376Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-data-manager-interface-index": {
+      "file_path": "pages/data-manager-interface/index.jsx",
+      "last_modified": "2026-02-04T10:33:55.613Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-dexie-admin-index": {
+      "file_path": "pages/dexie-admin/index.jsx",
+      "last_modified": "2026-02-04T10:33:55.610Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-driver-index": {
+      "file_path": "pages/driver/index.jsx",
+      "last_modified": "2026-02-04T10:34:55.863Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-inventory-index": {
+      "file_path": "pages/inventory/index.jsx",
+      "last_modified": "2026-02-07T10:46:47.773Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad-menu-editor-editpanel": {
+      "file_path": "pages/ipad-menu-editor/EditPanel.jsx",
+      "last_modified": "2026-02-04T10:33:55.616Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad-menu-editor-previewpanel": {
+      "file_path": "pages/ipad-menu-editor/PreviewPanel.jsx",
+      "last_modified": "2026-02-04T10:34:55.872Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad-menu-editor-index": {
+      "file_path": "pages/ipad-menu-editor/index.jsx",
+      "last_modified": "2026-02-04T10:34:55.871Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-ipadinventory": {
+      "file_path": "pages/ipad_inventory/IPadInventory.tsx",
+      "last_modified": "2026-02-10T09:14:18.099Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-ipadinventorypage": {
+      "file_path": "pages/ipad_inventory/IPadInventoryPage.tsx",
+      "last_modified": "2026-02-04T10:34:55.884Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-incomingorderslist": {
+      "file_path": "pages/ipad_inventory/components/IncomingOrdersList.tsx",
+      "last_modified": "2026-02-10T08:28:21.422Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-incomingorderssidebar": {
+      "file_path": "pages/ipad_inventory/components/IncomingOrdersSidebar.tsx",
+      "last_modified": "2026-02-10T08:58:59.962Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-inventoryheader": {
+      "file_path": "pages/ipad_inventory/components/InventoryHeader.tsx",
+      "last_modified": "2026-02-15T07:07:36.069Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-inventoryitemsgrid": {
+      "file_path": "pages/ipad_inventory/components/InventoryItemsGrid.tsx",
+      "last_modified": "2026-02-10T08:24:42.799Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-lowstockreportmodal": {
+      "file_path": "pages/ipad_inventory/components/LowStockReportModal.tsx",
+      "last_modified": "2026-02-10T04:53:03.808Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-prepareditemsview": {
+      "file_path": "pages/ipad_inventory/components/PreparedItemsView.tsx",
+      "last_modified": "2026-02-10T12:07:52.131Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-supplierslist": {
+      "file_path": "pages/ipad_inventory/components/SuppliersList.tsx",
+      "last_modified": "2026-02-10T11:59:31.731Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-ipad_inventory-components-triplechecksession": {
+      "file_path": "pages/ipad_inventory/components/TripleCheckSession.tsx",
+      "last_modified": "2026-02-10T09:01:01.047Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kanban-index": {
+      "file_path": "pages/kanban/index.jsx",
+      "last_modified": "2026-02-04T10:34:24.978Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-cashpaymentmodal": {
+      "file_path": "pages/kds/components/CashPaymentModal.jsx",
+      "last_modified": "2025-12-18T07:44:04.558Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-completedorderssection": {
+      "file_path": "pages/kds/components/CompletedOrdersSection.jsx",
+      "last_modified": "2026-02-04T10:34:55.849Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-datescroller": {
+      "file_path": "pages/kds/components/DateScroller.jsx",
+      "last_modified": "2026-01-26T11:21:04.979Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-historyinfomodal": {
+      "file_path": "pages/kds/components/HistoryInfoModal.jsx",
+      "last_modified": "2026-01-19T17:01:02.984Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-kdspaymentmodal": {
+      "file_path": "pages/kds/components/KDSPaymentModal.jsx",
+      "last_modified": "2026-01-12T08:07:28.059Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-lowstockreportmodal": {
+      "file_path": "pages/kds/components/LowStockReportModal.jsx",
+      "last_modified": "2026-02-09T09:37:46.915Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-ordercard": {
+      "file_path": "pages/kds/components/OrderCard.jsx",
+      "last_modified": "2026-02-17T14:20:48.446Z",
+      "supabase_tables": [
+        "orders",
+        "order_items"
+      ],
+      "dexie_tables": [
+        "orders",
+        "order_items"
+      ],
+      "is_cast_ready": true
+    },
+    "pages-kds-components-ordereditmodal": {
+      "file_path": "pages/kds/components/OrderEditModal.jsx",
+      "last_modified": "2026-02-04T10:33:55.597Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-components-_deprecated-kdsinventoryscreen": {
+      "file_path": "pages/kds/components/_deprecated/KDSInventoryScreen.jsx",
+      "last_modified": "2026-02-05T14:21:16.522Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-index": {
+      "file_path": "pages/kds/index.jsx",
+      "last_modified": "2026-02-15T07:06:39.585Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-kds-zerog-demo-kdszerog": {
+      "file_path": "pages/kds-zerog-demo/KDSZeroG.tsx",
+      "last_modified": "2026-02-08T17:55:27.442Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-litekds": {
+      "file_path": "pages/lite/LiteKDS.jsx",
+      "last_modified": "2026-02-04T10:34:55.864Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-litemodeselection": {
+      "file_path": "pages/lite/LiteModeSelection.jsx",
+      "last_modified": "2026-01-23T03:23:21.015Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-liteordering": {
+      "file_path": "pages/lite/LiteOrdering.jsx",
+      "last_modified": "2026-02-04T10:34:55.864Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-liteheader": {
+      "file_path": "pages/lite/components/LiteHeader.jsx",
+      "last_modified": "2026-01-23T03:54:39.759Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-litemenugrid": {
+      "file_path": "pages/lite/components/LiteMenuGrid.jsx",
+      "last_modified": "2026-02-04T10:34:55.865Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-litemenuitemcard": {
+      "file_path": "pages/lite/components/LiteMenuItemCard.jsx",
+      "last_modified": "2026-01-27T03:31:44.814Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-litemodifiermodal": {
+      "file_path": "pages/lite/components/LiteModifierModal.jsx",
+      "last_modified": "2026-01-27T03:31:55.659Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-liteordercard": {
+      "file_path": "pages/lite/components/LiteOrderCard.jsx",
+      "last_modified": "2026-01-23T06:03:51.787Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-liteordereditmodal": {
+      "file_path": "pages/lite/components/LiteOrderEditModal.jsx",
+      "last_modified": "2026-01-23T03:16:20.185Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-litepaymentmodal": {
+      "file_path": "pages/lite/components/LitePaymentModal.jsx",
+      "last_modified": "2026-01-23T05:26:10.889Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-lite-components-litesmartcart": {
+      "file_path": "pages/lite/components/LiteSmartCart.jsx",
+      "last_modified": "2026-01-23T02:45:33.857Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-login-completeprofile": {
+      "file_path": "pages/login/CompleteProfile.jsx",
+      "last_modified": "2026-02-10T06:46:43.081Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-login-hierarchicaldashboard": {
+      "file_path": "pages/login/HierarchicalDashboard.jsx",
+      "last_modified": "2026-02-17T13:49:54.341Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-login-loginscreen": {
+      "file_path": "pages/login/LoginScreen.jsx",
+      "last_modified": "2026-02-17T13:45:17.029Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-login-modeselectionscreen": {
+      "file_path": "pages/login/ModeSelectionScreen.jsx",
+      "last_modified": "2026-02-16T17:06:23.126Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-maya-index": {
+      "file_path": "pages/maya/index.jsx",
+      "last_modified": "2026-02-14T15:24:48.714Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-checkoutbutton": {
+      "file_path": "pages/menu-ordering-interface/components/CheckoutButton.jsx",
+      "last_modified": "2026-02-04T10:33:55.623Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-deliveryaddressmodal": {
+      "file_path": "pages/menu-ordering-interface/components/DeliveryAddressModal.jsx",
+      "last_modified": "2026-02-04T10:33:55.625Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-mtoquicknotesmodal": {
+      "file_path": "pages/menu-ordering-interface/components/MTOQuickNotesModal.jsx",
+      "last_modified": "2026-02-04T10:33:55.622Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-menucategoryfilter": {
+      "file_path": "pages/menu-ordering-interface/components/MenuCategoryFilter.jsx",
+      "last_modified": "2026-02-04T10:33:55.627Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-menugrid": {
+      "file_path": "pages/menu-ordering-interface/components/MenuGrid.jsx",
+      "last_modified": "2026-02-04T10:34:55.880Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-menuitemcard": {
+      "file_path": "pages/menu-ordering-interface/components/MenuItemCard.jsx",
+      "last_modified": "2026-02-04T10:33:55.626Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-modifiermodal": {
+      "file_path": "pages/menu-ordering-interface/components/ModifierModal.jsx",
+      "last_modified": "2026-02-11T07:20:16.404Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-paymentselectionmodal": {
+      "file_path": "pages/menu-ordering-interface/components/PaymentSelectionModal.jsx",
+      "last_modified": "2026-02-04T10:44:26.917Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-saladprepdecision": {
+      "file_path": "pages/menu-ordering-interface/components/SaladPrepDecision.jsx",
+      "last_modified": "2026-02-04T10:33:55.625Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-shoppingcart": {
+      "file_path": "pages/menu-ordering-interface/components/ShoppingCart.jsx",
+      "last_modified": "2025-12-18T07:44:04.562Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-components-smartcart": {
+      "file_path": "pages/menu-ordering-interface/components/SmartCart.jsx",
+      "last_modified": "2026-02-17T13:46:40.042Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-menu-ordering-interface-index": {
+      "file_path": "pages/menu-ordering-interface/index.jsx",
+      "last_modified": "2026-02-17T13:46:09.994Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-albumview": {
+      "file_path": "pages/music/components/AlbumView.jsx",
+      "last_modified": "2026-02-17T08:23:40.593Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-cdimportmodal": {
+      "file_path": "pages/music/components/CDImportModal.jsx",
+      "last_modified": "2026-02-16T05:26:44.646Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-directoryscanner": {
+      "file_path": "pages/music/components/DirectoryScanner.jsx",
+      "last_modified": "2026-02-16T19:25:31.452Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-externalingestmanager": {
+      "file_path": "pages/music/components/ExternalIngestManager.jsx",
+      "last_modified": "2026-02-16T19:25:02.320Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-playlistbuilder": {
+      "file_path": "pages/music/components/PlaylistBuilder.jsx",
+      "last_modified": "2026-02-14T16:56:49.919Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-syncoverlay": {
+      "file_path": "pages/music/components/SyncOverlay.jsx",
+      "last_modified": "2026-02-16T19:40:50.806Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-youtubeingest": {
+      "file_path": "pages/music/components/YouTubeIngest.jsx",
+      "last_modified": "2026-02-16T18:06:44.334Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-components-youtubesearch": {
+      "file_path": "pages/music/components/YouTubeSearch.jsx",
+      "last_modified": "2026-02-14T17:17:18.085Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-music-index": {
+      "file_path": "pages/music/index.jsx",
+      "last_modified": "2026-02-17T10:13:46.280Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-brandidentitydesigner": {
+      "file_path": "pages/onboarding/components/BrandIdentityDesigner.tsx",
+      "last_modified": "2026-02-04T10:44:26.965Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menudataimporter": {
+      "file_path": "pages/onboarding/components/MenuDataImporter.tsx",
+      "last_modified": "2026-02-04T10:34:55.888Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menureviewdashboard": {
+      "file_path": "pages/onboarding/components/MenuReviewDashboard.tsx",
+      "last_modified": "2026-02-16T17:14:38.707Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-step4_generation": {
+      "file_path": "pages/onboarding/components/Step4_Generation.tsx",
+      "last_modified": "2026-02-04T10:34:55.890Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-step5_finish": {
+      "file_path": "pages/onboarding/components/Step5_Finish.tsx",
+      "last_modified": "2026-02-04T10:34:55.890Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-wizardlayout": {
+      "file_path": "pages/onboarding/components/WizardLayout.tsx",
+      "last_modified": "2026-02-04T10:34:55.890Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-categorydesignmodal": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/CategoryDesignModal.tsx",
+      "last_modified": "2026-02-04T10:34:55.893Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-menuitemeditmodal": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/MenuItemEditModal.tsx",
+      "last_modified": "2026-02-04T10:44:26.977Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-tabs-tabgeneraldetails": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/tabs/TabGeneralDetails.tsx",
+      "last_modified": "2026-02-04T10:44:26.982Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-tabs-tabmodifiers": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/tabs/TabModifiers.tsx",
+      "last_modified": "2026-02-04T10:44:26.979Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-tabs-tabprep": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/tabs/TabPrep.tsx",
+      "last_modified": "2026-02-04T10:44:26.985Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-tabs-tabrecipe": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/tabs/TabRecipe.tsx",
+      "last_modified": "2026-02-11T07:09:22.818Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-editor-tabs-tabvisualsai": {
+      "file_path": "pages/onboarding/components/menu-editor/editor/tabs/TabVisualsAI.tsx",
+      "last_modified": "2026-02-04T10:44:26.988Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-onboarding-components-menu-editor-shared-humorousloader": {
+      "file_path": "pages/onboarding/components/menu-editor/shared/HumorousLoader.tsx",
+      "last_modified": "2026-02-04T10:34:55.891Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-order-tracking-index": {
+      "file_path": "pages/order-tracking/index.jsx",
+      "last_modified": "2026-02-04T10:33:55.618Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-owner-settings-index": {
+      "file_path": "pages/owner-settings/index.jsx",
+      "last_modified": "2026-02-11T06:31:30.942Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-prep-index": {
+      "file_path": "pages/prep/index.jsx",
+      "last_modified": "2026-02-15T07:07:26.979Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-profile-settings-appvisibilitysettings": {
+      "file_path": "pages/profile-settings/AppVisibilitySettings.tsx",
+      "last_modified": "2026-02-11T03:41:24.716Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-profile-settings-index": {
+      "file_path": "pages/profile-settings/index.tsx",
+      "last_modified": "2026-02-11T03:39:11.689Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-super-admin-databaseexplorer": {
+      "file_path": "pages/super-admin/DatabaseExplorer.jsx",
+      "last_modified": "2026-02-14T05:08:12.863Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-super-admin-superadminportal": {
+      "file_path": "pages/super-admin/SuperAdminPortal.jsx",
+      "last_modified": "2026-02-15T17:42:33.772Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    },
+    "pages-super-admin-index": {
+      "file_path": "pages/super-admin/index.jsx",
+      "last_modified": "2026-02-11T17:29:33.130Z",
+      "supabase_tables": [],
+      "dexie_tables": [],
+      "is_cast_ready": false
+    }
+  }
+}

@@ -55,13 +55,17 @@ const AbraPreviewDrawer: React.FC = () => {
                         <div className="border-4 border-dashed border-purple-300 rounded-xl p-12 text-center max-w-lg bg-white shadow-sm">
                             <div className="text-6xl mb-6">✨</div>
                             <h3 className="text-2xl font-bold text-gray-800 mb-2">Magic Sandbox Active</h3>
-                            <p className="text-gray-600 mb-6">
-                                The component <strong>{currentSpell.target_component.component_id}</strong> is being viewed through the AbraHat lens.
+                            <p className="text-gray-600 mb-2 text-sm italic">
+                                File: {currentSpell.target_component.file_path}
+                            </p>
+                            <p className="text-gray-700 mb-6 text-sm">
+                                <b>Proposed:</b> {currentSpell.target_component.proposed_behavior}
                             </p>
                             <div className="bg-purple-50 p-4 rounded-lg text-left text-sm text-purple-800 border border-purple-100 font-mono">
-                                Incantation: {currentSpell.incantation}<br />
-                                Effect: {currentSpell.effect}
+                                <b>Incantation:</b> {currentSpell.incantation}<br />
+                                <b>Effect:</b> {currentSpell.effect}
                             </div>
+
                         </div>
                     </div>
 

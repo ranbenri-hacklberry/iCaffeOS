@@ -1,0 +1,66 @@
+{
+    "spell_id": "dessert-priority-glow",
+    "incantation": "Blue Dessert Pulse",
+    "effect": "Dessert items in 'new' status pulse blue after 5 minutes to ensure freshness delivery.",
+    "caster": {
+        "employee_id": "current-user-id",
+        "role": "manager",
+        "business_id": "22222222-2222-2222-2222-222222222222"
+    },
+    "correlation_id": "abra-555-glow",
+    "timestamp": "2026-02-17T16:25:00Z",
+    "target_component": {
+        "component_id": "pages-kds-components-ordercard",
+        "file_path": "pages/kds/components/OrderCard.jsx",
+        "current_behavior": "Order cards show standard aging (warm/critical) for the whole card.",
+        "proposed_behavior": "Individual items in the order card will pulse with a 'Blue Glow' (Framer Motion) if: 1. They are in 'Dessert' category. 2. Item status is 'new'. 3. Time since order creation > 5 mins."
+    },
+    "impact_analysis": {
+        "affected_screens": [
+            {
+                "file_path": "pages/kds/index.jsx",
+                "impact_type": "UI_RENDER",
+                "description": "Visual pulse in the KDS grid."
+            }
+        ],
+        "affected_supabase_tables": [
+            "orders",
+            "order_items",
+            "menu_items"
+        ],
+        "affected_dexie_tables": [
+            "orders",
+            "order_items",
+            "menu_items"
+        ],
+        "affected_rpcs": [],
+        "risk_level": "medium"
+    },
+    "database_requirements": {
+        "needs_supabase_migration": false,
+        "needs_dexie_version_bump": false,
+        "new_rpc_functions": []
+    },
+    "security_audit": {
+        "rls_affected": false,
+        "exposes_financial_data": false,
+        "requires_auth_change": false,
+        "forbidden_patterns_check": {
+            "uses_raw_sql": false,
+            "uses_service_role_key": false,
+            "bypasses_rls": false,
+            "modifies_auth_tables": false
+        }
+    },
+    "files": {
+        "modified": [
+            "src/pages/kds/components/OrderCard.jsx"
+        ],
+        "created": []
+    },
+    "ui_changes": {
+        "modifies_layout": false,
+        "modifies_styles": true,
+        "user_approval_required": true
+    }
+}
