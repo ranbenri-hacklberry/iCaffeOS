@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, SkipBack, ThumbsUp, ThumbsDown, Music, ChevronLeft } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 /**
  * Compact Mini music player for headers

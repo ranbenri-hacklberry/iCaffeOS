@@ -14,6 +14,11 @@ import MiniMusicBar from './components/music/MiniMusicBar';
 import LoginGateway from './components/LoginGateway';
 import { isElectron } from "./utils/apiUtils";
 
+// Abrakadabra Engine
+import { AbraHatProvider } from "./context/AbraHatContext";
+import AbraPreviewDrawer from "./components/abrakadabra/shared/AbraPreviewDrawer";
+
+
 // Pages
 import LoginScreen from "./pages/login/LoginScreen";
 import ModeSelectionScreen from "./pages/login/ModeSelectionScreen";
@@ -346,6 +351,45 @@ const AppRoutes = () => {
   );
 };
 
+
+// Placeholder SDK Construction (for initial Integration)
+// In a real implementation, this would be imported from src/sdk/client.ts
+const realSDK = {
+  auth: { identify: async () => ({ id: 'guest', role: 'staff', access_level: 2, name: 'Guest', business_id: '', permissions: [] }) },
+  db: {
+    query: async () => ({ data: [], error: null, correlation_id: 'init' }),
+    commit: async () => ({ success: true, correlation_id: 'init', timestamp: new Date().toISOString(), rollback_token: 'init' })
+  },
+  ai: { consult: async () => ({ content: '', suggestions: [], tokens_used: 0 }) },
+  registry: { lookup: async () => null },
+  abrakadabra: {
+    getManifesto: async () => ({
+      spell_id: 'void', incantation: '', effect: '',
+      caster: { employee_id: '', role: 'staff', business_id: '' },
+      correlation_id: '', timestamp: '',
+      target_component: { component_id: '', file_path: '', current_behavior: '', proposed_behavior: '' },
+      impact_analysis: { affected_screens: [], affected_supabase_tables: [], affected_dexie_tables: [], affected_rpcs: [], risk_level: 'low' },
+      database_requirements: { needs_supabase_migration: false, needs_dexie_version_bump: false, new_rpc_functions: [] },
+      security_audit: { rls_affected: false, exposes_financial_data: false, requires_auth_change: false, forbidden_patterns_check: { uses_raw_sql: false, uses_service_role_key: false, bypasses_rls: false, modifies_auth_tables: false } },
+      files: { modified: [], created: [] },
+      ui_changes: { modifies_layout: false, modifies_styles: false, user_approval_required: false }
+    }),
+    castSpell: async () => ({
+      spell_id: 'void', incantation: '', effect: '',
+      caster: { employee_id: '', role: 'staff', business_id: '' },
+      correlation_id: '', timestamp: '',
+      target_component: { component_id: '', file_path: '', current_behavior: '', proposed_behavior: '' },
+      impact_analysis: { affected_screens: [], affected_supabase_tables: [], affected_dexie_tables: [], affected_rpcs: [], risk_level: 'low' },
+      database_requirements: { needs_supabase_migration: false, needs_dexie_version_bump: false, new_rpc_functions: [] },
+      security_audit: { rls_affected: false, exposes_financial_data: false, requires_auth_change: false, forbidden_patterns_check: { uses_raw_sql: false, uses_service_role_key: false, bypasses_rls: false, modifies_auth_tables: false } },
+      files: { modified: [], created: [] },
+      ui_changes: { modifies_layout: false, modifies_styles: false, user_approval_required: false }
+    }),
+    prestoPromote: async () => ({ success: true, correlation_id: 'init', timestamp: '', rollback_token: '' }),
+    dispel: async () => ({ success: true, correlation_id: 'init', timestamp: '', rollback_token: '' })
+  }
+};
+
 const Routes = () => {
   const Router = isElectron() ? HashRouter : BrowserRouter;
 
@@ -354,17 +398,21 @@ const Routes = () => {
       <ErrorBoundary>
         <MayaAuthProvider>
           <AuthProvider>
-            <ConnectivityStatus />
-            {/* <SyncStatusModal /> - USER REQUESTED TO HIDE THIS MODAL */}
-            <MusicProvider>
-              <ScrollToTop />
-              <AppRoutes />
-            </MusicProvider>
+            <AbraHatProvider realSDK={realSDK}>
+              <ConnectivityStatus />
+              {/* <SyncStatusModal /> - USER REQUESTED TO HIDE THIS MODAL */}
+              <MusicProvider>
+                <ScrollToTop />
+                <AppRoutes />
+                <AbraPreviewDrawer />
+              </MusicProvider>
+            </AbraHatProvider>
           </AuthProvider>
         </MayaAuthProvider>
       </ErrorBoundary>
     </Router>
   );
 };
+
 
 export default Routes;
