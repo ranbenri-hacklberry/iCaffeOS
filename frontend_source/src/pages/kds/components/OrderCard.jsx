@@ -241,8 +241,8 @@ const OrderCard = memo(({
 
   const cardWidthClass = isHistory
     ? (isLargeOrder ? 'w-[294px]' : 'w-[200px]')
-    // 🎨 DESIGN SYSTEM MARKER [DO NOT TOUCH]: widths must be 420px (double) and 280px (single)
-    : (isDriverView ? 'w-full' : (isLargeOrder ? 'w-[420px]' : 'w-[280px]'));
+    // 🎨 DESIGN: widths are 400px (double) and 260px (single) - Updated 2026-02-16
+    : (isDriverView ? 'w-full' : (isLargeOrder ? 'w-[400px]' : 'w-[260px]'));
 
   const deliveryInfo = useMemo(() => {
     if (!order.delivery_info) return {};
@@ -275,13 +275,7 @@ const OrderCard = memo(({
           )}
 
           <div
-            className={`flex items-start gap-[5px] flex-1 min-w-0 tracking-tight cursor-pointer ${!isLiteMode ? 'active:scale-[0.98] transition-all hover:bg-black/5' : ''} p-1.5 -m-1.5 rounded-lg`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onReadyItems && !isReady && !isHistory) {
-                onReadyItems(order.id, [item]);
-              }
-            }}
+            className={`flex items-start gap-[5px] flex-1 min-w-0 tracking-tight p-1.5 -m-1.5 rounded-lg`}
           >
             {/* Quantity Badge */}
             <span className={`flex items-center justify-center rounded-lg font-black shrink-0 mt-0.5 ${badgeSizeClass} ${!isLiteMode ? 'shadow-sm' : ''} ${isPackedItem

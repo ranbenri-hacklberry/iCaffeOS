@@ -497,24 +497,50 @@ const ModeSelectionScreen = () => {
                 </div>
 
                 <div className="mt-6 text-center flex flex-col items-center gap-2">
-                    <button
-                        onClick={() => {
-                            if (currentUser?.is_impersonating) {
-                                // Impersonating - return to Super Admin Portal
-                                logout();
-                            } else if (currentUser?.is_super_admin) {
-                                // Super Admin not impersonating - go to Super Admin Portal
-                                navigate('/super-admin');
-                            } else {
-                                // Regular user - full logout
-                                logout();
-                            }
-                        }}
-                        className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors px-4 py-2 rounded-lg hover:bg-white/10 text-sm"
-                    >
-                        <LogOut size={16} />
-                        <span>{currentUser?.is_impersonating ? 'חזרה לפורטל הראשי' : currentUser?.is_super_admin ? 'חזרה לפורטל' : 'יציאה'}</span>
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => {
+                                if (currentUser?.is_impersonating) {
+                                    // Impersonating - return to Super Admin Portal
+                                    logout();
+                                } else if (currentUser?.is_super_admin) {
+                                    // Super Admin not impersonating - go to Super Admin Portal
+                                    navigate('/super-admin');
+                                } else {
+                                    // Regular user - full logout
+                                    logout();
+                                }
+                            }}
+                            className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors px-4 py-2 rounded-lg hover:bg-white/10 text-sm"
+                        >
+                            <LogOut size={16} />
+                            <span>{currentUser?.is_impersonating ? 'חזרה לפורטל הראשי' : currentUser?.is_super_admin ? 'חזרה לפורטל' : 'יציאה'}</span>
+                        </button>
+
+                        {/* Force Re-Login Button */}
+                        <button
+                            onClick={() => {
+                                // Clear ALL cached auth data
+                                localStorage.removeItem('kiosk_user');
+                                localStorage.removeItem('kiosk_auth_time');
+                                localStorage.removeItem('kiosk_mode');
+                                localStorage.removeItem('business_id');
+                                localStorage.removeItem('businessId');
+                                localStorage.removeItem('business_name');
+                                localStorage.removeItem('original_super_admin');
+                                localStorage.removeItem('return_to_super_portal');
+                                localStorage.removeItem('manager_auth_key');
+                                localStorage.removeItem('manager_auth_time');
+                                sessionStorage.clear();
+                                // Redirect to login
+                                window.location.href = '/login';
+                            }}
+                            className="inline-flex items-center gap-2 text-amber-400 hover:text-amber-300 transition-colors px-4 py-2 rounded-lg hover:bg-amber-500/10 text-sm border border-amber-500/30"
+                        >
+                            <Users size={16} />
+                            <span>כניסה מחדש</span>
+                        </button>
+                    </div>
                     <div className="text-[10px] text-slate-500 font-mono opacity-50">
                         v{appVersion}
                     </div>

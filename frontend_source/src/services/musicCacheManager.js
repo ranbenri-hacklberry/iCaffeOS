@@ -3,7 +3,7 @@ import { getBackendApiUrl } from '@/utils/apiUtils';
 
 const MUSIC_API_URL = getBackendApiUrl();
 const MAX_CACHE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB
-const PREFETCH_COUNT = 50;
+const PREFETCH_COUNT = 500;
 
 /**
  * Tiered Storage Manager for Music
@@ -84,7 +84,8 @@ export const MusicCacheManager = {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         songId: song.id,
-                        filePath: song.file_path
+                        filePath: song.file_path,
+                        coverPath: song.album?.cover_url || song.cover_url
                     })
                 });
 

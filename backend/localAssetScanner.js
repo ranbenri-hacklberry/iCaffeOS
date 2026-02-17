@@ -3,11 +3,22 @@
  * Recursively scans a directory for music files and extracts metadata.
  * Designed to feed data to the frontend Dexie DB.
  */
-import fs from 'fs/promises';
+import fs from 'fs';
+import fsPromises from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import { parseFile } from 'music-metadata';
 
-const DEFAULT_MUSIC_PATH = process.env.RANTUNES_MUSIC_PATH || '/Volumes/Ran1/Music';
+const getInitialMusicPath = () => {
+    if (process.env.RANTUNES_MUSIC_PATH) return process.env.RANTUNES_MUSIC_PATH;
+    const externalPath = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
+    const localPath = path.join(os.homedir(), 'Music', 'iCaffe');
+
+    if (fs.existsSync(externalPath)) return externalPath;
+    return localPath;
+};
+
+const DEFAULT_MUSIC_PATH = getInitialMusicPath();
 const SUPPORTED_EXTS = new Set(['.mp3', '.flac', '.m4a', '.wav', '.ogg', '.aac']);
 
 export class LocalAssetScanner {
@@ -23,7 +34,7 @@ export class LocalAssetScanner {
         console.log(`📂 Scanning music directory: ${this.rootPath}`);
 
         try {
-            await fs.access(this.rootPath);
+            await fsPromises.access(this.rootPath);
         } catch (error) {
             console.error(`❌ Path not accessible: ${this.rootPath}`);
             return [];
@@ -39,7 +50,7 @@ export class LocalAssetScanner {
     async _scanDir(dir, assets) {
         let entries;
         try {
-            entries = await fs.readdir(dir, { withFileTypes: true });
+            entries = await fsPromises.readdir(dir, { withFileTypes: true });
         } catch (err) {
             console.warn(`⚠️ Cannot read directory: ${dir}`, err.message);
             return;
@@ -75,15 +86,15 @@ export class LocalAssetScanner {
             // music-metadata extraction
             const metadata = await parseFile(filePath, { skipCovers: true, duration: true });
             const { common, format } = metadata;
-            const stats = await fs.stat(filePath);
+            const stats = await fsPromises.stat(filePath);
 
             return {
                 id: this._generateId(filePath), // generate stable ID
                 file_path: filePath,
                 file_size: stats.size,
                 title: common.title || path.basename(filePath, path.extname(filePath)),
-                artist: common.artist || 'Unknown Artist',
-                album: common.album || 'Unknown Album',
+                artist: common.artist || this._getFolderFallback(filePath, 2) || 'Unknown Artist',
+                album: common.album || this._getFolderFallback(filePath, 1) || 'Unknown Album',
                 genre: common.genre ? common.genre[0] : null,
                 year: common.year || null,
                 duration: format.duration || 0,
@@ -91,7 +102,7 @@ export class LocalAssetScanner {
             };
         } catch (error) {
             // Fallback for minimal info if metadata extraction fails but file is valid
-            const stats = await fs.stat(filePath).catch(() => ({ size: 0 }));
+            const stats = await fsPromises.stat(filePath).catch(() => ({ size: 0 }));
             return {
                 id: this._generateId(filePath),
                 file_path: filePath,
@@ -103,6 +114,21 @@ export class LocalAssetScanner {
                 scanned_at: new Date().toISOString()
             };
         }
+    }
+
+    _getFolderFallback(filePath, depth) {
+        let current = filePath;
+        for (let i = 0; i < depth; i++) {
+            current = path.dirname(current);
+        }
+        const name = path.basename(current);
+        const parent = path.dirname(current);
+
+        // Don't use root path name or generic volume names
+        if (current === this.rootPath || parent === '/' || name === 'Volumes' || name === 'mnt' || name === 'Users') {
+            return null;
+        }
+        return name;
     }
 
     _generateId(str) {

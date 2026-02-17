@@ -23,6 +23,7 @@ export const ConnectionProvider = ({ children }) => {
     const [showOfflinePopup, setShowOfflinePopup] = useState(false);
     const [showOnlinePopup, setShowOnlinePopup] = useState(false);
     const [lostType, setLostType] = useState(null); // 'local', 'cloud', or 'all'
+    const failureCount = useRef(0);
 
     const checkConnectivity = useCallback(async () => {
         let localOk = false;
@@ -30,17 +31,19 @@ export const ConnectionProvider = ({ children }) => {
 
         // FAST PATH: If browser says offline, don't even try network calls
         if (!navigator.onLine) {
-            console.log('📴 [ConnectionContext] Browser reports offline - skipping network checks');
-            if (state.status !== 'offline') {
-                setLostType('all');
-                setShowOfflinePopup(true);
+            failureCount.current++;
+            if (failureCount.current >= 3) {
+                if (state.status !== 'offline') {
+                    setLostType('all');
+                    setShowOfflinePopup(true);
+                }
+                setState(prev => ({
+                    ...prev,
+                    status: 'offline',
+                    cloudAvailable: false,
+                    localAvailable: false
+                }));
             }
-            setState(prev => ({
-                ...prev,
-                status: 'offline',
-                cloudAvailable: false,
-                localAvailable: false
-            }));
             return;
         }
 
@@ -65,7 +68,9 @@ export const ConnectionProvider = ({ children }) => {
             window.location.hostname === '127.0.0.1' ||
             window.location.hostname.startsWith('192.168.') ||
             window.location.hostname.startsWith('10.') ||
-            window.location.hostname.startsWith('100.');
+            window.location.hostname.startsWith('172.') ||
+            window.location.hostname.startsWith('100.') ||
+            !window.location.hostname.includes('.');
 
         if (isLocalHost) {
             try {
@@ -92,23 +97,31 @@ export const ConnectionProvider = ({ children }) => {
         else if (localOk) nextStatus = 'local-only';
         else if (cloudOk) nextStatus = 'cloud-only';
 
-        // Context-aware popup logic
-        if (nextStatus !== prevStatus && prevStatus !== 'checking') {
-            if (nextStatus === 'offline') {
-                setLostType('all');
-                setShowOfflinePopup(true);
-            } else if (nextStatus === 'local-only' && prevStatus === 'online') {
-                setLostType('cloud');
-                setShowOfflinePopup(true);
-            } else if (nextStatus === 'cloud-only' && prevStatus === 'online' && isLocalHost) {
-                setLostType('local');
-                setShowOfflinePopup(true);
-            } else if (nextStatus === 'online' || (nextStatus === 'cloud-only' && !isLocalHost)) {
-                setShowOfflinePopup(false);
-                if (prevStatus === 'offline' || prevStatus === 'local-only') {
-                    setShowOnlinePopup(true);
-                    setTimeout(() => setShowOnlinePopup(false), 3000);
+        // 🛡️ FAILURE THRESHOLD LOGIC
+        if (nextStatus === 'online') {
+            failureCount.current = 0;
+            if (showOfflinePopup) setShowOfflinePopup(false);
+            if (prevStatus !== 'online' && prevStatus !== 'checking') {
+                setShowOnlinePopup(true);
+                setTimeout(() => setShowOnlinePopup(false), 3000);
+            }
+        } else {
+            failureCount.current++;
+            if (failureCount.current >= 3) {
+                if (nextStatus !== prevStatus && prevStatus !== 'checking') {
+                    if (nextStatus === 'offline') {
+                        setLostType('all');
+                        setShowOfflinePopup(true);
+                    } else if (nextStatus === 'local-only' && prevStatus === 'online') {
+                        setLostType('cloud');
+                        setShowOfflinePopup(true);
+                    } else if (nextStatus === 'cloud-only' && prevStatus === 'online' && isLocalHost) {
+                        setLostType('local');
+                        setShowOfflinePopup(true);
+                    }
                 }
+            } else {
+                nextStatus = prevStatus; // Keep previous status until threshold reached
             }
         }
 
@@ -126,7 +139,7 @@ export const ConnectionProvider = ({ children }) => {
     // Check on mount and periodically
     useEffect(() => {
         checkConnectivity();
-        const interval = setInterval(checkConnectivity, 20000);
+        const interval = setInterval(checkConnectivity, 8000);
         return () => clearInterval(interval);
     }, [checkConnectivity]);
 

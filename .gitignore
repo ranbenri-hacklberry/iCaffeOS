@@ -28,3 +28,8 @@ coverage/
 *.zip
 *.tar.gz
 *.framework
+smart_sentry_firmware/
+binaries/
+n150-app/
+*.log
+mcp-supabase-server/

@@ -102,6 +102,34 @@ const MiniMusicBar = ({ className = '' }) => {
         }
     };
 
+    // Parse title: Extract content in parentheses or after a dash
+    const parseTitle = (title) => {
+        if (!title) return { main: '', sub: '' };
+        let main = title;
+        let subParts = [];
+        if (main.includes(' - ')) {
+            const parts = main.split(' - ');
+            main = parts[0];
+            subParts.push(...parts.slice(1));
+        } else if (main.includes(' – ')) {
+            const parts = main.split(' – ');
+            main = parts[0];
+            subParts.push(...parts.slice(1));
+        }
+        const parenRegex = /\(([^)]+)\)/g;
+        const matches = main.match(parenRegex);
+        if (matches) {
+            matches.forEach(m => {
+                main = main.replace(m, '');
+                subParts.push(m);
+            });
+        }
+        return {
+            main: main.trim().replace(/\s+/g, ' '),
+            sub: subParts.join(' ').trim()
+        };
+    };
+
     // Open RanTunes in new tab
     const openRanTunes = () => {
         window.open('https://music.hacklberryfinn.com', '_blank');
@@ -117,35 +145,48 @@ const MiniMusicBar = ({ className = '' }) => {
 
     return (
         <div
-            className={`flex items-center gap-2 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 py-1.5 transition-all max-w-[33%] min-w-[200px] ${className}`}
+            className={`flex items-center gap-2 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 py-1.5 transition-all max-w-[340px] min-w-[200px] ${className}`}
             dir="ltr"
         >
-            {/* Album Art */}
+            {/* Mini Vinyl Record */}
             <div
-                className="w-8 h-8 rounded-lg overflow-hidden bg-gray-200 shrink-0 cursor-pointer"
+                className={`w-8 h-8 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20
+                    ${playback.is_playing ? 'animate-[spin_4s_linear_infinite]' : ''}`}
                 onClick={openRanTunes}
             >
-                {playback.cover_url ? (
-                    <img
-                        src={playback.cover_url}
-                        alt={playback.album_name || 'Album'}
-                        className="w-full h-full object-cover"
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <Music className="w-4 h-4" />
-                    </div>
-                )}
+                {/* Vinyl Grooves */}
+                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_transparent_30%,_rgba(255,255,255,0.1)_35%,_transparent_40%,_rgba(255,255,255,0.1)_45%,_transparent_50%)]" />
+
+                <div className="w-4 h-4 rounded-full overflow-hidden border border-black/20 flex items-center justify-center bg-white z-10">
+                    {playback.cover_url ? (
+                        <img
+                            src={playback.cover_url}
+                            alt={playback.album_name || 'Album'}
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                            <Music className="w-2 h-2 text-gray-400" />
+                        </div>
+                    )}
+                    <div className="w-1 h-1 rounded-full bg-black absolute z-30" />
+                </div>
             </div>
 
             {/* Song & Artist */}
-            <div className="min-w-0 flex-1 cursor-pointer" onClick={openRanTunes}>
-                <p className="text-gray-800 text-xs font-medium truncate leading-tight">
-                    {playback.song_title}
+            <div className="min-w-0 flex-1 cursor-pointer text-left" onClick={openRanTunes}>
+                <p className="text-gray-800 text-xs font-bold truncate leading-tight">
+                    {parseTitle(playback.song_title).main}
                 </p>
-                <p className="text-gray-500 text-[10px] truncate leading-tight">
-                    {playback.artist_name}
-                </p>
+                {parseTitle(playback.song_title).sub ? (
+                    <p className="text-gray-400 text-[8px] font-bold uppercase tracking-widest truncate leading-tight mt-0.5">
+                        {parseTitle(playback.song_title).sub}
+                    </p>
+                ) : (
+                    <p className="text-gray-500 text-[10px] truncate leading-tight">
+                        {playback.artist_name}
+                    </p>
+                )}
             </div>
 
             {/* Controls */}

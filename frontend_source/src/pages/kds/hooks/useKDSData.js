@@ -1675,7 +1675,24 @@ export const useKDSData = () => {
             const smartOrderId = getSmartId(orderId);
             const now = new Date().toISOString();
 
-            // 💾 DEXIE FIRST: Mark items as ready immediately
+            // 🚀 OPTIMISTIC UI UPDATE: Update UI immediately before server call
+            const updateItemsInList = (list) => list.map(order => {
+                if (order.id !== orderId) return order;
+                return {
+                    ...order,
+                    items: order.items?.map(item => {
+                        const ids = item.ids || [item.id];
+                        if (itemIds.some(id => ids.includes(id))) {
+                            return { ...item, item_status: 'ready' };
+                        }
+                        return item;
+                    })
+                };
+            });
+            setCurrentOrders(prev => updateItemsInList(prev));
+            log(`🚀 [OPTIMISTIC] Marked ${itemIds.length} items as READY in UI`);
+
+            // 💾 DEXIE: Mark items as ready locally
             try {
                 const { db } = await import('@/db/database');
                 await db.order_items.where('id').anyOf(itemIds).modify({
@@ -1685,15 +1702,15 @@ export const useKDSData = () => {
                 log(`💾 [DEXIE] Mark ${itemIds.length} items as READY locally`);
             } catch (e) { console.warn('Dexie ready items update failed:', e); }
 
-            setIsLoading(true);
-
+            // 🌐 SUPABASE: Send to server (no loading spinner - already updated)
             const { error } = await supabase.rpc('mark_items_ready_v2', {
                 p_order_id: orderId,
                 p_item_ids: itemIds
             });
 
             if (error) throw error;
-            await fetchOrders(false, null, true);
+            // Soft refresh in background (won't cause flicker due to anti-jump)
+            fetchOrders(false, null, true);
         } catch (err) {
             console.error('Error marking items ready:', err);
             setErrorModal({

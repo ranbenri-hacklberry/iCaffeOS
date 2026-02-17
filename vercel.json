@@ -26,6 +26,6 @@
         }
     ],
     "buildCommand": "cd frontend_source && npm install && npm run build",
-    "outputDirectory": "frontend_source/dist",
+    "outputDirectory": "frontend_source/build",
     "framework": "vite"
 }

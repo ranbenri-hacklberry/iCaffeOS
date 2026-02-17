@@ -479,7 +479,7 @@ export const syncOrders = async (businessId) => {
     // The local DB is already the source of truth.
     if (clientBrand === 'DOCKER') {
         console.log('🏘️ [Sync] Local mode detected. Skipping expensive history fetch to maintain snappy performance.');
-        return { success: true, count: 0 };
+        return { success: true, ordersCount: 0 };
     }
 
     try {

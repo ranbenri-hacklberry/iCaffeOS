@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
     Music, Disc, ListMusic, Search, Plus, RefreshCw,
     ArrowRight, Sparkles, User, Play, FolderOpen, Heart, Youtube,
-    Pause, SkipForward, SkipBack, Trash2, X, HardDrive, AlertCircle, Home, Download, Archive
+    Pause, SkipForward, SkipBack, Trash2, X, HardDrive, AlertCircle, Home, Download, Archive, List,
+    Volume2, VolumeX, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
@@ -15,10 +16,12 @@ import AddMusicCard from '@/components/music/AddMusicCard';
 import VinylTurntable from '@/components/music/VinylTurntable';
 import SongRow from '@/components/music/SongRow';
 import MiniMusicPlayer from '@/components/music/MiniMusicPlayer';
-import ConnectionStatusBar from '@/components/ConnectionStatusBar';
 import AlbumView from '@/pages/music/components/AlbumView';
 import PlaylistBuilder from '@/pages/music/components/PlaylistBuilder';
+import SyncOverlay from '@/pages/music/components/SyncOverlay';
+import CDImportModal from '@/pages/music/components/CDImportModal';
 import MusicQueue from '@/components/music/MusicQueue';
+import QueueModeModal from '@/components/music/QueueModeModal';
 import UnifiedHeader from '@/components/UnifiedHeader';
 
 import DirectoryScanner from '@/pages/music/components/DirectoryScanner';
@@ -98,22 +101,93 @@ const MusicPageContent = () => {
         togglePlay,
         handleNext,
         handlePrevious,
-        playlist,
-        rateSong
+        playlist, // This is the current playback queue
+        rateSong,
+        currentTime,
+        duration,
+        volume,
+        seek,
+        setVolume,
+        handleReorder,
+        removeFromQueue,
+        addToQueue,
+        addPlaylistToQueue
     } = useMusic();
 
     const [activeTab, setActiveTab] = useState('albums');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAlbum, setSelectedAlbum] = useState(null);
     const [showPlaylistBuilder, setShowPlaylistBuilder] = useState(false);
-    const [showQueue, setShowQueue] = useState(false);
-
     const [showScanner, setShowScanner] = useState(false);
+    const [showQueue, setShowQueue] = useState(false);
+    const [queueContext, setQueueContext] = useState(null); // { item, type: 'song'|'album' }
     const [showYouTubeIngest, setShowYouTubeIngest] = useState(false);
+    const [selectedBatch, setSelectedBatch] = useState(null);
+    const [showDirectoryScanner, setShowDirectoryScanner] = useState(false);
     const [selectedYoutubeVideo, setSelectedYoutubeVideo] = useState(null);
     const [currentAlbumSongs, setCurrentAlbumSongs] = useState([]);
     const [favoriteSongs, setFavoriteSongs] = useState([]);
     const [allSongs, setAllSongs] = useState([]);
+
+    // SYNC STATE
+    const [showSyncOverlay, setShowSyncOverlay] = useState(false);
+    const [mismatchDetected, setMismatchDetected] = useState(false);
+    const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+    // CD STATE
+    const [showCDImport, setShowCDImport] = useState(false);
+    const [isCdMounted, setIsCdMounted] = useState(false);
+
+    // NETWORK STATUS
+    const [networkSource, setNetworkSource] = useState('local'); // 'local', 'yt'
+    const [isMasterOnline, setIsMasterOnline] = useState(true);
+    const [libraryStats, setLibraryStats] = useState(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedItems, setSelectedItems] = useState([]); // Array of IDs
+
+    const toggleItemSelection = (id) => {
+        setSelectedItems(prev =>
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedItems.length === 0) return;
+        if (!window.confirm(`האם אתה בטוח שברצונך למחוק ${selectedItems.length} פריטים?`)) return;
+
+        try {
+            for (const id of selectedItems) {
+                if (activeTab === 'albums') await deleteAlbum(id, false);
+                else if (activeTab === 'playlists') await deletePlaylist(id);
+                else if (activeTab === 'singles') await deleteSong(id, false);
+            }
+            setSelectedItems([]);
+            setIsEditMode(false);
+            refreshAll();
+        } catch (err) {
+            console.error('Bulk delete failed:', err);
+        }
+    };
+
+    const fetchLibraryStats = useCallback(async () => {
+        try {
+            const res = await fetch(`${MUSIC_API_URL}/api/music/library/stats`);
+            const data = await res.json();
+            if (data.success) setLibraryStats(data.stats);
+        } catch (err) { }
+    }, []);
+
+    useEffect(() => {
+        // Start Heartbeat if we are on the N150
+        const isN150 = window.location.hostname.includes('n150') || true; // Auto-detect in real env
+        fetch(`${MUSIC_API_URL}/api/music/discovery/start`, {
+            method: 'POST',
+            body: JSON.stringify({ device_type: isN150 ? 'n150' : 'mbp' }),
+            headers: { 'Content-Type': 'application/json' }
+        }).catch(err => console.warn('Discovery skipped:', err));
+
+        fetchLibraryStats();
+    }, [fetchLibraryStats]);
 
     // NEW: Music Source State (simplified to local only)
     const [showDiskPopup, setShowDiskPopup] = useState(false);
@@ -198,20 +272,49 @@ const MusicPageContent = () => {
     }, [albums]);
 
     const filteredAlbums = processedAlbums.filter(album =>
-        album.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        album.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        ((album.song_count > 1 || album.song_count === undefined) || (album.song_count === 0)) &&
+        (album.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            album.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     const filteredPlaylists = (playlists || []).filter(playlist =>
         playlist.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const filteredSingles = (allSongs || []).filter(song => {
-        const matchesSearch = song.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            song.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-        const isSingle = !song.album_id;
-        return matchesSearch && isSingle;
-    });
+    const filteredSingles = React.useMemo(() => {
+        // Real songs with no album_id
+        const realSingles = (allSongs || []).filter(song => !song.album_id);
+
+        // Count songs per album to find single-song albums
+        const albumCounts = {};
+        (allSongs || []).forEach(s => {
+            if (s.album_id) albumCounts[s.album_id] = (albumCounts[s.album_id] || 0) + 1;
+        });
+
+        // Single-song albums (converted to song-like objects for the tab)
+        // We check song_count property OR the calculated count
+        const albumSingles = (albums || [])
+            .filter(a => (a.song_count == 1) || (albumCounts[a.id] == 1))
+            .map(a => ({
+                id: a.id,
+                title: a.name,
+                artist: a.artist,
+                album: a,
+                isAlbumSingle: true,
+                track_id: a.id,
+                // Ensure we have a cover
+                cover_url: a.cover_url,
+                thumbnail_url: a.cover_url,
+                // Add the song ID if we found it via count, for direct playback
+                actual_song_id: (allSongs || []).find(s => s.album_id === a.id)?.id
+            }));
+
+        const combined = [...realSingles, ...albumSingles];
+        return combined.filter(song =>
+            song.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            song.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [allSongs, albums, searchQuery]);
 
     // Load songs for singles tab
     useEffect(() => {
@@ -223,6 +326,45 @@ const MusicPageContent = () => {
             loadAll();
         }
     }, [activeTab, fetchAllSongs]);
+
+    // Check Sync Status
+    const checkSyncStatus = useCallback(async () => {
+        try {
+            const res = await fetch(`${MUSIC_API_URL}/api/music/sync/status`);
+            const data = await res.json();
+            if (data.success && data.count > 0) {
+                setMismatchDetected(true);
+                setPendingSyncCount(data.count);
+            } else {
+                setMismatchDetected(false);
+            }
+        } catch (err) { }
+    }, []);
+
+    useEffect(() => {
+        checkSyncStatus();
+
+        // Listen for drive mount events
+        if (window.electron?.ipcRenderer) {
+            const removeListener = window.electron.ipcRenderer.on('system:volume-change', (data) => {
+                console.log('📦 Volume change event received:', data);
+                if (data.isMounted && data.filename === 'RANTUNES') {
+                    checkSyncStatus();
+                }
+            });
+
+            const removeCdListener = window.electron.ipcRenderer.on('system:cd-event', (data) => {
+                console.log('📀 CD event received:', data);
+                setIsCdMounted(data.isMounted);
+                if (data.isMounted) setShowCDImport(true);
+            });
+
+            return () => {
+                removeListener();
+                removeCdListener();
+            };
+        }
+    }, [checkSyncStatus]);
 
     // Load songs when album/playlist is selected
     useEffect(() => {
@@ -261,25 +403,41 @@ const MusicPageContent = () => {
     };
 
     // Handle album play - play all songs
-    const handleAlbumPlay = async (album) => {
-        setSelectedAlbum({ ...album, isPlaylist: false });
+    const handleAlbumPlay = async (album, mode = 'last') => {
         const songs = await fetchAlbumSongs(album.id);
-        setCurrentAlbumSongs(songs);
         const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
         if (playable.length > 0) {
-            playSong(playable[0], playable);
+            addPlaylistToQueue(playable, mode);
         }
     };
 
     // Handle playlist play
-    const handlePlaylistPlay = async (playlist) => {
-        setSelectedAlbum({ ...playlist, isPlaylist: true, artist: { name: 'פלייליסט חכם' } });
+    const handlePlaylistPlay = async (playlist, mode = 'last') => {
         const songs = await fetchPlaylistSongs(playlist.id);
-        setCurrentAlbumSongs(songs);
         const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
         if (playable.length > 0) {
-            playSong(playable[0], playable);
+            addPlaylistToQueue(playable, mode);
         }
+    };
+
+    // Handle add to queue selection
+    const handleQueueSelect = async (mode) => {
+        if (!queueContext) return;
+
+        if (queueContext.type === 'album') {
+            handleAlbumPlay(queueContext.item, mode);
+        } else {
+            let item = queueContext.item;
+            // If it's a "Single" that's actually an album with 1 song, fetch the song object
+            if (item.isAlbumSingle) {
+                const songs = await fetchAlbumSongs(item.id);
+                if (songs?.[0]) {
+                    item = songs[0];
+                }
+            }
+            addToQueue(item, mode);
+        }
+        setQueueContext(null);
     };
 
     // Handle back from album view
@@ -293,20 +451,34 @@ const MusicPageContent = () => {
         navigate('/mode-selection');
     };
 
-    // Handle song play
-    const handleSongPlay = (song) => {
-        // Never play disliked songs
-        if ((song?.myRating || 0) === 1) {
-            return;
+    // Handle song play - Immediate play (User request: "Click plays immediately")
+    const handleSongPlay = async (song) => {
+        if ((song?.myRating || 0) === 1) return;
+
+        let songToPlay = song;
+        // If this is a single-song album wrapper, we need the actual song file path
+        if (song.isAlbumSingle) {
+            // Priority 1: Use the pre-calculated song ID if available
+            if (song.actual_song_id && allSongs) {
+                const found = allSongs.find(s => s.id === song.actual_song_id);
+                if (found) {
+                    playSong(found, [found], true);
+                    return;
+                }
+            }
+
+            try {
+                const songs = await fetchAlbumSongs(song.id);
+                if (songs && songs.length > 0) {
+                    songToPlay = songs[0];
+                }
+            } catch (err) {
+                console.error("Failed to fetch song for album single:", err);
+                return;
+            }
         }
 
-        // Determine context based on active view
-        const contextSongs = selectedAlbum ? currentAlbumSongs :
-            activeTab === 'singles' ? filteredSingles :
-                activeTab === 'favorites' ? favoriteSongs :
-                    [song]; // fallback
-
-        playSong(song, contextSongs);
+        playSong(songToPlay, [songToPlay], true);
     };
 
     // Handle rating
@@ -375,9 +547,11 @@ const MusicPageContent = () => {
 
     // Load favorites when opening the favorites tab
     useEffect(() => {
-        if (activeTab !== 'favorites') return;
-        loadFavorites();
-    }, [activeTab, loadFavorites]);
+        if (activeTab === 'favorites') loadFavorites();
+        if (activeTab === 'singles' && allSongs.length === 0) {
+            fetchAllSongs().then(setAllSongs);
+        }
+    }, [activeTab, loadFavorites, allSongs.length, fetchAllSongs]);
 
     // Get songs to display (current album or playlist)
     const displaySongs = currentAlbumSongs.length > 0 ? currentAlbumSongs : playlist;
@@ -390,39 +564,135 @@ const MusicPageContent = () => {
                 subtitle="ניהול ספריית מוזיקה ופלייליסטים"
                 onHome={() => navigate('/mode-selection')}
                 forceMusicDark={true}
-                className="!bg-black/40 !border-white/10 !text-white"
+                className="music-header"
             >
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowYouTubeIngest(true)}
-                        className="w-10 h-10 rounded-full music-glass flex items-center justify-center bg-red-600/20 hover:bg-red-600/40 border border-red-500/30"
-                        title="ייבוא מ-YouTube"
-                    >
-                        <Download className="w-5 h-5 text-red-400" />
-                    </button>
+                <div className="flex items-center gap-3">
+                    {/* Library Tools / Edit Actions */}
+                    <div className="flex items-center gap-2">
+                        {isEditMode ? (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleBulkDelete}
+                                    disabled={selectedItems.length === 0}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-bold text-xs transition-all
+                                        ${selectedItems.length > 0 ? 'bg-red-500 text-white shadow-lg' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>מחק {selectedItems.length}</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsEditMode(false);
+                                        setSelectedItems([]);
+                                    }}
+                                    className="px-4 py-1.5 rounded-xl bg-white/10 text-white font-bold text-xs hover:bg-white/20"
+                                >
+                                    ביטול
+                                </button>
+                            </div>
+                        ) : (
+                            isManager && (
+                                <button
+                                    onClick={() => setIsEditMode(true)}
+                                    className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold text-xs hover:bg-indigo-500/30 transition-all"
+                                >
+                                    <List className="w-3.5 h-3.5" />
+                                    <span>עריכה</span>
+                                </button>
+                            )
+                        )}
 
-                    <button
-                        onClick={() => setShowScanner(true)}
-                        className="w-10 h-10 rounded-full music-glass flex items-center justify-center"
-                        title="סרוק ספרייה"
-                    >
-                        <FolderOpen className="w-5 h-5 text-white" />
-                    </button>
+                        {!isEditMode && (
+                            <>
+                                {isCdMounted && (
+                                    <button
+                                        onClick={() => setShowCDImport(true)}
+                                        className="w-9 h-9 rounded-full bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 flex items-center justify-center animate-pulse"
+                                        title="דיסק פיזי זוהה"
+                                    >
+                                        <Disc className="w-4 h-4 text-blue-400" />
+                                    </button>
+                                )}
 
-                    <button
-                        onClick={refreshAll}
-                        className={`w-10 h-10 rounded-full music-glass flex items-center justify-center
-                               ${isLoading ? 'animate-spin' : ''}`}
-                        title="רענן"
-                    >
-                        <RefreshCw className="w-5 h-5 text-white" />
-                    </button>
+                                <button
+                                    onClick={() => setShowYouTubeIngest(true)}
+                                    className="w-9 h-9 rounded-full bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 flex items-center justify-center transition-all active:scale-90 shadow-lg"
+                                    title="ייבוא מ-YouTube"
+                                >
+                                    <Download className="w-4 h-4 text-red-400" />
+                                </button>
+
+                                <button
+                                    onClick={() => setShowScanner(true)}
+                                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all active:scale-90"
+                                    title="סרוק ספרייה"
+                                >
+                                    <FolderOpen className="w-4 h-4 text-white/70" />
+                                </button>
+
+                                <button
+                                    onClick={refreshAll}
+                                    className={`w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all active:scale-90
+                                           ${isLoading ? 'animate-spin' : ''}`}
+                                    title="רענן"
+                                >
+                                    <RefreshCw className="w-4 h-4 text-white/70" />
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="w-px h-6 bg-white/10 mx-1" />
+
+                    {/* Source Indicator */}
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight transition-all shadow-sm
+                        ${isMusicDriveConnected ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
+                        {isMusicDriveConnected ? <HardDrive className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                        <span className="uppercase tracking-wider">{isMusicDriveConnected ? 'RANTUNES' : 'Local Disk'}</span>
+                    </div>
                 </div>
             </UnifiedHeader>
 
+            {/* Sync Notification Banner */}
+            <AnimatePresence>
+                {mismatchDetected && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-purple-600 overflow-hidden"
+                    >
+                        <div className="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <RefreshCw className="w-4 h-4 text-white animate-pulse" />
+                                <span className="text-white text-sm font-bold">
+                                    זוהה פער בספרייה: {pendingSyncCount} שירים ממתינים לסינכרון לדיסק RANTUNES
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setShowSyncOverlay(true)}
+                                    className="px-4 py-1 bg-white text-purple-600 rounded-lg text-xs font-bold hover:bg-white/90 transition-colors"
+                                >
+                                    סינכרון כעת
+                                </button>
+                                <button
+                                    onClick={() => setMismatchDetected(false)}
+                                    className="p-1 hover:bg-black/10 rounded-full transition-colors"
+                                >
+                                    <X className="w-4 h-4 text-white/70" />
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="music-split-layout flex-1 flex overflow-hidden">
                 {/* Right side - Vinyl Turntable or Queue */}
-                <div className="music-split-right order-last flex flex-col items-center justify-center p-6 relative">
+                <div
+                    className="music-split-right order-last flex flex-col items-center justify-center p-6 relative"
+                >
                     <AnimatePresence mode="wait">
                         {!showQueue ? (
                             <motion.div
@@ -437,38 +707,110 @@ const MusicPageContent = () => {
                                     song={currentSong}
                                     isPlaying={isPlaying}
                                     albumArt={currentSong?.album?.cover_url || currentSong?.cover_url || currentSong?.thumbnail_url}
-                                    onTogglePlay={togglePlay}
+                                    onTogglePlay={(forcePlayFirst) => {
+                                        if (forcePlayFirst && playlist.length > 0 && !currentSong) {
+                                            playSong(playlist[0], null, true);
+                                        } else {
+                                            togglePlay();
+                                        }
+                                    }}
+                                    queue={playlist}
                                 />
 
                                 {/* Player controls */}
-                                {currentSong && (
-                                    <div className="flex items-center gap-4 mt-8" dir="ltr">
-                                        <button
-                                            onClick={handlePrevious}
-                                            className="w-14 h-14 rounded-2xl music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10"
-                                        >
-                                            <SkipBack className="w-6 h-6 text-white" />
-                                        </button>
+                                <div className="flex flex-col items-center w-full max-w-sm mt-8">
+                                    {/* Progress & Time - Always show if we have a song OR a queue (since turntable shows queue item) */}
+                                    {(currentSong || playlist.length > 0) && (
+                                        <>
+                                            <div className="w-full flex items-center gap-3 mb-6 px-4" dir="ltr">
+                                                <span className="text-white/40 text-xs w-10 text-right font-mono">
+                                                    {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
+                                                </span>
 
-                                        <button
-                                            onClick={togglePlay}
-                                            className="w-20 h-20 rounded-3xl music-gradient-purple flex items-center justify-center shadow-2xl hover:scale-105 transition-transform border border-white/20"
-                                        >
-                                            {isPlaying ? (
-                                                <Pause className="w-9 h-9 text-white" />
-                                            ) : (
-                                                <Play className="w-9 h-9 text-white fill-white mr-[-4px]" />
-                                            )}
-                                        </button>
+                                                {/* Interactive Progress Bar */}
+                                                <div
+                                                    className="relative flex-1 h-6 group cursor-pointer flex items-center"
+                                                    onClick={(e) => {
+                                                        if (!duration) return;
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const percent = (e.clientX - rect.left) / rect.width;
+                                                        seek(Math.min(Math.max(0, percent), 1) * duration);
+                                                    }}
+                                                >
+                                                    {/* Background Track */}
+                                                    <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                        {/* Progress Fill */}
+                                                        <motion.div
+                                                            className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                                                            style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                                                            layoutId="progressBar"
+                                                        />
+                                                    </div>
 
-                                        <button
-                                            onClick={handleNext}
-                                            className="w-14 h-14 rounded-2xl music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10"
-                                        >
-                                            <SkipForward className="w-6 h-6 text-white" />
-                                        </button>
-                                    </div>
-                                )}
+                                                    {/* Scrubber Knob (visible on hover) */}
+                                                    <motion.div
+                                                        className="absolute w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        style={{ left: `${(currentTime / (duration || 1)) * 100}%`, transform: 'translateX(-50%)' }}
+                                                    />
+                                                </div>
+
+                                                <span className="text-white/40 text-xs w-10 font-mono">
+                                                    {Math.floor(duration / 60)}:{(Math.floor(duration % 60)).toString().padStart(2, '0')}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-6" dir="ltr">
+                                                <button
+                                                    onClick={handlePrevious}
+                                                    disabled={!currentSong && playlist.length === 0}
+                                                    className="w-14 h-14 rounded-2xl music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                                >
+                                                    <SkipBack className="w-6 h-6 text-white" />
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        if (!currentSong && playlist.length > 0) {
+                                                            playSong(playlist[0], null, true);
+                                                        } else {
+                                                            togglePlay();
+                                                        }
+                                                    }}
+                                                    className="w-20 h-20 rounded-3xl music-gradient-purple flex items-center justify-center shadow-2xl hover:scale-105 transition-transform border border-white/20"
+                                                >
+                                                    {isPlaying ? (
+                                                        <Pause className="w-9 h-9 text-white fill-current" />
+                                                    ) : (
+                                                        <Play className="w-9 h-9 text-white fill-current ml-1" />
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    onClick={handleNext}
+                                                    disabled={!currentSong && playlist.length === 0}
+                                                    className="w-14 h-14 rounded-2xl music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                                >
+                                                    <SkipForward className="w-6 h-6 text-white" />
+                                                </button>
+                                            </div>
+
+                                            {/* Volume Control */}
+                                            <div className="flex items-center gap-3 mt-8 w-full px-4" dir="ltr">
+                                                <VolumeX className="w-4 h-4 text-white/40 cursor-pointer hover:text-white" onClick={() => setVolume(0)} />
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.01"
+                                                    value={volume}
+                                                    onChange={(e) => setVolume(parseFloat(e.target.value))}
+                                                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
+                                                />
+                                                <Volume2 className="w-4 h-4 text-white/40 cursor-pointer hover:text-white" onClick={() => setVolume(1)} />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </motion.div>
                         ) : (
                             <motion.div
@@ -492,17 +834,10 @@ const MusicPageContent = () => {
                                 : 'music-glass text-white/60 border-white/10 hover:text-white'}`}
                         title={showQueue ? "חזרה לנגן" : "הצג תור נגינה"}
                     >
-                        {showQueue ? <Disc className="w-6 h-6" /> : <List className="w-6 h-6" />}
+                        {showQueue ? <Disc className="w-6 h-6" /> : <ListMusic className="w-6 h-6" />}
                     </button>
 
-                    {/* No song message */}
-                    {!currentSong && !showQueue && (
-                        <div className="text-center mt-8 bg-black/20 p-6 rounded-3xl backdrop-blur-sm border border-white/5 max-w-[280px]">
-                            <Music className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                            <p className="text-white/60 font-medium">בחר שיר כדי להתחיל לנגן</p>
-                            <p className="text-white/30 text-sm mt-1">האלבומים שלך מופיעים מצד ימין</p>
-                        </div>
-                    )}
+
                 </div>
 
                 {/* Left side - Song list / Albums */}
@@ -531,8 +866,20 @@ const MusicPageContent = () => {
                                     >
                                         <ArrowRight className="w-6 h-6 text-white" />
                                     </button>
-                                    <div className="flex flex-col">
-                                        <h2 className="text-white text-3xl font-black tracking-tight">{selectedAlbum.name}</h2>
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                        <div className="flex items-center gap-4 mb-1">
+                                            <h2 className="text-white text-4xl font-black tracking-tight truncate drop-shadow-lg">{selectedAlbum.name}</h2>
+                                            <button
+                                                onClick={() => setQueueContext({ item: selectedAlbum, type: 'album' })}
+                                                className="group relative"
+                                                title="הוסף אלבום לתור"
+                                            >
+                                                <div className="absolute inset-0 bg-white/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                <div className="relative w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center transition-all group-hover:scale-110 group-hover:bg-white/20 group-active:scale-95 shadow-2xl">
+                                                    <Plus className="w-6 h-6 text-white" />
+                                                </div>
+                                            </button>
+                                        </div>
                                         <p className="text-white/60 font-bold mt-0.5">{selectedAlbum.artist?.name} • {currentAlbumSongs.length} שירים</p>
                                     </div>
                                 </div>
@@ -551,6 +898,7 @@ const MusicPageContent = () => {
                                             onPlay={handleSongPlay}
                                             onRate={handleRate}
                                             onDelete={(s) => handleDeleteClick('song', s)}
+                                            onQueue={(item) => setQueueContext({ item, type: 'song' })}
                                         />
                                     ))}
                                 </div>
@@ -581,7 +929,14 @@ const MusicPageContent = () => {
                                 {/* Albums grid */}
                                 {activeTab === 'albums' && (
                                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        <AddMusicCard tabId="albums" onAdd={() => setShowYouTubeIngest(true)} />
+                                        {isManager && (
+                                            <AddMusicCard tabId="albums" onAdd={(tracks) => {
+                                                if (tracks && tracks.length > 0) {
+                                                    setSelectedBatch(tracks);
+                                                }
+                                                setShowYouTubeIngest(true);
+                                            }} />
+                                        )}
 
                                         {isLoading && albums.length === 0 ? (
                                             <div className="col-span-full flex items-center justify-center py-12">
@@ -599,9 +954,11 @@ const MusicPageContent = () => {
                                                 <AlbumCard
                                                     key={album.id}
                                                     album={album}
-                                                    onClick={handleAlbumClick}
-                                                    onPlay={handleAlbumPlay}
-                                                    onDelete={(item) => handleDeleteClick('album', item)}
+                                                    onClick={isEditMode ? () => toggleItemSelection(album.id) : handleAlbumClick}
+                                                    onPlay={isEditMode ? null : handleAlbumPlay}
+                                                    selectionMode={isEditMode}
+                                                    isSelected={selectedItems.includes(album.id)}
+                                                    onDelete={isEditMode ? null : (item) => handleDeleteClick('album', item)}
                                                 />
                                             ))
                                         )}
@@ -611,7 +968,14 @@ const MusicPageContent = () => {
                                 {/* Artists grid */}
                                 {activeTab === 'artists' && (
                                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        <AddMusicCard tabId="artists" onAdd={() => setShowYouTubeIngest(true)} />
+                                        {isManager && (
+                                            <AddMusicCard tabId="artists" onAdd={(tracks) => {
+                                                if (tracks && tracks.length > 0) {
+                                                    setSelectedBatch(tracks);
+                                                }
+                                                setShowYouTubeIngest(true);
+                                            }} />
+                                        )}
                                         {filteredArtists.map(artist => {
                                             const initials = artist.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
                                             const artistGradients = [
@@ -627,20 +991,23 @@ const MusicPageContent = () => {
                                                 ? (artist.image_url.startsWith('http') ? artist.image_url : `${MUSIC_API_URL}/music/cover?path=${encodeURIComponent(artist.image_url)}`)
                                                 : null;
 
+                                            const isSelected = selectedItems.includes(artist.id);
+
                                             return (
                                                 <motion.div
                                                     key={artist.id}
-                                                    whileHover={{ scale: 1.03 }}
+                                                    whileHover={!isEditMode ? { scale: 1.03 } : { scale: 1.01 }}
                                                     whileTap={{ scale: 0.98 }}
-                                                    className="rounded-2xl overflow-hidden group relative cursor-pointer"
-                                                    onClick={() => handleArtistClick(artist)}
+                                                    className={`rounded-2xl overflow-hidden group relative cursor-pointer transition-all
+                                                        ${isEditMode && isSelected ? 'ring-4 ring-purple-500 opacity-100' : isEditMode ? 'opacity-60' : ''}`}
+                                                    onClick={() => isEditMode ? toggleItemSelection(artist.id) : handleArtistClick(artist)}
                                                 >
                                                     <div className="aspect-square relative overflow-hidden">
                                                         {artistImageUrl ? (
                                                             <img
                                                                 src={artistImageUrl}
                                                                 alt={artist.name}
-                                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                                className={`w-full h-full object-cover transition-transform duration-500 ${!isEditMode ? 'group-hover:scale-110' : ''}`}
                                                                 loading="lazy"
                                                                 onError={(e) => { e.target.style.display = 'none'; }}
                                                             />
@@ -649,12 +1016,17 @@ const MusicPageContent = () => {
                                                                 <span className="text-white/80 text-4xl font-black select-none">{initials}</span>
                                                             </div>
                                                         )}
+
+                                                        {isEditMode && (
+                                                            <div className={`absolute top-3 left-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20
+                                                                ${isSelected ? 'bg-purple-500 border-white' : 'bg-black/20 border-white/30'}`}>
+                                                                {isSelected && <div className="w-3 h-1.5 border-l-2 border-b-2 border-white -rotate-45 mt-[-2px]" />}
+                                                            </div>
+                                                        )}
+
                                                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
                                                             <h3 className="text-white font-bold text-sm truncate">{artist.name}</h3>
                                                             <p className="text-white/60 text-xs">אמן</p>
-                                                        </div>
-                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full music-gradient-purple flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 shadow-lg z-10">
-                                                            <Play className="w-5 h-5 text-white fill-white mr-[-2px]" />
                                                         </div>
                                                     </div>
                                                 </motion.div>
@@ -666,68 +1038,99 @@ const MusicPageContent = () => {
                                 {/* Playlists grid */}
                                 {activeTab === 'playlists' && (
                                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        <AddMusicCard tabId="playlists" onAdd={() => setShowYouTubeIngest(true)} />
-                                        {filteredPlaylists.map(playlist => (
-                                            <motion.div
-                                                key={playlist.id}
-                                                whileHover={{ scale: 1.03 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                className="rounded-2xl overflow-hidden group relative cursor-pointer"
-                                                onClick={() => handlePlaylistClick(playlist)}
-                                            >
-                                                <div className="aspect-square bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center relative overflow-hidden">
-                                                    <ListMusic className="w-16 h-16 text-white/25" />
-                                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
-                                                        <h3 className="text-white font-bold text-sm truncate">{playlist.name}</h3>
-                                                        <p className="text-white/60 text-xs">
-                                                            {playlist.created_at ? new Date(playlist.created_at).toLocaleDateString('he-IL') : 'פלייליסט'}
-                                                        </p>
+                                        {isManager && (
+                                            <AddMusicCard tabId="playlists" onAdd={(tracks) => {
+                                                if (tracks && tracks.length > 0) {
+                                                    setSelectedBatch(tracks);
+                                                }
+                                                setShowYouTubeIngest(true);
+                                            }} />
+                                        )}
+                                        {filteredPlaylists.map(playlist => {
+                                            const isSelected = selectedItems.includes(playlist.id);
+                                            return (
+                                                <motion.div
+                                                    key={playlist.id}
+                                                    whileHover={!isEditMode ? { scale: 1.03 } : { scale: 1.01 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    className={`rounded-2xl overflow-hidden group relative cursor-pointer transition-all
+                                                        ${isEditMode && isSelected ? 'ring-4 ring-purple-500 opacity-100' : isEditMode ? 'opacity-60' : ''}`}
+                                                    onClick={() => isEditMode ? toggleItemSelection(playlist.id) : handlePlaylistClick(playlist)}
+                                                >
+                                                    <div className="aspect-square bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center relative overflow-hidden">
+                                                        <ListMusic className="w-16 h-16 text-white/25" />
+
+                                                        {isEditMode && (
+                                                            <div className={`absolute top-3 left-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20
+                                                                ${isSelected ? 'bg-purple-500 border-white' : 'bg-black/20 border-white/30'}`}>
+                                                                {isSelected && <div className="w-3 h-1.5 border-l-2 border-b-2 border-white -rotate-45 mt-[-2px]" />}
+                                                            </div>
+                                                        )}
+
+                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
+                                                            <h3 className="text-white font-bold text-sm truncate">{playlist.name}</h3>
+                                                            <p className="text-white/60 text-xs">
+                                                                {playlist.created_at ? new Date(playlist.created_at).toLocaleDateString('he-IL') : 'פלייליסט'}
+                                                            </p>
+                                                        </div>
+
                                                     </div>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handlePlaylistPlay(playlist);
-                                                        }}
-                                                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full music-gradient-purple flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 shadow-lg z-10"
-                                                    >
-                                                        <Play className="w-5 h-5 text-white fill-white mr-[-2px]" />
-                                                    </button>
-                                                </div>
-                                            </motion.div>
-                                        ))}
+                                                </motion.div>
+                                            );
+                                        })}
                                     </div>
                                 )}
 
                                 {/* Singles grid */}
                                 {activeTab === 'singles' && (
                                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        <AddMusicCard tabId="singles" onAdd={() => setShowYouTubeIngest(true)} />
-                                        {filteredSingles.map((song) => (
-                                            <motion.div
-                                                key={song.id}
-                                                whileHover={{ scale: 1.03 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                className={`rounded-2xl overflow-hidden group relative cursor-pointer
-                                                    ${currentSong?.id === song.id ? 'ring-2 ring-purple-500' : ''}`}
-                                                onClick={() => handleSongPlay(song)}
-                                            >
-                                                <div className={`aspect-square flex items-center justify-center relative overflow-hidden
-                                                    ${getSongGradient(song.title)}`}>
-                                                    <Music className="w-14 h-14 text-white/20" />
-                                                    {currentSong?.id === song.id && isPlaying && (
-                                                        <div className="absolute bottom-3 left-3 flex items-center gap-[2px] z-10">
-                                                            <div className="w-1 h-3 bg-white rounded-full animate-music-bar-1" />
-                                                            <div className="w-1 h-5 bg-white rounded-full animate-music-bar-2" />
-                                                            <div className="w-1 h-2 bg-white rounded-full animate-music-bar-3" />
+                                        {isManager && (
+                                            <AddMusicCard tabId="singles" onAdd={(tracks) => {
+                                                if (tracks && tracks.length > 0) {
+                                                    setSelectedBatch(tracks);
+                                                }
+                                                setShowYouTubeIngest(true);
+                                            }} />
+                                        )}
+                                        {filteredSingles.map((song) => {
+                                            const isSelected = selectedItems.includes(song.id);
+                                            return (
+                                                <motion.div
+                                                    key={song.id}
+                                                    whileHover={!isEditMode ? { scale: 1.03 } : { scale: 1.01 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    className={`rounded-2xl overflow-hidden group relative cursor-pointer transition-all
+                                                        ${isEditMode && isSelected ? 'ring-4 ring-purple-500 opacity-100' : isEditMode ? 'opacity-60' : ''}
+                                                        ${!isEditMode && currentSong?.id === song.id ? 'ring-2 ring-purple-500' : ''}`}
+                                                    onClick={() => isEditMode ? toggleItemSelection(song.id) : handleSongPlay(song)}
+                                                >
+                                                    <div className={`aspect-square flex items-center justify-center relative overflow-hidden
+                                                        ${getSongGradient(song.title)}`}>
+                                                        <Music className="w-14 h-14 text-white/20" />
+
+                                                        {isEditMode && (
+                                                            <div className={`absolute top-3 left-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20
+                                                                ${isSelected ? 'bg-purple-500 border-white' : 'bg-black/20 border-white/30'}`}>
+                                                                {isSelected && <div className="w-3 h-1.5 border-l-2 border-b-2 border-white -rotate-45 mt-[-2px]" />}
+                                                            </div>
+                                                        )}
+
+                                                        {!isEditMode && currentSong?.id === song.id && isPlaying && (
+                                                            <div className="absolute bottom-3 left-3 flex items-center gap-[2px] z-10">
+                                                                <div className="w-1 h-3 bg-white rounded-full animate-music-bar-1" />
+                                                                <div className="w-1 h-5 bg-white rounded-full animate-music-bar-2" />
+                                                                <div className="w-1 h-2 bg-white rounded-full animate-music-bar-3" />
+                                                            </div>
+                                                        )}
+
+                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
+                                                            <h3 className="text-white font-bold text-sm truncate">{song.title}</h3>
+                                                            <p className="text-white/60 text-xs truncate">{song.artist?.name || 'אמן לא ידוע'}</p>
                                                         </div>
-                                                    )}
-                                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
-                                                        <h3 className="text-white font-bold text-sm truncate">{song.title}</h3>
-                                                        <p className="text-white/60 text-xs truncate">{song.artist?.name || 'אמן לא ידוע'}</p>
                                                     </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
+                                                </motion.div>
+                                            );
+                                        })}
                                     </div>
                                 )}
 
@@ -773,29 +1176,71 @@ const MusicPageContent = () => {
                 )}
 
                 {/* Directory scanner modal */}
-                <DirectoryScanner
-                    isOpen={showScanner}
-                    onClose={() => setShowScanner(false)}
-                    onScan={scanMusicDirectory}
-                    isDriveConnected={isMusicDriveConnected}
-                />
+                <AnimatePresence>
+                    {showScanner && (
+                        <DirectoryScanner
+                            isOpen={showScanner}
+                            onClose={() => setShowScanner(false)}
+                            onScan={scanMusicDirectory}
+                            isDriveConnected={isMusicDriveConnected}
+                        />
+                    )}
+                </AnimatePresence>
 
                 {/* YouTube Ingest */}
                 {showYouTubeIngest && (
                     <YouTubeIngest
                         initialVideo={selectedYoutubeVideo}
+                        initialTracks={selectedBatch}
                         initialQuery={searchQuery}
                         context={importContext}
+                        isManager={isManager}
                         onClose={() => {
                             setShowYouTubeIngest(false);
                             setSelectedYoutubeVideo(null);
+                            setSelectedBatch(null);
                             setSearchQuery('');
                         }}
                         onSuccess={() => {
                             refreshAll();
+                            checkSyncStatus();
+                            setShowYouTubeIngest(false);
+                            setSelectedBatch(null);
                         }}
                     />
                 )}
+
+                {/* CD Import Modal */}
+                <CDImportModal
+                    isOpen={showCDImport}
+                    onClose={() => setShowCDImport(false)}
+                    onSuccess={() => {
+                        refreshAll();
+                        checkSyncStatus();
+                    }}
+                />
+
+                {/* Queue Selection Modal */}
+                <QueueModeModal
+                    isOpen={!!queueContext}
+                    onClose={() => setQueueContext(null)}
+                    onSelect={handleQueueSelect}
+                    title={queueContext?.type === 'album' ? selectedAlbum?.name : (queueContext?.item?.title)}
+                />
+
+                {/* Sync Overlay */}
+                <AnimatePresence>
+                    {showSyncOverlay && (
+                        <SyncOverlay
+                            isOpen={showSyncOverlay}
+                            onClose={() => setShowSyncOverlay(false)}
+                            onSyncComplete={() => {
+                                refreshAll();
+                                checkSyncStatus();
+                            }}
+                        />
+                    )}
+                </AnimatePresence>
 
 
 
@@ -911,7 +1356,7 @@ const MusicPageContent = () => {
                     )}
                 </AnimatePresence>
             </div>
-        </div>
+        </div >
     );
 };
 

@@ -3,6 +3,7 @@ import type { BrowserWindow as BrowserWindowType } from 'electron';
 const { app, BrowserWindow, ipcMain, screen, powerSaveBlocker, globalShortcut } = electron;
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { exec } from 'child_process';
 import net from 'net';
 import { fileURLToPath } from 'url';
@@ -31,7 +32,7 @@ process.on('uncaughtException', (err: any) => {
 // Service Dependency Check Constants
 const PG_PORT = 5432;
 const RAID_MOUNT = process.platform === 'linux' ? '/mnt/raid1' : path.join(app.getPath('userData'), 'data');
-const MUSIC_ROOT = process.platform === 'darwin' ? '/Volumes/Ran1/Music' : '/mnt/music_ssd';
+const MUSIC_ROOT = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
 const BACKEND_PORT = 8081;
 const CHECK_INTERVAL = 1500;
 const MAX_RETRIES = 10;
@@ -143,21 +144,31 @@ function setupIPC() {
 
     ipcMain.handle('music:download-youtube', async (_, { url, artist, album, title }) => {
         return new Promise((resolve, reject) => {
-            // Sanitize inputs to prevent command injection (basic)
+            // Sanitize inputs
             const safeArtist = artist.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim() || 'Unknown Artist';
             const safeAlbum = album.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim() || 'Unknown Album';
             const safeTitle = title.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim() || 'Unknown Title';
 
-            const basePath = MUSIC_ROOT;
-            // Output format: /mnt/music_ssd/Artist - Album/Title.mp3
-            // We use -o with direct path structure
-            // Note: yt-dlp will handle the extension
-            const outputPath = path.join(basePath, `${safeArtist} - ${safeAlbum}`, `${safeTitle}.%(ext)s`);
+            // 🚀 Dynamic Root Discovery
+            let basePath = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
+            if (!fs.existsSync(basePath)) {
+                basePath = path.join(os.homedir(), 'Music', 'iCaffe');
+                console.warn(`⚠️ [Electron] Primary path not found. Falling back to local: ${basePath}`);
+            }
+
+            // Output format: Artist - Album/Title.mp3
+            const folderName = `${safeArtist} - ${safeAlbum}`;
+            const dirPath = path.join(basePath, folderName);
+            const outputPath = path.join(dirPath, `${safeTitle}.%(ext)s`);
 
             // Ensure directory exists
-            const dirPath = path.join(basePath, `${safeArtist} - ${safeAlbum}`);
-            if (!fs.existsSync(dirPath)) {
-                fs.mkdirSync(dirPath, { recursive: true });
+            try {
+                if (!fs.existsSync(dirPath)) {
+                    fs.mkdirSync(dirPath, { recursive: true });
+                }
+            } catch (err: any) {
+                console.error('❌ [Electron] Failed to create directory:', err);
+                return reject(`Failed to create directory: ${err.message}`);
             }
 
             const ytDlp = getYtDlpPath();
@@ -211,6 +222,34 @@ function setupIPC() {
     ipcMain.handle('youtube:get-playlist', async (_, { playlistId, pageToken }) => {
         return await youtubeService.getPlaylistItems(playlistId, pageToken);
     });
+
+    // --- DRIVE MONITORING ---
+    const volumesPath = '/Volumes';
+    if (fs.existsSync(volumesPath)) {
+        fs.watch(volumesPath, (eventType, filename) => {
+            if (filename) {
+                console.log(`📦 Drive Volume change detected: ${filename} (${eventType})`);
+                const isMounted = fs.existsSync(path.join(volumesPath, filename));
+
+                mainWindow?.webContents.send('system:volume-change', {
+                    filename,
+                    eventType,
+                    isMounted
+                });
+
+                // --- CD DETECTION ---
+                // Typical names for Audio CDs on macOS/Linux
+                const cdNames = ['Audio CD', 'CD', 'sr0'];
+                if (cdNames.some(name => filename.includes(name))) {
+                    console.log(`📀 Physical CD event: ${filename} (Mounted: ${isMounted})`);
+                    mainWindow?.webContents.send('system:cd-event', {
+                        isMounted,
+                        filename
+                    });
+                }
+            }
+        });
+    }
 }
 
 // --- BOOT SEQUENCE LOGIC ---
@@ -361,7 +400,7 @@ function createSplashWindow(): BrowserWindowType {
 
     splashWindow.loadURL(`data:text/html;charset=utf-8,
     <body style="background:#111;color:#eee;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;-webkit-app-region:drag;border:1px solid #333;">
-      <h2 style="margin-bottom:5px;">icaffeos booting...</h2>
+      <h2 style="margin-bottom:5px;">iCaffeOS booting...</h2>
       <div id="status" style="margin-top:20px;color:#888;font-size:14px;">Initializing...</div>
       <div style="width:80%;height:4px;background:#333;margin-top:15px;border-radius:2px;">
         <div id="bar" style="width:0%;height:100%;background:#00bcd4;transition:width 0.3s;border-radius:2px;"></div>
@@ -390,6 +429,7 @@ async function createMainWindow(): Promise<BrowserWindowType> {
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
+        title: "iCaffeOS",
         kiosk: false, // Temporary false to debug visibility
         show: false,
         webPreferences: {

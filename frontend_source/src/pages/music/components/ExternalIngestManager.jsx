@@ -12,7 +12,7 @@ const ExternalIngestManager = () => {
 
     // Mock platform check for UI
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    const defaultPath = isMac ? '/Volumes/Ran1/Music' : '/mnt/music_ssd';
+    const defaultPath = isMac ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
 
     const handleScan = async () => {
         setStatus('scanning');

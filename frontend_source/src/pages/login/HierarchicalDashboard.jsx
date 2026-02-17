@@ -112,8 +112,8 @@ const HierarchicalDashboard = () => {
                     {/* POS - Hero Card */}
                     {isAppVisible('kiosk') && (
                         <HeroCard
-                            title="עמדת קופה"
-                            subtitle="פתח משמרת חדשה"
+                            title="POS"
+                            subtitle="מערכת הזמנות ותשלום"
                             icon={MonitorPlay}
                             Pattern={PosWireframe}
                             gradient="bg-gradient-to-br from-orange-400 via-red-500 to-pink-600"
@@ -127,8 +127,8 @@ const HierarchicalDashboard = () => {
                     {/* On mobile → navigate to /mobile-kds, on tablet/desktop → /kds */}
                     {isAppVisible('kds') && (
                         <HeroCard
-                            title={isMobile ? 'הזמנות' : 'מסך מטבח'}
-                            subtitle={!liveData.loading ? `${liveData.kds.activeOrders} בהכנה` : "טוען..."}
+                            title="KDS"
+                            subtitle={!liveData.loading ? `מסך מטבח • ${liveData.kds.activeOrders} בהכנה` : "טוען..."}
                             icon={isMobile ? Smartphone : ChefHat}
                             Pattern={KdsWireframe}
                             gradient="bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600"
@@ -148,8 +148,8 @@ const HierarchicalDashboard = () => {
                     {/* Music Player - Hero Card (New) */}
                     {isAppVisible('music') && (
                         <HeroCard
-                            title="נגן מוזיקה"
-                            subtitle="ניהול אווירה"
+                            title="RanTunes"
+                            subtitle="ניהול אווירה ופלייליסטים"
                             icon={Music}
                             Pattern={() => (
                                 <div className="absolute inset-0 flex items-center justify-center opacity-10">

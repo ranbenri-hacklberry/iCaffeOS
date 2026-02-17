@@ -13,8 +13,16 @@ import { MusicQueueManager } from '@/services/musicQueueManager';
 
 export const MusicProvider = ({ children }) => {
     const { currentUser } = useAuth();
-    const audioRef = useRef(new Audio());
+    const audio1Ref = useRef(new Audio());
+    const audio2Ref = useRef(new Audio());
+    const [activeAudio, setActiveAudio] = useState(1); // 1 or 2
+    const isTransitionalRef = useRef(false);
+    const fadeIntervalRef = useRef(null);
+
     const handleNextRef = useRef(() => { });
+
+    // Internal volume ref to track target volume independently of fading
+    const targetVolumeRef = useRef(0.7);
 
     // Playback state
     const [isPlaying, setIsPlaying] = useState(false);
@@ -22,6 +30,7 @@ export const MusicProvider = ({ children }) => {
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [volume, setVolumeState] = useState(0.7);
+    const [crossfadeSeconds] = useState(4); // 4 seconds is tighter for manual skips
 
     // Playlist state
     const [playlist, setPlaylist] = useState([]);
@@ -47,8 +56,9 @@ export const MusicProvider = ({ children }) => {
                     setPlaylistIndex(idx >= 0 ? idx : 0);
 
                     // Don't auto-play on init for battery/policy reasons, just prepare
-                    audioRef.current.src = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(current.file_path)}&id=${current.track_id || current.id}`;
-                    audioRef.current.load();
+                    const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+                    audio.src = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(current.file_path)}&id=${current.track_id || current.id}`;
+                    audio.load();
                 }
             }
         };
@@ -87,17 +97,16 @@ export const MusicProvider = ({ children }) => {
     }, []);
 
     // Trigger Prefetcher whenever song or playlist changes
+    // This ensures all songs in the queue are saved to local disk for external drive fallback
     useEffect(() => {
         if (playlist.length > 0) {
-            // Task 4: Next 3 tracks prioritized
+            // Priority 1: Next 10 tracks immediately
+            // Priority 2: Rest of the queue (up to 500)
             const timeout = setTimeout(() => {
-                // Prefetch logic: slice next 3 and then the rest up to 50
-                const next3 = playlist.slice(playlistIndex + 1, playlistIndex + 4);
-                const others = playlist.slice(playlistIndex + 4, playlistIndex + 51);
-
-                // Prioritize next 3
-                MusicCacheManager.prefetch([...next3, ...others], 0);
-            }, 3000);
+                const nextTracks = playlist.slice(playlistIndex, playlistIndex + 500);
+                console.log(`📡 MusicContext: Triggering caching for ${nextTracks.length} tracks...`);
+                MusicCacheManager.prefetch(playlist, playlistIndex);
+            }, 500); // Proactive but wait for initial UI load
             return () => clearTimeout(timeout);
         }
     }, [playlist, playlistIndex]);
@@ -105,35 +114,66 @@ export const MusicProvider = ({ children }) => {
     // Skip threshold - if song was played less than 30% before skip, count as dislike
     const SKIP_THRESHOLD = 0.3;
 
-    // Audio event listeners
+    // Audio Event Handling with Crossfade Support
     useEffect(() => {
-        const audio = audioRef.current;
+        const a1 = audio1Ref.current;
+        const a2 = audio2Ref.current;
 
-        const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-        const handleDurationChange = () => setDuration(audio.duration || 0);
-        const handleEnded = () => handleNextRef.current();
-        const handlePlay = () => setIsPlaying(true);
-        const handlePause = () => setIsPlaying(false);
+        const createHandlers = (playerNum) => ({
+            timeupdate: (e) => {
+                if (activeAudio === playerNum) {
+                    setCurrentTime(e.target.currentTime);
+                    // Automatic Crossfade Trigger
+                    if (!isTransitionalRef.current &&
+                        e.target.duration > 0 &&
+                        e.target.currentTime > e.target.duration - (crossfadeSeconds + 1)) {
+                        console.log('🎵 Auto-crossfade triggered');
+                        handleNextRef.current(true); // true for crossfade
+                    }
+                }
+            },
+            durationchange: (e) => {
+                if (activeAudio === playerNum) setDuration(e.target.duration || 0);
+            },
+            ended: (e) => {
+                if (activeAudio === playerNum && !isTransitionalRef.current) {
+                    handleNextRef.current(false);
+                }
+            },
+            play: (e) => {
+                // Determine if this player is indeed the one that SHOULD be playing UI-wise
+                if (activeAudio === playerNum || isTransitionalRef.current) setIsPlaying(true);
+            },
+            pause: (e) => {
+                // Only pause UI if we're not in the middle of a crossfade (where one player pauses)
+                if (!isTransitionalRef.current && activeAudio === playerNum) setIsPlaying(false);
+            },
+            error: (e) => {
+                console.error(`🎵 Audio Player ${playerNum} Error:`, e.target.error);
+                if (activeAudio === playerNum) setIsPlaying(false);
+            }
+        });
 
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        audio.addEventListener('durationchange', handleDurationChange);
-        audio.addEventListener('ended', handleEnded);
-        audio.addEventListener('play', handlePlay);
-        audio.addEventListener('pause', handlePause);
+        const h1 = createHandlers(1);
+        const h2 = createHandlers(2);
+
+        Object.keys(h1).forEach(key => a1.addEventListener(key, h1[key]));
+        Object.keys(h2).forEach(key => a2.addEventListener(key, h2[key]));
 
         return () => {
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
-            audio.removeEventListener('durationchange', handleDurationChange);
-            audio.removeEventListener('ended', handleEnded);
-            audio.removeEventListener('play', handlePlay);
-            audio.removeEventListener('pause', handlePause);
+            Object.keys(h1).forEach(key => a1.removeEventListener(key, h1[key]));
+            Object.keys(h2).forEach(key => a2.removeEventListener(key, h2[key]));
         };
-    }, []);
+    }, [activeAudio, crossfadeSeconds]);
 
-    // Update volume
+    // Volume syncing across players
     useEffect(() => {
-        audioRef.current.volume = volume;
-    }, [volume]);
+        targetVolumeRef.current = volume;
+        if (!isTransitionalRef.current) {
+            audio1Ref.current.volume = activeAudio === 1 ? volume : 0;
+            audio2Ref.current.volume = activeAudio === 2 ? volume : 0;
+        }
+    }, [volume, activeAudio]);
 
     // Log skip as dislike if skipped early
     const logSkip = useCallback(async (song, wasEarlySkip) => {
@@ -179,93 +219,206 @@ export const MusicProvider = ({ children }) => {
         }
     }, [currentUser]);
 
-    // Play a song
-    const playSong = useCallback(async (song, playlistSongs = null) => {
+    // Play a song with crossfade capability
+    const playSong = useCallback(async (song, playlistSongs = null, useCrossfade = true) => {
         if (!song) return;
 
-        // Never play disliked songs
+        // Skip disliked
         if ((song.myRating || 0) === 1) {
-            console.log('🎵 playSong: skipping disliked song:', song.title);
-            // If we have a playlist, move to next
-            if (playlistSongs || playlist.length > 0) {
-                // If playlistSongs is provided, we need to update our local state first
-                if (playlistSongs) setPlaylist(playlistSongs);
-                // Call handleNext (wrapped in timeout to avoid recursion issues)
-                setTimeout(() => handleNextRef.current(), 100);
-            }
+            setTimeout(() => handleNextRef.current(useCrossfade), 100);
             return;
         }
 
         setIsLoading(true);
 
         try {
-            // TRACK PLAY for LRU Tiered Storage
             MusicCacheManager.trackPlay(song);
 
-            // Build audio URL - Provide both path and internal ID for tiered storage fallback
-            const audioUrl = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(song.file_path)}&id=${song.id}`;
+            const player1 = audio1Ref.current;
+            const player2 = audio2Ref.current;
+            const currentActiveIdx = activeAudio;
+            const nextActiveIdx = currentActiveIdx === 1 ? 2 : 1;
+            const currentPlayer = currentActiveIdx === 1 ? player1 : player2;
+            const nextPlayer = nextActiveIdx === 1 ? player1 : player2;
 
-            audioRef.current.src = audioUrl;
-            audioRef.current.load();
-
-            try {
-                await audioRef.current.play();
-            } catch (playError) {
-                console.error('Audio play failed:', playError);
-                throw new Error('Failed to play audio. The file may not be available.');
+            // Verify connection/path
+            if (!song.file_path && !song.url) {
+                console.error('❌ Playback blocked: No file path or URL for song:', song);
+                // Optionally show UI alert
+                // alert('Cannot play: File path missing');
+                return;
             }
 
-            setCurrentSong(song);
-
-            // Set playlist if provided and persist to DB
-            if (playlistSongs) {
+            // Update Playlist Context if provided
+            if (playlistSongs && playlistSongs.length > 0) {
                 setPlaylist(playlistSongs);
                 const idx = playlistSongs.findIndex(s => s.id === song.id);
-                setPlaylistIndex(idx >= 0 ? idx : 0);
+                if (idx !== -1) setPlaylistIndex(idx);
+            } else {
+                // If playing from existing playlist, ensure index is synced
+                const idx = playlist.findIndex(s => s.id === song.id);
+                if (idx !== -1) setPlaylistIndex(idx);
+            }
 
-                // PERSIST NEW QUEUE TO DB
+            console.log('🎵 Starting playback for:', song.title, 'Path:', song.file_path);
+
+            const audioUrl = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(song.file_path || '')}&id=${song.id}`;
+
+            // Check if file is reachable (optional head check or just rely on error handler)
+            // For now, relies on error handler.
+
+            if (useCrossfade && isPlaying) {
+                console.log(`🎚️ Crossfading... Player ${currentActiveIdx} -> ${nextActiveIdx}`);
+
+                // Clear any existing fade
+                if (fadeIntervalRef.current) {
+                    clearInterval(fadeIntervalRef.current);
+                }
+
+                isTransitionalRef.current = true;
+
+                // Prepare next player
+                nextPlayer.src = audioUrl;
+                nextPlayer.volume = 0;
+                nextPlayer.load();
+
+                // Wait for metadata
+                await new Promise((resolve, reject) => {
+                    const l = () => { nextPlayer.removeEventListener('loadedmetadata', l); nextPlayer.removeEventListener('error', e); resolve(); };
+                    const e = (err) => { nextPlayer.removeEventListener('loadedmetadata', l); nextPlayer.removeEventListener('error', e); reject(err); };
+                    nextPlayer.addEventListener('loadedmetadata', l);
+                    nextPlayer.addEventListener('error', e);
+                    setTimeout(resolve, 800); // Timeout fallback
+                });
+
+                // Start playing next
+                await nextPlayer.play();
+
+                // Switch UI context IMMEDIATELY so time/controls affect the new track
+                setActiveAudio(nextActiveIdx);
+                setCurrentSong(song);
+                setDuration(nextPlayer.duration || 0);
+                setCurrentTime(0);
+
+                // Volume Ramp
+                const steps = 60; // More steps for smoother transition
+                const interval = (crossfadeSeconds * 1000) / steps;
+                let step = 0;
+                const startVol = targetVolumeRef.current;
+
+                fadeIntervalRef.current = setInterval(() => {
+                    step++;
+                    const progress = step / steps;
+
+                    // Ease-in-out curve for volume
+                    const easeOut = 1 - Math.pow(1 - progress, 2);
+                    const easeIn = Math.pow(progress, 2);
+
+                    currentPlayer.volume = Math.max(0, startVol * (1 - easeOut));
+                    nextPlayer.volume = Math.min(startVol, startVol * easeIn);
+
+                    if (step >= steps) {
+                        clearInterval(fadeIntervalRef.current);
+                        fadeIntervalRef.current = null;
+                        currentPlayer.pause();
+                        currentPlayer.currentTime = 0;
+                        isTransitionalRef.current = false;
+                        // Final snap to ensure volume is perfect
+                        nextPlayer.volume = targetVolumeRef.current;
+                    }
+                }, interval);
+
+            } else {
+                // Immediate switch
+                if (fadeIntervalRef.current) {
+                    clearInterval(fadeIntervalRef.current);
+                    fadeIntervalRef.current = null;
+                }
+                isTransitionalRef.current = false;
+                currentPlayer.pause();
+
+                nextPlayer.src = audioUrl;
+                nextPlayer.volume = targetVolumeRef.current;
+                nextPlayer.load();
+                await nextPlayer.play();
+
+                setActiveAudio(nextActiveIdx);
+                setCurrentSong(song);
+            }
+
+            // Sync playlist state
+            // Sync to Local Storage Queue
+            if (playlistSongs) {
                 MusicQueueManager.setQueue(playlistSongs);
+                MusicQueueManager.setCurrent(song.id);
+            } else {
                 MusicQueueManager.setCurrent(song.id);
             }
 
-            // Log playback to remote history
+            // Remote history & Current Playback Sync
             if (currentUser) {
+                // 1. History
                 await supabase.from('music_playback_history').insert({
                     song_id: song.id,
                     employee_id: currentUser.id,
                     was_skipped: false,
                     business_id: currentUser.business_id
                 });
+
+                // 2. Current Playback (for MiniPlayer sync)
+                const playbackData = {
+                    user_email: currentUser.email,
+                    song_id: song.id,
+                    song_title: song.title,
+                    artist_name: song.artist?.name || 'Unknown Artist',
+                    album_name: song.album?.name || 'Unknown Album',
+                    cover_url: song.album?.cover_url || song.cover_url || song.thumbnail_url,
+                    is_playing: true,
+                    updated_at: new Date().toISOString(),
+                    business_id: currentUser.business_id
+                };
+
+                // Upsert based on user_email
+                await supabase
+                    .from('music_current_playback')
+                    .upsert(playbackData, { onConflict: 'user_email' });
             }
         } catch (error) {
             console.error('Error playing song:', error);
+            isTransitionalRef.current = false;
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser, playlist]);
+    }, [currentUser, playlist, isPlaying, activeAudio, crossfadeSeconds]);
 
     // Play/Pause toggle
     const togglePlay = useCallback(() => {
-        if (audioRef.current.paused) {
-            audioRef.current.play();
+        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        if (audio.paused) {
+            audio.play();
         } else {
-            audioRef.current.pause();
+            audio.pause();
         }
-    }, []);
+    }, [activeAudio]);
 
     // Pause
     const pause = useCallback(() => {
-        audioRef.current.pause();
-    }, []);
+        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        audio.pause();
+    }, [activeAudio]);
 
     // Resume
     const resume = useCallback(() => {
-        audioRef.current.play();
-    }, []);
+        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        audio.play();
+    }, [activeAudio]);
 
-    // Next song
-    const handleNext = useCallback(() => {
+    // Next song with forced crossfade option
+    const handleNext = useCallback((forceCrossfade = true) => {
         if (!playlist.length) return;
+
+        // Ensure we handle events being passed as forceCrossfade
+        const shouldCrossfade = typeof forceCrossfade === 'boolean' ? forceCrossfade : true;
 
         // Check if this was an early skip
         const wasEarlySkip = currentTime < duration * SKIP_THRESHOLD;
@@ -277,7 +430,6 @@ export const MusicProvider = ({ children }) => {
 
         let nextIndex;
         if (shuffle) {
-            // try a few times to avoid disliked songs
             let tries = 0;
             do {
                 nextIndex = Math.floor(Math.random() * playlist.length);
@@ -291,14 +443,12 @@ export const MusicProvider = ({ children }) => {
                 if (repeat === 'all') {
                     nextIndex = 0;
                 } else {
-                    // End of playlist
                     setIsPlaying(false);
                     return;
                 }
             }
         }
 
-        // Skip disliked songs (linear scan)
         if (!shuffle && repeat !== 'one') {
             let guard = 0;
             while (guard < playlist.length && isDislikedSong(playlist[nextIndex])) {
@@ -315,7 +465,7 @@ export const MusicProvider = ({ children }) => {
         }
 
         setPlaylistIndex(nextIndex);
-        playSong(playlist[nextIndex]);
+        playSong(playlist[nextIndex], null, shouldCrossfade);
     }, [playlist, playlistIndex, shuffle, repeat, currentSong, currentTime, duration, logSkip, playSong]);
 
     // Keep ref in sync with handleNext
@@ -327,9 +477,11 @@ export const MusicProvider = ({ children }) => {
     const handlePrevious = useCallback(() => {
         if (!playlist.length) return;
 
+        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+
         // If more than 3 seconds in, restart current song
         if (currentTime > 3) {
-            audioRef.current.currentTime = 0;
+            audio.currentTime = 0;
             return;
         }
 
@@ -365,13 +517,14 @@ export const MusicProvider = ({ children }) => {
         }
 
         setPlaylistIndex(prevIndex);
-        playSong(playlist[prevIndex]);
+        playSong(playlist[prevIndex], null, true);
     }, [playlist, playlistIndex, repeat, currentTime, playSong]);
 
     // Seek to position
     const seek = useCallback((time) => {
-        audioRef.current.currentTime = time;
-    }, []);
+        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        audio.currentTime = time;
+    }, [activeAudio]);
 
     // Rate a song (like/dislike only) - use backend service to bypass RLS
     const rateSong = useCallback(async (songId, rating) => {
@@ -421,16 +574,29 @@ export const MusicProvider = ({ children }) => {
     const setVolume = useCallback((vol) => {
         const clampedVol = Math.max(0, Math.min(1, vol));
         setVolumeState(clampedVol);
-        audioRef.current.volume = clampedVol;
-    }, []);
+        targetVolumeRef.current = clampedVol;
+        // If not fading, update audio element volume directly
+        if (!isTransitionalRef.current) {
+            audio1Ref.current.volume = activeAudio === 1 ? clampedVol : 0;
+            audio2Ref.current.volume = activeAudio === 2 ? clampedVol : 0;
+        }
+    }, [activeAudio]);
 
 
     // Stop playback
     const stop = useCallback(() => {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+        if (fadeIntervalRef.current) {
+            clearInterval(fadeIntervalRef.current);
+            fadeIntervalRef.current = null;
+        }
+        audio1Ref.current.pause();
+        audio1Ref.current.currentTime = 0;
+        audio2Ref.current.pause();
+        audio2Ref.current.currentTime = 0;
+
         setCurrentSong(null);
         setIsPlaying(false);
+        isTransitionalRef.current = false;
     }, []);
 
     // Remove from queue
@@ -438,6 +604,72 @@ export const MusicProvider = ({ children }) => {
         setPlaylist(prev => prev.filter(s => s.id !== songId));
         await MusicQueueManager.removeTrack(songId);
     }, []);
+
+    /**
+     * ➕ Smart Queue Addition
+     * @param {Object} item - Song, Album, or Playlist
+     * @param {string} mode - 'next' | 'last' | 'shuffle'
+     */
+    const addToQueue = useCallback(async (song, mode = 'last') => {
+        if (!song) return;
+
+        setPlaylist(prev => {
+            const newPlaylist = [...prev];
+            // mode logic
+            if (mode === 'next') {
+                newPlaylist.splice(playlistIndex + 1, 0, song);
+            } else if (mode === 'shuffle') {
+                const upcomingStart = playlistIndex + 1;
+                const insertPos = upcomingStart + Math.floor(Math.random() * (newPlaylist.length - upcomingStart + 1));
+                newPlaylist.splice(insertPos, 0, song);
+            } else {
+                newPlaylist.push(song);
+            }
+
+            // Persist
+            MusicQueueManager.setQueue(newPlaylist);
+            // Prioritize local caching for queued songs
+            MusicCacheManager.prefetch(newPlaylist, playlistIndex);
+            return newPlaylist;
+        });
+
+        // If nothing playing, start it
+        setCurrentSong(prev => {
+            if (!prev) {
+                playSong(song);
+            }
+            return prev;
+        });
+    }, [playlistIndex, playSong]);
+
+    const addPlaylistToQueue = useCallback(async (songs, mode = 'last') => {
+        if (!songs || songs.length === 0) return;
+
+        setPlaylist(prev => {
+            let newPlaylist = [...prev];
+            if (mode === 'next') {
+                newPlaylist.splice(playlistIndex + 1, 0, ...songs);
+            } else if (mode === 'shuffle') {
+                // Simple shuffle append
+                const shuffled = [...songs].sort(() => Math.random() - 0.5);
+                newPlaylist = [...newPlaylist, ...shuffled];
+            } else {
+                newPlaylist = [...newPlaylist, ...songs];
+            }
+
+            MusicQueueManager.setQueue(newPlaylist);
+            // Prioritize local caching for queued songs
+            MusicCacheManager.prefetch(newPlaylist, playlistIndex);
+            return newPlaylist;
+        });
+
+        setCurrentSong(prev => {
+            if (!prev) {
+                playSong(songs[0]);
+            }
+            return prev;
+        });
+    }, [playlistIndex, playSong]);
 
     const value = {
         // State
@@ -453,7 +685,7 @@ export const MusicProvider = ({ children }) => {
         isLoading,
 
         // Actions
-        playSong,
+        playSong: (song, playlist, crossfade = true) => playSong(song, playlist, crossfade), // Default clicks to crossfade
         togglePlay,
         pause,
         resume,
@@ -468,9 +700,11 @@ export const MusicProvider = ({ children }) => {
         setPlaylist,
         handleReorder,
         removeFromQueue,
+        addToQueue,
+        addPlaylistToQueue,
 
         // Refs
-        audioRef
+        audioRef: activeAudio === 1 ? audio1Ref : audio2Ref
     };
 
     return (
