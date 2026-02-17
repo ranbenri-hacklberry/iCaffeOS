@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import '@/components/SplashScreen.css';
+import './SplashScreen.css';
 
 const LOADING_MESSAGES = [
     'מכין את הקפה...',
