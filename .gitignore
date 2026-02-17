@@ -33,3 +33,7 @@ binaries/
 n150-app/
 *.log
 mcp-supabase-server/
+frontend_source/public/music/
+*.flac
+*.mp3
+*.wav
