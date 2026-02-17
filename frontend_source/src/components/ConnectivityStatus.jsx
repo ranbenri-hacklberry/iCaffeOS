@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { isLocalInstance } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
-import { resolveUrl } from '@/utils/apiUtils';
-import db from '@/db/database';
+import { isLocalInstance } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { resolveUrl } from '../utils/apiUtils';
+import db from '../db/database';
 
 /**
  * ConnectivityStatus Component

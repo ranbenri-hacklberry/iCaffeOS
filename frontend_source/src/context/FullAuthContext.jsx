@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { supabase, cloudSupabase } from '@/lib/supabase'; // 🆕 FIX: Import supabase client
-import AuthContext from '@/context/AuthContextCore';
+import { supabase, cloudSupabase } from '../lib/supabase'; // 🆕 FIX: Import supabase client
+import AuthContext from './AuthContextCore';
 
 // API URL for sync endpoint - Favor relative paths when running locally to use Vite proxy
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { getBackendApiUrl } from '../utils/apiUtils';
 
 const API_URL = getBackendApiUrl();
 
-import { APP_VERSION } from '@/version';
+import { APP_VERSION } from '../version';
 
 export { APP_VERSION };
 export const AuthProvider = ({ children }) => {
@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
     });
 
     const triggerSync = async (businessId = null, options = {}) => {
-        const { triggerCloudToLocalSync } = await import('@/services/syncService');
+        const { triggerCloudToLocalSync } = await import('../services/syncService');
         const targetBusinessId = businessId || currentUser?.business_id;
 
         if (!targetBusinessId) {
@@ -288,7 +288,7 @@ export const AuthProvider = ({ children }) => {
             if (currentUser?.business_id) {
                 console.log('🌐 [AuthContext] Back online - syncing pending changes...');
                 try {
-                    const { syncQueue } = await import('@/services/offlineQueue');
+                    const { syncQueue } = await import('../services/offlineQueue');
                     const result = await syncQueue();
                     if (result.synced > 0) {
                         console.log(`✅ [AuthContext] Synced ${result.synced} pending actions`);
@@ -310,8 +310,8 @@ export const AuthProvider = ({ children }) => {
         const runBackgroundSync = async () => {
             try {
                 console.log('🔄 [Background] Starting periodic sync...');
-                const { syncOrders, syncLoyalty, isOnline } = await import('@/services/syncService');
-                const { syncQueue } = await import('@/services/offlineQueue');
+                const { syncOrders, syncLoyalty, isOnline } = await import('../services/syncService');
+                const { syncQueue } = await import('../services/offlineQueue');
 
                 if (!isOnline()) {
                     console.log('📴 [Background] Offline, skipping sync');

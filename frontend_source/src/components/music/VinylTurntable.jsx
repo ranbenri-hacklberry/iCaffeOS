@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Music, Play, Pause } from 'lucide-react';
 
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { getBackendApiUrl } from '../../utils/apiUtils';
 
 const MUSIC_API_URL = getBackendApiUrl();
 
