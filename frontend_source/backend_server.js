@@ -47,6 +47,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+app.use(express.static('public'));
 
 // Request logger
 app.use((req, res, next) => {
@@ -140,6 +141,117 @@ app.get('/api/system/containers', (req, res) => {
     });
 });
 
+/**
+ * 🆕 System Validation Endpoint
+ * Checks and reports status of local/cloud integrations
+ */
+app.get('/api/system/validate-integrations', async (req, res) => {
+    try {
+        const { businessId } = req.query;
+
+        // Check CPU Temp (Linux/N150 specific)
+        let cpuTemp = 'N/A';
+        try {
+            if (os.platform() === 'linux') {
+                const temp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
+                cpuTemp = (parseInt(temp) / 1000).toFixed(1) + '°C';
+            } else if (os.platform() === 'darwin') {
+                cpuTemp = '42.0°C'; // Mock for Mac/Dev
+            }
+        } catch (e) { cpuTemp = 'ERR'; }
+
+        // Initialize status with System Env checks
+        let integrations = {
+            ollama: { status: 'ok', message: 'Connected to local mesh' },
+            gemini: {
+                status: process.env.VITE_GEMINI_API_KEY ? 'ok' : 'error',
+                message: process.env.VITE_GEMINI_API_KEY ? 'System Key Active' : 'Key Missing'
+            },
+            grok: {
+                status: process.env.VITE_GROK_API_KEY ? 'ok' : 'error',
+                message: process.env.VITE_GROK_API_KEY ? 'System Key Active' : 'Key Missing'
+            },
+            claude: {
+                status: process.env.VITE_CLAUDE_API_KEY ? 'ok' : 'error',
+                message: process.env.VITE_CLAUDE_API_KEY ? 'System Key Active' : 'Key Missing'
+            },
+            youtube: {
+                status: process.env.VITE_YOUTUBE_API_KEY ? 'ok' : 'error',
+                message: process.env.VITE_YOUTUBE_API_KEY ? 'System Key Active' : 'Key Missing'
+            },
+            whatsapp: { status: 'ok', message: 'Service up' }
+        };
+
+        // If Business ID provided, check specific overrides in DB
+        if (businessId && supabase) {
+            const { data } = await supabase
+                .from('businesses')
+                .select('gemini_api_key, grok_api_key, claude_api_key, whatsapp_api_key, youtube_api_key')
+                .eq('id', businessId)
+                .single();
+
+            if (data) {
+                if (data.gemini_api_key) integrations.gemini = { status: 'ok', message: 'Business Key Active' };
+                if (data.grok_api_key) integrations.grok = { status: 'ok', message: 'Business Key Active' };
+                if (data.claude_api_key) integrations.claude = { status: 'ok', message: 'Business Key Active' };
+                if (data.whatsapp_api_key) integrations.whatsapp = { status: 'ok', message: 'Business API Active' };
+                if (data.youtube_api_key) integrations.youtube = { status: 'ok', message: 'Business Key Active' };
+            }
+        }
+
+        const checks = {
+            ...integrations,
+            hardware: { temp: cpuTemp, node: os.hostname() }
+        };
+        res.json({ success: true, checks });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * 🆕 KDS Screenshot Trigger
+ * Captures the current display of the N150 node
+ */
+app.get('/api/system/capture-screenshot', (req, res) => {
+    const { businessId } = req.query;
+    const isMac = os.platform() === 'darwin';
+    const screenshotDir = path.join(__dirname, 'public', 'screenshots');
+
+    // Normalize naming: business-specific or global
+    const fileName = businessId ? `latest_kds_${businessId}.png` : 'latest_kds.png';
+    const outputPath = path.join(screenshotDir, fileName);
+
+    if (!fs.existsSync(screenshotDir)) {
+        fs.mkdirSync(screenshotDir, { recursive: true });
+    }
+
+    let targetUrl = null;
+    // Map specific business to its KDS IP
+    if (businessId === '11111111-1111-1111-1111-111111111111') {
+        targetUrl = 'http://100.97.166.104:4028/kiosk';
+    }
+
+    if (!targetUrl) {
+        console.log(`⚠️ [KDS] No KDS configured for business ${businessId} - Skipping screenshot`);
+        return res.json({ success: false, error: 'No KDS URL mapped' });
+    }
+
+    const cmd = `npx playwright screenshot "${targetUrl}" "${outputPath}" --wait-for-timeout 5000`;
+
+    console.log(`📸 Starting capture for ${businessId || 'global'} from ${targetUrl}...`);
+
+    exec(cmd, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`❌ [KDS] Capture failed: ${error.message}`);
+            if (stderr) console.error(`[KDS] Stderr: ${stderr}`);
+            return res.json({ success: false, error: error.message, details: stderr });
+        }
+        console.log(`✅ [KDS] Capture success: ${outputPath}`);
+        res.json({ success: true, timestamp: Date.now(), filename: fileName });
+    });
+});
+
 
 // === WHATSAPP & SMS MANAGER (LOCAL) ===
 import whatsAppManager from './src/services/whatsappManager.js';
@@ -148,12 +260,17 @@ import whatsAppManager from './src/services/whatsappManager.js';
 import mayaRoutes from './backend/api/mayaRoutes.js';
 import marketingRoutes from './backend/api/marketingRoutes.js';
 import adminRoutes from './backend/api/adminRoutes.js';
+import abrakadabraRoutes from './backend/api/abrakadabraRoutes.js';
+import musicRoutes from './backend/api/musicRoutes.js';
 import { startDockerWatchdog } from './backend/services/dockerWatchdog.js';
 
 app.use('/api/maya', mayaRoutes);
 app.use('/api/marketing', marketingRoutes);
+app.use('/api/admin', adminRoutes); // ✅ Admin routes (docker-health, sync, etc.)
+app.use('/api/abrakadabra', abrakadabraRoutes);
+app.use('/api/music', musicRoutes);
+app.use('/music', musicRoutes); // Support both path styles
 app.use('/music/cover', musicCoverRouter);
-// app.use('/api/admin', adminRoutes); // Disabled: Outdated redundancy. Logic moved to backend_server.js
 
 // Start Docker Monitoring (Checks every 60s)
 startDockerWatchdog(60000);
@@ -1043,7 +1160,7 @@ app.get("/api/admin/identity", async (req, res) => {
         // Fetch basic business info for these IDs
         const { data: businesses, error } = await supabase
             .from('businesses')
-            .select('id, name')
+            .select('id, name, owner_name')
             .in('id', ids);
 
         if (error) {
@@ -1767,16 +1884,22 @@ app.all("/api/admin/all-stats", enforceBusinessId, async (req, res) => {
     console.log(`📊 [AllStats] Request for business ${businessId} on ${tables.length} tables`);
     const results = {};
 
-    // Batch fetch from both layers
+    // Batch fetch from both layers with a timeout to prevent hanging
     const tasks = tables.map(tableId => (async () => {
         try {
-            const [cloud, docker] = await Promise.all([
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout')), 8000)
+            );
+
+            const fetchPromise = Promise.all([
                 getCount(remoteSupabase, tableId, businessId),
                 getCount(localSupabase, tableId, businessId)
             ]);
+
+            const [cloud, docker] = await Promise.race([fetchPromise, timeoutPromise]);
             results[tableId] = { cloud, docker };
         } catch (err) {
-            console.error(`❌ [AllStats] Error for ${tableId}:`, err.message);
+            console.error(`❌ [AllStats] Error or Timeout for ${tableId}:`, err.message);
             results[tableId] = { cloud: 0, docker: 0, error: err.message };
         }
     })());

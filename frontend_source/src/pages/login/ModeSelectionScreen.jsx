@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useMayaAuth } from '@/context/MayaAuthContext';
-import { Monitor, ChefHat, LogOut, BarChart3, Coffee, Users, Music, ShieldAlert, Package, List, LayoutGrid, Truck, ShoppingCart, Settings, MessageSquare, ExternalLink, Film, Palette, UserCircle } from 'lucide-react';
+import { Monitor, ChefHat, LogOut, BarChart3, Coffee, Users, Music, ShieldAlert, Package, List, LayoutGrid, Truck, ShoppingCart, Settings, MessageSquare, ExternalLink, Film, Palette, UserCircle, Database } from 'lucide-react';
 import WhatsNewModal from '@/components/WhatsNewModal';
 import SmsBalanceWidget from '@/components/SmsBalanceWidget';
 
@@ -11,91 +11,45 @@ const ModeSelectionScreen = () => {
     const { currentUser, setMode, logout, appVersion } = useAuth();
     const mayaAuth = useMayaAuth();
     const [showWhatsNew, setShowWhatsNew] = useState(true);
+    const [integrationErrors, setIntegrationErrors] = useState(null);
 
-    // Get user from either regular auth or Maya auth
-    const user = currentUser || (mayaAuth.employee ? {
-        name: mayaAuth.employee.name,
-        access_level: mayaAuth.employee.accessLevel,
-        is_super_admin: mayaAuth.employee.isSuperAdmin,
-        business_id: mayaAuth.employee.businessId,
-        business_name: 'iCaffe' // TODO: Get from database
-    } : null);
-
-    // Debug logging
-    console.log('🔍 ModeSelection Debug:', {
-        currentUser: currentUser?.name,
-        currentUserIsSuperAdmin: currentUser?.is_super_admin,
-        mayaEmployee: mayaAuth.employee?.name,
-        mayaEmployeeIsSuperAdmin: mayaAuth.employee?.isSuperAdmin,
-        mergedUserIsSuperAdmin: user?.is_super_admin
-    });
-
-    // Check if user is a manager/admin (case-insensitive)
-    const accessLevel = (user?.access_level || '').toLowerCase();
-    const role = (user?.role || '').toLowerCase();
-
-    const isManager = role === 'admin' ||
-        role === 'manager' ||
-        role === 'owner' ||
-        accessLevel === 'admin' ||
-        accessLevel === 'manager' ||
-        accessLevel === 'owner' ||
-        user?.is_admin === true;
-
-    // Check if user is a driver
-    const isDriver = user?.is_driver === true || role === 'driver' || accessLevel === 'driver';
-
-    // Check if user is staff
-    const isStaff = role === 'staff' || accessLevel === 'staff';
-
-    // Check if user is owner
-    const isOwner = role === 'owner' || accessLevel === 'owner';
-
-    // Get user's visible apps preferences (from employees.visible_apps)
-    const visibleApps = user?.visible_apps || null;
-
-    // Helper function to check if an app should be displayed
-    const isAppVisible = (appId) => {
-        // If user hasn't set preferences, show all apps (default behavior)
-        if (!visibleApps || !Array.isArray(visibleApps)) {
-            return true;
+    // 🚀 Auto-redirect Super Admin to Super Admin portal
+    React.useEffect(() => {
+        const isSuper = currentUser?.is_super_admin || currentUser?.user_metadata?.is_super_admin || localStorage.getItem('is_super_admin') === 'true';
+        if (isSuper && window.location.pathname !== '/super-admin') {
+            console.log('👑 Super Admin detected on ModeSelection - Redirecting to Portal...');
+            navigate('/super-admin', { replace: true });
         }
+    }, [currentUser, navigate]);
 
-        // Otherwise, check if the app is in the user's visible apps list
-        return visibleApps.includes(appId);
-    };
-
-    const handleModeSelect = (mode) => {
-        setMode(mode);
-        if (mode === 'kiosk') {
-            navigate('/');
-        } else if (mode === 'kds') {
-            navigate('/kds');
-        } else if (mode === 'inventory') {
-            navigate('/inventory');
-        } else if (mode === 'prep') {
-            navigate('/prep');
-        } else if (mode === 'music') {
-            navigate('/music');
-        } else if (mode === 'mobile-kds') {
-            setMode('kds'); // Set as KDS mode for auth
-            navigate('/mobile-kds');
-        } else if (mode === 'manager') {
-            navigate('/data-manager-interface');
-        } else if (mode === 'dexie-admin') {
-            navigate('/dexie-admin');
-        } else if (mode === 'db-explorer') {
-            navigate('/super-admin/db');
-        } else if (mode === 'kanban') {
-            navigate('/kanban');
-        } else if (mode === 'driver') {
-            navigate('/driver');
-        } else if (mode === 'owner-settings') {
-            navigate('/owner-settings');
-        } else if (mode === 'menu-editor') {
-            navigate('/ipad-menu-editor');
+    // 🆕 Check for integration failures on mount
+    React.useEffect(() => {
+        const failures = localStorage.getItem('failed_integrations');
+        if (failures) {
+            try {
+                setIntegrationErrors(JSON.parse(failures));
+            } catch (e) {
+                console.error('Failed to parse integration errors', e);
+            }
         }
-    };
+    }, []);
+
+    // Enhanced User Logic for Display
+    const isDeviceUser = currentUser?.is_device || currentUser?.name === 'Main Terminal';
+
+    // Try to get the "Real Name" from metadata if the display name is generic
+    const realName = currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name;
+
+    const displayUser = mayaAuth.employee
+        ? { ...mayaAuth.employee, name: mayaAuth.employee.name }
+        : {
+            ...currentUser,
+            name: realName && realName !== 'Main Terminal' ? realName : (isDeviceUser ? (currentUser?.business_name || 'עמדת שירות') : currentUser?.name)
+        };
+
+    const user = displayUser || currentUser;
+
+    // ... (rest of logic) ...
 
     return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 pt-16 font-heebo" dir="rtl">
@@ -110,34 +64,49 @@ const ModeSelectionScreen = () => {
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-full">
                         <span className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
                         <span className="text-sm font-bold text-green-400">
-                            {user?.impersonating_business_name || user?.business_name || 'iCaffe'}
+                            {currentUser?.business_name || 'iCaffe'}
                         </span>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-w-5xl mx-auto">
-
-                    {/* 0. Super Admin Portal - Debug/Always Visible */}
-                    {(user?.is_super_admin || mayaAuth.employee?.isSuperAdmin || currentUser?.is_super_admin) && (
+                    {/* 1. Dashboard (Cockpit) - FIRST ON MOBILE & DESKTOP */}
+                    {isAppVisible('manager') && (
                         <button
-                            onClick={() => navigate('/super-admin')}
-                            className="group relative bg-gradient-to-br from-red-600 to-pink-600 rounded-2xl p-5 hover:from-red-700 hover:to-pink-700 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-white/20 hover:border-white/40"
+                            onClick={() => handleModeSelect('manager')}
+                            className="group relative bg-white rounded-2xl p-5 hover:bg-purple-50 transition-all duration-300 hover:-translate-y-1 active:scale-95 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-purple-100 cursor-pointer z-30"
                         >
-                            <div className="absolute top-3 left-3 bg-yellow-400 text-slate-900 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                ADMIN
-                            </div>
-                            <div className="absolute top-0 left-0 w-20 h-20 bg-white/10 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                            <div className="relative z-10">
-                                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-12 transition-transform border border-white/30">
-                                    <ShieldAlert size={20} strokeWidth={2.5} />
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-purple-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform pointer-events-none" />
+                            <div className="relative z-10 pointer-events-none">
+                                <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <BarChart3 size={20} strokeWidth={2.5} />
                                 </div>
-                                <h2 className="text-xl font-black text-white mb-1">פורטל Super Admin</h2>
-                                <p className="text-white/80 text-sm leading-relaxed font-medium">
-                                    ניהול עסקים והגדרות על
+                                <h2 className="text-xl font-black text-slate-900 mb-1">הקוקפיט (Dashboard)</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    מכירות, תפריט, מלאי ומשימות
                                 </p>
                             </div>
                         </button>
                     )}
+
+                    {/* 1b. RunTunes (Music) - UNDER COCKPIT */}
+                    <button
+                        onClick={() => handleModeSelect('music')}
+                        className="group relative bg-indigo-900/40 rounded-2xl p-5 hover:bg-indigo-900/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-indigo-500/30 hover:border-indigo-400"
+                    >
+                        <div className="absolute top-0 left-0 w-20 h-20 bg-indigo-500/20 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                        <div className="relative z-10">
+                            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-12 transition-transform">
+                                <Music size={20} strokeWidth={2.5} />
+                            </div>
+                            <h2 className="text-xl font-black text-white mb-1">RunTunes (נגן)</h2>
+                            <p className="text-indigo-200 text-sm leading-relaxed font-medium">
+                                ניהול מוזיקה ואווירה
+                            </p>
+                        </div>
+                    </button>
+
+
 
                     {/* Profile Settings - Visible to ALL users */}
                     <button
@@ -156,125 +125,105 @@ const ModeSelectionScreen = () => {
                         </div>
                     </button>
 
-                    {/* 1. Dashboard (Cockpit) - Visible to all, requires Manager Re-Auth (TODO: Phase 2) */}
-                    {isAppVisible('manager') && (
-                    <button
-                        onClick={() => handleModeSelect('manager')}
-                        className="group relative bg-white rounded-2xl p-5 hover:bg-purple-50 transition-all duration-300 hover:-translate-y-1 active:scale-95 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-purple-100 cursor-pointer z-30"
-                    >
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-purple-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform pointer-events-none" />
-                        <div className="relative z-10 pointer-events-none">
-                            <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <BarChart3 size={20} strokeWidth={2.5} />
-                            </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">הקוקפיט (Dashboard)</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                מכירות, תפריט, מלאי ומשימות
-                            </p>
-                            {/* TODO: Add lock icon for Phase 2 */}
-                        </div>
-                    </button>
-                    )}
-
                     {/* 2. Cash Register - Hidden on Mobile */}
                     {isAppVisible('kiosk') && (
-                    <button
-                        onClick={() => handleModeSelect('kiosk')}
-                        className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-orange-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-orange-100"
-                    >
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-orange-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                        <div className="relative z-10">
-                            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <Coffee size={20} strokeWidth={2.5} />
+                        <button
+                            onClick={() => handleModeSelect('kiosk')}
+                            className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-orange-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-orange-100"
+                        >
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-orange-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                            <div className="relative z-10">
+                                <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <Coffee size={20} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">עמדת קופה</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    הקלדת הזמנות ומכירות
+                                </p>
                             </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">עמדת קופה</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                הקלדת הזמנות ומכירות
-                            </p>
-                        </div>
-                    </button>
+                        </button>
                     )}
 
-                    {/* 3. Service (KDS) - Tablet/Desktop */}
+                    {/* 3. Service (KDS) - Tablet/Desktop ONLY */}
                     {isAppVisible('kds') && (
-                    <button
-                        onClick={() => handleModeSelect('kds')}
-                        className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-emerald-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-emerald-100"
-                    >
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-emerald-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                        <div className="relative z-10">
-                            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <Monitor size={20} strokeWidth={2.5} />
+                        <button
+                            onClick={() => handleModeSelect('kds')}
+                            className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-emerald-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-emerald-100"
+                        >
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-emerald-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                            <div className="relative z-10">
+                                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <Monitor size={20} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">סרוויס (KDS)</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    ניהול הזמנות ומשימות
+                                </p>
                             </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">סרוויס (KDS)</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                ניהול הזמנות ומשימות
-                            </p>
-                        </div>
-                    </button>
+                        </button>
                     )}
 
                     {/* 3. Prep Tasks - Reordered to be before Inventory */}
                     {isAppVisible('prep') && (
-                    <button
-                        onClick={() => handleModeSelect('prep')}
-                        className="group relative bg-white rounded-2xl p-5 hover:bg-indigo-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-indigo-100"
-                    >
-                        <div className="absolute top-3 left-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                            חדש
-                        </div>
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-indigo-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                        <div className="relative z-10">
-                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <List size={20} strokeWidth={2.5} />
+                        <button
+                            onClick={() => handleModeSelect('prep')}
+                            className="group relative bg-white rounded-2xl p-5 hover:bg-indigo-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-indigo-100"
+                        >
+                            <div className="absolute top-3 left-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                חדש
                             </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">הכנות ומשימות</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                פתיחה, סגירה ומשימות יום
-                            </p>
-                        </div>
-                    </button>
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-indigo-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                            <div className="relative z-10">
+                                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <List size={20} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">הכנות ומשימות</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    פתיחה, סגירה ומשימות יום
+                                </p>
+                            </div>
+                        </button>
                     )}
 
                     {/* 4. Inventory - Reordered after Prep Tasks */}
                     {isAppVisible('inventory') && (
-                    <button
-                        onClick={() => handleModeSelect('inventory')}
-                        className="group relative bg-white rounded-2xl p-5 hover:bg-blue-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-blue-100"
-                    >
-                        <div className="absolute top-3 left-3 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                            חדש
-                        </div>
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-blue-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                        <div className="relative z-10">
-                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <Package size={20} strokeWidth={2.5} />
+                        <button
+                            onClick={() => handleModeSelect('inventory')}
+                            className="group relative bg-white rounded-2xl p-5 hover:bg-blue-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-blue-100"
+                        >
+                            <div className="absolute top-3 left-3 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                חדש
                             </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">ניהול מלאי</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                ספירות מלאי והזמנות רכש
-                            </p>
-                        </div>
-                    </button>
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-blue-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                            <div className="relative z-10">
+                                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <Package size={20} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">ניהול מלאי</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    ספירות מלאי והזמנות רכש
+                                </p>
+                            </div>
+                        </button>
                     )}
 
                     {/* 5. Menu Editor */}
                     {isAppVisible('menu-editor') && (
-                    <button
-                        onClick={() => handleModeSelect('menu-editor')}
-                        className="group relative bg-white rounded-2xl p-5 hover:bg-rose-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-rose-100"
-                    >
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-rose-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                        <div className="relative z-10">
-                            <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <Palette size={20} strokeWidth={2.5} />
+                        <button
+                            onClick={() => handleModeSelect('menu-editor')}
+                            className="group relative bg-white rounded-2xl p-5 hover:bg-rose-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-rose-100"
+                        >
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-rose-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                            <div className="relative z-10">
+                                <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <Palette size={20} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">עריכת תפריט</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    עדכון פריטים, מחירים ותמונות
+                                </p>
                             </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">עריכת תפריט</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                עדכון פריטים, מחירים ותמונות
-                            </p>
-                        </div>
-                    </button>
+                        </button>
                     )}
 
                     {/* 3b. Mobile KDS - HIDDEN REQUESTED */}
@@ -296,24 +245,24 @@ const ModeSelectionScreen = () => {
 
                     {/* 4. Kanban - Order Management Board */}
                     {isAppVisible('kanban') && (
-                    <button
-                        onClick={() => handleModeSelect('kanban')}
-                        className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-teal-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-teal-100"
-                    >
-                        <div className="absolute top-3 left-3 bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                            חדש
-                        </div>
-                        <div className="absolute top-0 left-0 w-20 h-20 bg-teal-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
-                        <div className="relative z-10">
-                            <div className="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
-                                <LayoutGrid size={20} strokeWidth={2.5} />
+                        <button
+                            onClick={() => handleModeSelect('kanban')}
+                            className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-teal-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-teal-100"
+                        >
+                            <div className="absolute top-3 left-3 bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                חדש
                             </div>
-                            <h2 className="text-xl font-black text-slate-900 mb-1">קנבן הזמנות</h2>
-                            <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                ניהול הזמנות ומשלוחים
-                            </p>
-                        </div>
-                    </button>
+                            <div className="absolute top-0 left-0 w-20 h-20 bg-teal-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
+                            <div className="relative z-10">
+                                <div className="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
+                                    <LayoutGrid size={20} strokeWidth={2.5} />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">קנבן הזמנות</h2>
+                                <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                                    ניהול הזמנות ומשלוחים
+                                </p>
+                            </div>
+                        </button>
                     )}
 
                     {/* 7. Owner Settings - Owner Only */}
@@ -372,66 +321,66 @@ const ModeSelectionScreen = () => {
 
                     {/* 9. Video Creator - Super Admin Only */}
                     {user?.is_super_admin && (
-                    <button
-                        onClick={() => {
-                            navigate('/video-creator');
-                        }}
-                        className="group relative bg-gradient-to-br from-purple-900 to-pink-900 rounded-2xl p-5 hover:from-purple-800 hover:to-pink-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-white/10 hover:border-white/30"
-                    >
-                        {/* Decorative Background */}
-                        <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-br-full -translate-x-6 -translate-y-6 group-hover:scale-110 transition-transform" />
+                        <button
+                            onClick={() => {
+                                navigate('/video-creator');
+                            }}
+                            className="group relative bg-gradient-to-br from-purple-900 to-pink-900 rounded-2xl p-5 hover:from-purple-800 hover:to-pink-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-white/10 hover:border-white/30"
+                        >
+                            {/* Decorative Background */}
+                            <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-br-full -translate-x-6 -translate-y-6 group-hover:scale-110 transition-transform" />
 
-                        {/* NEW Badge */}
-                        <div className="absolute top-3 left-3 bg-pink-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                            חדש
-                        </div>
-
-                        <div className="relative z-10 flex flex-col items-end">
-                            {/* Icon Container */}
-                            <div className="relative mb-3 group-hover:rotate-6 transition-transform">
-                                <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-500 rounded-xl flex items-center justify-center text-white shadow-lg">
-                                    <Film size={24} strokeWidth={2.5} />
-                                </div>
+                            {/* NEW Badge */}
+                            <div className="absolute top-3 left-3 bg-pink-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                חדש
                             </div>
 
-                            <h2 className="text-xl font-black text-white mb-1">יצירת סרטון AI</h2>
-                            <p className="text-white/80 text-sm leading-relaxed font-medium">
-                                צור סרטונים מדהימים עם Kling AI
-                            </p>
-                        </div>
-                    </button>
+                            <div className="relative z-10 flex flex-col items-end">
+                                {/* Icon Container */}
+                                <div className="relative mb-3 group-hover:rotate-6 transition-transform">
+                                    <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-500 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                        <Film size={24} strokeWidth={2.5} />
+                                    </div>
+                                </div>
+
+                                <h2 className="text-xl font-black text-white mb-1">יצירת סרטון AI</h2>
+                                <p className="text-white/80 text-sm leading-relaxed font-medium">
+                                    צור סרטונים מדהימים עם Kling AI
+                                </p>
+                            </div>
+                        </button>
                     )}
 
                     {/* 10. Ad Generator - Super Admin Only */}
                     {user?.is_super_admin && (
-                    <button
-                        onClick={() => {
-                            navigate('/ad-generator');
-                        }}
-                        className="group relative bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-5 hover:from-indigo-800 hover:to-purple-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-white/10 hover:border-white/30"
-                    >
-                        {/* Decorative Background */}
-                        <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-br-full -translate-x-6 -translate-y-6 group-hover:scale-110 transition-transform" />
+                        <button
+                            onClick={() => {
+                                navigate('/ad-generator');
+                            }}
+                            className="group relative bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-5 hover:from-indigo-800 hover:to-purple-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-white/10 hover:border-white/30"
+                        >
+                            {/* Decorative Background */}
+                            <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-br-full -translate-x-6 -translate-y-6 group-hover:scale-110 transition-transform" />
 
-                        {/* NEW Badge */}
-                        <div className="absolute top-3 left-3 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                            חדש
-                        </div>
-
-                        <div className="relative z-10 flex flex-col items-end">
-                            {/* Icon Container */}
-                            <div className="relative mb-3 group-hover:rotate-6 transition-transform">
-                                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center text-white shadow-lg">
-                                    <Palette size={24} strokeWidth={2.5} />
-                                </div>
+                            {/* NEW Badge */}
+                            <div className="absolute top-3 left-3 bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                חדש
                             </div>
 
-                            <h2 className="text-xl font-black text-white mb-1">סטודיו פרסום</h2>
-                            <p className="text-white/80 text-sm leading-relaxed font-medium">
-                                צור מודעות מקצועיות ברמת מוזיאון
-                            </p>
-                        </div>
-                    </button>
+                            <div className="relative z-10 flex flex-col items-end">
+                                {/* Icon Container */}
+                                <div className="relative mb-3 group-hover:rotate-6 transition-transform">
+                                    <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                        <Palette size={24} strokeWidth={2.5} />
+                                    </div>
+                                </div>
+
+                                <h2 className="text-xl font-black text-white mb-1">סטודיו פרסום</h2>
+                                <p className="text-white/80 text-sm leading-relaxed font-medium">
+                                    צור מודעות מקצועיות ברמת מוזיאון
+                                </p>
+                            </div>
+                        </button>
                     )}
 
                     {/* 4b. Driver Screen - Only for drivers */}
@@ -514,8 +463,30 @@ const ModeSelectionScreen = () => {
                             className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors px-4 py-2 rounded-lg hover:bg-white/10 text-sm"
                         >
                             <LogOut size={16} />
-                            <span>{currentUser?.is_impersonating ? 'חזרה לפורטל הראשי' : currentUser?.is_super_admin ? 'חזרה לפורטל' : 'יציאה'}</span>
+                            <span>{currentUser?.is_impersonating ? 'חזרה לפורטל הראשי' : 'יציאה'}</span>
                         </button>
+
+                        {/* Super Admin Access Button (Bottom) */}
+                        {(user?.is_super_admin || mayaAuth.employee?.isSuperAdmin || currentUser?.is_super_admin || currentUser?.user_metadata?.is_super_admin || localStorage.getItem('is_super_admin') === 'true') && (
+                            <button
+                                onClick={() => navigate('/super-admin')}
+                                className="inline-flex items-center gap-2 text-pink-400 hover:text-pink-300 transition-colors px-4 py-2 rounded-lg hover:bg-pink-500/10 text-sm border border-pink-500/30"
+                            >
+                                <ShieldAlert size={16} />
+                                <span>פורטל Super Admin</span>
+                            </button>
+                        )}
+
+                        {/* 🗄️ Database Sync Shortcut - Super Admin only */}
+                        {isSuperAdmin && (
+                            <button
+                                onClick={() => navigate('/super-admin/db')}
+                                className="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors px-4 py-2 rounded-lg hover:bg-cyan-500/10 text-sm border border-cyan-500/30 font-bold"
+                            >
+                                <Database size={16} />
+                                <span>סנכרון מסד נתונים</span>
+                            </button>
+                        )}
 
                         {/* Force Re-Login Button */}
                         <button
@@ -546,8 +517,74 @@ const ModeSelectionScreen = () => {
                     </div>
                 </div>
             </div>
+
             {/* What's New Modal - shows once per version after login (for all managers) */}
             {showWhatsNew && isManager && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
+
+            {/* 🚨 CRITICAL INTEGRATION FAILURE MODAL */}
+            {integrationErrors && integrationErrors.length > 0 && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+                    <div className="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden">
+                        <div className="p-6 bg-gradient-to-r from-red-900/40 to-slate-800 border-b border-white/5 flex items-center gap-4">
+                            <div className="p-3 bg-red-500/20 rounded-2xl border border-red-500/30">
+                                <ShieldAlert size={32} className="text-red-500 animate-pulse" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-white">נדרשת פעולה: שגיאות מערכת</h3>
+                                <p className="text-red-200 text-sm">נמצאו בעיות בחיבור לשירותים חיצוניים</p>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                            {integrationErrors.map((err, idx) => (
+                                <div key={idx} className="bg-slate-900/50 rounded-xl p-4 border border-white/5 flex items-start justify-between gap-4 group hover:border-red-500/30 transition-colors">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                {err.service}
+                                            </span>
+                                            <span className="text-white font-bold">שגיאת חיבור</span>
+                                        </div>
+                                        <p className="text-slate-400 text-sm font-mono break-all">{err.message}</p>
+                                    </div>
+
+                                    {err.dashboard && (
+                                        <a
+                                            href={err.dashboard}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white hover:text-blue-400 transition-colors border border-white/5"
+                                            title="פתח לוח בקרה"
+                                        >
+                                            <ExternalLink size={18} />
+                                        </a>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-6 bg-slate-900/30 border-t border-white/5 flex justify-between items-center">
+                            <button
+                                onClick={() => {
+                                    localStorage.removeItem('failed_integrations');
+                                    setIntegrationErrors(null);
+                                    window.location.reload();
+                                }}
+                                className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold rounded-xl transition-all"
+                            >
+                                בדוק שוב (Reload)
+                            </button>
+
+                            <button
+                                onClick={() => setIntegrationErrors(null)}
+                                className="text-slate-500 hover:text-white text-sm underline underline-offset-4"
+                            >
+                                התעלם והמשך
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

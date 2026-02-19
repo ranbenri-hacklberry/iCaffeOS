@@ -1,13 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-const cloudUrl = import.meta.env?.VITE_SUPABASE_URL;
-const cloudKey = import.meta.env?.VITE_SUPABASE_ANON_KEY;
-// Standardized Hybrid Logic
-const localUrl = import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
-const localKey = import.meta.env?.VITE_LOCAL_SUPABASE_SERVICE_KEY || import.meta.env?.VITE_LOCAL_SUPABASE_ANON_KEY || cloudKey;
+const FALLBACK_URL = 'https://gxzsxvbercpkgxraiaex.supabase.co';
+const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4enN4dmJlcmNwa2d4cmFpYWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NjMyNzAsImV4cCI6MjA3NzEzOTI3MH0.6sJ7PJ2imo9-mzuYdqRlhQty7PCQAzpSKfcQ5ve571g';
+
+const cloudUrl = import.meta.env?.VITE_SUPABASE_URL || FALLBACK_URL;
+const cloudKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || FALLBACK_KEY;
+
+// Standardized Hybrid Logic: Local vs Cloud
+const localUrl = import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://localhost:54321';
+const localKey = import.meta.env?.VITE_LOCAL_SUPABASE_ANON_KEY || 'no-key';
 
 if (!cloudUrl || !cloudKey) {
-    console.error('🚨 Supabase environment variables missing!');
+    console.warn('🚨 Supabase Cloud environment variables missing! Using fallbacks.');
 }
 
 let activeClient = null;
@@ -143,6 +147,8 @@ export const initSupabase = async () => {
     } else if (safeCloudUrl) {
         isLocal = false;
         activeClient = getClient(safeCloudUrl, cloudKey);
+        console.log('☁️ FALLBACK: Defaulting to Cloud Supabase');
+        console.log(`🔗 Active Connection: ${safeCloudUrl}`);
     }
 
     return { isLocal, url: isLocal ? localUrl : (safeCloudUrl || localUrl) };

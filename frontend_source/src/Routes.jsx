@@ -17,6 +17,7 @@ import { isElectron } from "./utils/apiUtils";
 // Abrakadabra Engine
 import { AbraHatProvider } from "./context/AbraHatContext";
 import AbraPreviewDrawer from "./components/abrakadabra/shared/AbraPreviewDrawer";
+import AbraInspector from "./components/abrakadabra/shared/AbraInspector";
 
 
 // Pages
@@ -360,7 +361,27 @@ const realSDK = {
     query: async () => ({ data: [], error: null, correlation_id: 'init' }),
     commit: async () => ({ success: true, correlation_id: 'init', timestamp: new Date().toISOString(), rollback_token: 'init' })
   },
-  ai: { consult: async () => ({ content: '', suggestions: [], tokens_used: 0 }) },
+  ai: {
+    consult: async (prompt, context) => {
+      console.log('🖥️ Routing AI Consult to Local Ollama Mesh (DGX Spark)...');
+      try {
+        const response = await fetch('http://localhost:8081/api/maya/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'system', content: 'You are an intent-parsing engine for Abrakadabra.' }, { role: 'user', content: prompt }],
+            businessId: '22222222-2222-2222-2222-222222222222',
+            provider: 'local'
+          })
+        });
+        const data = await response.json();
+        return { content: data.response, suggestions: [], tokens_used: 0 };
+      } catch (err) {
+        console.error('AI Consult failed:', err);
+        return { content: 'Error connecting to local AI mesh.', suggestions: [], tokens_used: 0 };
+      }
+    }
+  },
   registry: { lookup: async () => null },
   abrakadabra: {
     getManifesto: async () => ({
@@ -390,6 +411,8 @@ const realSDK = {
   }
 };
 
+import MayaOverlay from "./components/maya/MayaOverlay";
+
 const Routes = () => {
   const Router = isElectron() ? HashRouter : BrowserRouter;
 
@@ -403,8 +426,11 @@ const Routes = () => {
               {/* <SyncStatusModal /> - USER REQUESTED TO HIDE THIS MODAL */}
               <MusicProvider>
                 <ScrollToTop />
+                <MayaOverlay />
                 <AppRoutes />
+
                 <AbraPreviewDrawer />
+                <AbraInspector />
               </MusicProvider>
             </AbraHatProvider>
           </AuthProvider>

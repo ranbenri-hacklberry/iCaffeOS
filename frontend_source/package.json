@@ -31,6 +31,7 @@
     "warning": "🚨 CRITICAL: DO NOT REMOVE OR MODIFY ABOVE DEPENDENCIES - Required for app functionality"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.77.0",
     "@capacitor/android": "^8.0.2",
     "@capacitor/core": "^8.0.2",
     "@dhiwise/component-tagger": "^1.0.10",
@@ -47,6 +48,7 @@
     "@testing-library/jest-dom": "^5.15.1",
     "@testing-library/user-event": "^12.8.3",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "anthropic": "^0.0.0",
     "axios": "^1.8.4",
     "bonjour-service": "^1.3.0",
     "class-variance-authority": "^0.7.1",
@@ -70,6 +72,7 @@
     "music-metadata": "^11.12.0",
     "node-fetch": "^3.3.2",
     "node-thermal-printer": "^4.5.0",
+    "openai": "^6.22.0",
     "pg": "^8.18.0",
     "qrcode-terminal": "^0.12.0",
     "react": "^18.2.0",
