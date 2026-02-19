@@ -469,6 +469,16 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('kiosk_user', JSON.stringify(enrichedEmployee));
         localStorage.setItem('kiosk_auth_time', Date.now().toString());
 
+        // 🛡️ [SYNC STABILITY] Update business context keys to prevent data mixing
+        // This ensures hooks that rely on localStorage fallbacks use the correct business ID
+        if (enrichedEmployee.business_id) {
+            localStorage.setItem('business_id', enrichedEmployee.business_id);
+            localStorage.setItem('businessId', enrichedEmployee.business_id);
+        }
+        if (enrichedEmployee.business_name) {
+            localStorage.setItem('business_name', enrichedEmployee.business_name);
+        }
+
         // Color force full sync on next background run
         localStorage.removeItem('last_full_sync');
         localStorage.setItem('last_sync_time', Date.now().toString());
