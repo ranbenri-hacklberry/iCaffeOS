@@ -74,10 +74,12 @@ const UnifiedHeader = ({
 
                     <div className={`shrink-0 w-px h-6 ${forceMusicDark ? 'bg-white/10' : 'bg-slate-100'}`} />
 
-                    {/* Music Player */}
+                    {/* Music Player - Temporarily Disabled per User Request */}
+                    {/* 
                     <div className="shrink-0 scale-95 origin-left">
                         <MiniMusicPlayer forceDark={forceMusicDark} />
                     </div>
+                    */}
                 </div>
             </div>
         </header>

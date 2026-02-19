@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isLocalInstance } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { resolveUrl } from '../utils/apiUtils';
+import { resolveUrl, CLOUD_URL } from '../utils/apiUtils';
 import db from '../db/database';
 
 /**
@@ -44,6 +44,14 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
             if (isLocalClient) {
                 try {
                     const baseUrl = await resolveUrl();
+
+                    // 🛡️ [SYNC STABILITY] Skip health check for Cloud URL to avoid 404 noise
+                    if (baseUrl === CLOUD_URL) {
+                        setIsN150Down(false);
+                        setMachineName('Cloud');
+                        return;
+                    }
+
                     const controller = new AbortController();
                     const id = setTimeout(() => controller.abort(), 5000);
 

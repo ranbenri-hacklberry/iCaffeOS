@@ -553,6 +553,8 @@ export const AuthProvider = ({ children }) => {
 
         setCurrentUser(impersonatedUser);
         localStorage.setItem('kiosk_user', JSON.stringify(impersonatedUser));
+        localStorage.setItem('business_id', businessId);
+        localStorage.setItem('businessId', businessId);
         localStorage.setItem('return_to_super_portal', 'true');
 
         // Force sync for new business

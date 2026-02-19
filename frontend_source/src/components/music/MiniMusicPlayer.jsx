@@ -11,6 +11,8 @@ import { useTheme } from '../../context/ThemeContext';
  * Light/white theme, ~1/3 screen width
  */
 const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false }) => {
+    // 🛑 [DISABLED] Per user request: Cancel mini player from all screens for now
+    return null;
     const { isDarkMode: themeDarkMode } = useTheme();
     const isDarkMode = forceDark ? true : (forceLight ? false : themeDarkMode);
     const { currentUser } = useAuth();
