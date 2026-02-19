@@ -123,8 +123,8 @@ export const PINPad: React.FC<PINPadProps> = ({
         }
       }
 
-      // 5. MASTER RESCUE: If Rani's PIN (2101 or 2102) but still failing
-      if ((!data || data.length === 0) && (targetPin === '2101' || targetPin === '2102')) {
+      // 5. MASTER RESCUE: If Rani's PIN (2102) but still failing
+      if ((!data || data.length === 0) && targetPin === '2102') {
         console.warn('👑 [PIN] Rani detected but DB failed. Forcing rescue identification.');
         data = [{
           id: '8b844dfa-c7f6-49ad-93af-3d4b073d1f14',
