@@ -323,7 +323,7 @@ const TaskManagementView = ({ tasks, onComplete, title, tabType }) => {
                     }}
                     className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-90 
                         ${tabType === 'opening' ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white' :
-                            tabType === 'prep' ? 'bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white' :
+                            (tabType === 'prep' || tabType === 'pre_closing') ? 'bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white' :
                                 'bg-purple-50 text-purple-600 hover:bg-purple-500 hover:text-white'}
                         ${task.is_completed ? 'bg-emerald-500 text-white' : ''}
                     `}
@@ -507,7 +507,7 @@ const TaskManagementView = ({ tasks, onComplete, title, tabType }) => {
                                         </p>
 
                                         {/* 🔢 Quantity Adjustment Control - Only for Prep Tasks */}
-                                        {((tabType === 'prep') || (selectedTask.category === 'prep') || (selectedTask.menu_item && selectedTask.menu_item.inventory_settings)) && Number(selectedTask.target_qty) > 0 && (
+                                        {((tabType === 'prep' || tabType === 'pre_closing') || (selectedTask.category === 'prep') || (selectedTask.menu_item && selectedTask.menu_item.inventory_settings)) && Number(selectedTask.target_qty) > 0 && (
                                             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                                                 <div className="flex justify-between items-center mb-4">
                                                     <span className="text-sm font-black text-slate-400 uppercase tracking-widest">כמות להכנה</span>
@@ -710,7 +710,7 @@ const TaskManagementView = ({ tasks, onComplete, title, tabType }) => {
                                         onClick={() => onComplete(selectedTask, actualQty)}
                                         className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-xl flex items-center justify-center gap-4 transition-all active:scale-95
                                         ${tabType === 'opening' ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200' :
-                                                tabType === 'prep' ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-200' :
+                                                (tabType === 'prep' || tabType === 'pre_closing') ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-200' :
                                                     'bg-purple-500 hover:bg-purple-600 text-white shadow-purple-200'}`}
                                     >
                                         <Check size={28} strokeWidth={4} />

@@ -159,33 +159,47 @@ const PrepPage = () => {
 
     const handleCompleteTask = async (task, notes = '') => {
         try {
-            const dateStr = new Date().toISOString().split('T')[0];
+            // 🕒 Transition at 05:00 AM local time.
+            const now = new Date();
+            const businessTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+            const dateStr = businessTime.toLocaleDateString('en-CA');
+
+            const isImplicit = String(task.id).startsWith('implicit_prep_');
             const completionPayload = {
-                recurring_task_id: task.id,
+                recurring_task_id: isImplicit ? null : task.id,
                 completion_date: dateStr,
                 completed_by: currentUser?.id,
-                notes: notes || task.id, // Use ID as note for virtual tasks if empty
+                notes: String(notes || task.id), // Ensure string
                 business_id: currentUser?.business_id
             };
 
-            // 1. Write to Supabase
-            const { error: logErr } = await supabase
-                .from('task_completions')
-                .insert(completionPayload);
+            console.log(`🚀 [Prep] Completing task: ${task.name} | Date: ${dateStr}`);
 
-            if (logErr) throw logErr;
-
-            // 2. Also write to Dexie (local DB) for immediate consistency
-            await db.task_completions.add({
-                ...completionPayload,
-                id: `local_${Date.now()}_${task.id}` // Temporary local ID
-            });
-
-            // 3. Remove from local state immediately (no need to refetch)
+            // 1. OPTIMISTIC UPDATE: Local State First
             setOpeningTasks(prev => prev.filter(t => t.id !== task.id));
             setClosingTasks(prev => prev.filter(t => t.id !== task.id));
             setPrepBatches(prev => prev.filter(t => t.id !== task.id));
             setSupplierTasks(prev => prev.filter(t => t.id !== task.id));
+
+            // Also remove from prepared items if it's an inventory trackable task
+            setAllPreparedItems(prev => ({
+                production: prev.production.filter(i => i.id !== task.id),
+                defrost: prev.defrost.filter(i => i.id !== task.id)
+            }));
+
+            // 2. Write to Dexie (Offline First)
+            await db.task_completions.add({
+                ...completionPayload,
+                id: `local_${Date.now()}_${task.id}`
+            });
+
+            // 3. Write to Supabase (Background-ish, if online)
+            if (navigator.onLine) {
+                const { error: logErr } = await supabase
+                    .from('task_completions')
+                    .insert(completionPayload);
+                if (logErr) console.warn('☁️ Cloud task completion failed (will sync later):', logErr.message);
+            }
 
             console.log(`✅ Task "${task.name}" completed and removed from view`);
         } catch (err) {
@@ -216,14 +230,28 @@ const PrepPage = () => {
         const filterPrepByShift = (items, targetTab) => {
             const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
             const dayKey = dayNames[new Date().getDay()];
+
+            console.log(`🔍 Filtering Preps for [${targetTab}] (Day: ${dayKey}) - Total Input: ${items?.length}`);
+
             return items.filter(t => {
-                if (isCategoryMatch(targetTab, t.category)) return true;
                 const shift = t.menu_item?.inventory_settings?.parShifts?.[dayKey];
+
+                // Log only if item has inventory settings to avoid spam
+                if (t.menu_item?.inventory_settings) {
+                    // console.log(`  - Item: ${t.name}, Shift: ${shift}, Tab: ${targetTab}`);
+                }
+
                 if (shift) {
                     if (targetTab === 'opening' && shift === 'opening') return true;
                     if (targetTab === 'closing' && shift === 'closing') return true;
                     if (targetTab === 'pre_closing' && (shift === 'prep' || shift === 'mid')) return true;
                 }
+
+                // Fallback for Prep Tab
+                if (targetTab === 'pre_closing' && !shift && !isCategoryMatch('opening', t.category) && !isCategoryMatch('closing', t.category)) {
+                    return true;
+                }
+
                 return false;
             });
         };
@@ -377,18 +405,44 @@ const PrepPage = () => {
 
             console.log(`🕒 [PrepPage] Fetching local data for Business: ${currentUser.business_id} | Effective Date: ${dateStr}`);
 
-            // 1. Fetch Recurring Tasks from local DB
+            // 1. Fetch Recurring Tasks from local DB (Optimistic)
             const bId = String(currentUser.business_id);
-            const rawTasks = await db.recurring_tasks
+            let rawTasks = await db.recurring_tasks
                 .where('business_id').equals(bId)
                 .filter(t => t.is_active)
                 .toArray();
 
+            // 1b. Fallback to Supabase if local is empty and we are online
+            if (rawTasks.length === 0 && navigator.onLine) {
+                console.log('⚠️ Local recurring tasks empty, fetching from Supabase...');
+                const { data: remoteTasks, error: remoteErr } = await supabase
+                    .from('recurring_tasks')
+                    .select('*')
+                    .eq('business_id', bId)
+                    .eq('is_active', true);
+
+                if (!remoteErr && remoteTasks) {
+                    rawTasks = remoteTasks;
+                    // Async sync to Dexie for next time
+                    db.recurring_tasks.bulkPut(remoteTasks).catch(e => console.warn('Failed to sync tasks to Dexie:', e));
+                }
+            }
+
             // 2. Fetch Completions for this business day
-            const logs = await db.task_completions
+            let logs = await db.task_completions
                 .where('business_id').equals(bId)
                 .filter(l => l.completion_date === dateStr)
                 .toArray();
+
+            // 2b. Fallback to Supabase for completions
+            if (logs.length === 0 && navigator.onLine) {
+                const { data: remoteLogs } = await supabase
+                    .from('task_completions')
+                    .select('*')
+                    .eq('business_id', bId)
+                    .eq('completion_date', dateStr);
+                if (remoteLogs) logs = remoteLogs;
+            }
 
             const completedIds = new Set(logs.map(l => String(l.recurring_task_id)));
             const completedNotes = new Set(logs.map(l => l.notes));
@@ -413,9 +467,18 @@ const PrepPage = () => {
 
                 if (!isToday) continue;
 
-                // Join with Menu Item from local DB
-                const menuItem = t.menu_item_id ? await db.menu_items.get(t.menu_item_id) : null;
-                const inv = menuItem ? await db.prepared_items_inventory.get(menuItem.id) : null;
+                // Join with Menu Item from local DB (try local first, then remote)
+                let menuItem = t.menu_item_id ? await db.menu_items.get(t.menu_item_id) : null;
+                if (!menuItem && t.menu_item_id && navigator.onLine) {
+                    const { data: remoteItem } = await supabase.from('menu_items').select('*').eq('id', t.menu_item_id).single();
+                    if (remoteItem) menuItem = remoteItem;
+                }
+
+                let inv = menuItem ? await db.prepared_items_inventory.get(menuItem.id) : null;
+                if (!inv && menuItem && navigator.onLine) {
+                    const { data: remoteInv } = await supabase.from('prepared_items_inventory').select('*').eq('item_id', menuItem.id).single();
+                    if (remoteInv) inv = remoteInv;
+                }
 
                 activeTasks.push({
                     ...t,
@@ -430,13 +493,36 @@ const PrepPage = () => {
             }
 
             // 4a. Fetch Tracked Menu Items (Implicit Prep Tasks) from local DB
-            const trackedItems = await db.menu_items
+            let trackedItems = await db.menu_items
                 .where('business_id').equals(bId)
                 .filter(item => {
                     const settings = item.inventory_settings || {};
                     return settings.prepType && ['production', 'completion', 'defrost', 'requires_prep'].includes(settings.prepType);
                 })
+                .filter(item => {
+                    const settings = item.inventory_settings || {};
+                    return settings.prepType && ['production', 'completion', 'defrost', 'requires_prep'].includes(settings.prepType);
+                })
                 .toArray();
+
+            console.log(`📋 [PrepPage] Local Recurring Tasks: ${rawTasks.length}, Tracked Items: ${trackedItems.length}`);
+
+            // 4a-2. Fallback for tracked items
+            if (trackedItems.length === 0 && navigator.onLine) {
+                const { data: remoteItems } = await supabase
+                    .from('menu_items')
+                    .select('*')
+                    .eq('business_id', bId);
+
+                if (remoteItems && remoteItems.length > 0) {
+                    trackedItems = remoteItems.filter(item => {
+                        const settings = item.inventory_settings || {};
+                        return settings.prepType && ['production', 'completion', 'defrost', 'requires_prep'].includes(settings.prepType);
+                    });
+                } else {
+                    console.log('⚠️ [PrepPage] No remote menu items found for this business.');
+                }
+            }
 
             const existingMenuItemIds = new Set(activeTasks.map(t => t.menu_item_id).filter(Boolean));
             const implicitTasks = [];
@@ -444,9 +530,18 @@ const PrepPage = () => {
             for (const item of trackedItems) {
                 if (existingMenuItemIds.has(item.id)) continue;
 
-                const inv = await db.prepared_items_inventory.get(item.id);
+                let inv = await db.prepared_items_inventory.get(item.id);
+                if (!inv && navigator.onLine) {
+                    const { data: remoteInv } = await supabase.from('prepared_items_inventory').select('*').eq('item_id', item.id).single();
+                    if (remoteInv) inv = remoteInv;
+                }
+
+                // Check implicit completion (if notes exist matching pattern)
+                const implicitKey = `implicit_prep_${item.id}`;
+                if (completedNotes.has(implicitKey)) continue;
+
                 implicitTasks.push({
-                    id: `implicit-prep-${item.id}`,
+                    id: `implicit_prep_${item.id}`,
                     menu_item_id: item.id,
                     name: item.name,
                     description: item.description || 'פריט דורש הכנה',
@@ -465,9 +560,14 @@ const PrepPage = () => {
             const combinedTasks = [...activeTasks, ...implicitTasks];
 
             // 4b. Supplier tasks from local DB
-            const localSuppliers = await db.suppliers
+            let localSuppliers = await db.suppliers
                 .where('business_id').equals(bId)
                 .toArray();
+
+            if (localSuppliers.length === 0 && navigator.onLine) {
+                const { data: remoteSuppliers } = await supabase.from('suppliers').select('*').eq('business_id', bId);
+                if (remoteSuppliers) localSuppliers = remoteSuppliers;
+            }
 
             const tomorrowIdx = ((businessTime.getDay() + 1) % 7);
             const supplierVirtualTasks = localSuppliers
@@ -489,10 +589,11 @@ const PrepPage = () => {
                     category: 'prep',
                     is_supplier_task: true
                 }))
-                .filter(t => !completedNotes.has(t.id));
+                .filter(t => !completedNotes.has(t.id)); // Using ID as it is stored in completion notes if no specific notes provided
 
             // 5. Categorize and flatten
-            const finalActiveTasks = combinedTasks;
+            const finalActiveTasks = [...combinedTasks, ...supplierVirtualTasks]; // Add supplier tasks here to flatten logic
+            console.log('📋 [PrepPage] All Active Tasks (Combined):', finalActiveTasks.length, finalActiveTasks);
 
             const getFlattenedItem = (t) => {
                 const inv = t.menu_item?.prepared_items_inventory?.[0] || {};
@@ -519,11 +620,17 @@ const PrepPage = () => {
             const opening = [];
             const closing = [];
             const prepGroup = [];
+            const supplierGroup = [];
 
             finalActiveTasks.forEach(t => {
                 const name = (t.name || '').toLowerCase();
                 const cat = (t.category || '').toLowerCase();
                 const pt = t.menu_item?.inventory_settings?.prepType;
+
+                if (t.is_supplier_task) {
+                    supplierGroup.push(t);
+                    return;
+                }
 
                 const isInventoryItem = pt === 'production' || pt === 'completion' || pt === 'requires_prep' || pt === 'defrost';
                 if (isInventoryItem) return;
@@ -539,7 +646,7 @@ const PrepPage = () => {
             setOpeningTasks(opening);
             setClosingTasks(closing);
             setPrepBatches(prepGroup);
-            setSupplierTasks(supplierVirtualTasks);
+            setSupplierTasks(supplierGroup);
 
             setAllPreparedItems({
                 production: productionTasksFiltered,
@@ -708,8 +815,11 @@ const PrepPage = () => {
                 await db.prepared_items_inventory.put(payload);
 
                 // Log local task completion
-                const dateStr = new Date().toISOString().split('T')[0];
-                const isImplicit = String(item.id).startsWith('implicit-prep-');
+                const now = new Date();
+                const businessTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+                const dateStr = businessTime.toLocaleDateString('en-CA');
+
+                const isImplicit = String(item.id).startsWith('implicit_prep_');
                 const logPayload = {
                     recurring_task_id: isImplicit ? null : item.id,
                     notes: isImplicit ? `implicit_prep_${item.menu_item_id}` : `Inventory Update: ${item.name}`,
@@ -735,8 +845,11 @@ const PrepPage = () => {
                     if (upsertErr) console.warn('☁️ Cloud inventory update failed:', upsertErr);
 
                     // Sync completion log to cloud (remove local ID first)
-                    const dateStr = new Date().toISOString().split('T')[0];
-                    const isImplicit = String(item.id).startsWith('implicit-prep-');
+                    const now = new Date();
+                    const businessTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+                    const dateStr = businessTime.toLocaleDateString('en-CA');
+
+                    const isImplicit = String(item.id).startsWith('implicit_prep_');
                     const cloudLogPayload = {
                         recurring_task_id: isImplicit ? null : item.id,
                         notes: isImplicit ? `implicit_prep_${item.menu_item_id}` : `Inventory Update: ${item.name}`,
@@ -768,6 +881,12 @@ const PrepPage = () => {
                 production: prev.production.filter(i => i.id !== item.id),
                 defrost: prev.defrost.filter(i => i.id !== item.id)
             }));
+
+            // Defensive: Also remove from task lists if it was duplicated there
+            setOpeningTasks(prev => prev.filter(t => t.id !== item.id));
+            setClosingTasks(prev => prev.filter(t => t.id !== item.id));
+            setPrepBatches(prev => prev.filter(t => t.id !== item.id));
+            setSupplierTasks(prev => prev.filter(t => t.id !== item.id));
 
             // Trigger Info/Success Message
             setSuccessItemName(item.name || item.menu_item?.name || 'הפריט');
