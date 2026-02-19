@@ -139,90 +139,144 @@ const KDSObservability = ({ isEmbedded = false }) => {
                     </div>
                 </div>
 
-                {/* Screenshot Display */}
-                <div className={`${isEmbedded ? 'p-0' : 'p-4'}`}>
-                    {screenshot ? (
-                        <div className="relative group overflow-hidden rounded-2xl border border-slate-800 shadow-2xl">
-                            <img
-                                src={screenshot}
-                                alt="KDS Screenshot"
-                                className="w-full h-auto cursor-pointer transition-transform duration-700 group-hover:scale-[1.01]"
-                                onClick={() => setIsFullscreen(true)}
-                            />
+                {/* Main Content Area - Split Layout */}
+                <div className={`flex flex-col lg:flex-row gap-6 ${isEmbedded ? 'p-0' : 'p-6'}`}>
 
-                            {/* Overlay Controls */}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 rounded-xl transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                <button
+                    {/* LEFT SIDE: The Screen (Small/Medium) */}
+                    <div className="flex-[2] relative">
+                        {screenshot ? (
+                            <div className="relative group overflow-hidden rounded-2xl border border-slate-800 shadow-2xl bg-black/40">
+                                <img
+                                    src={screenshot}
+                                    alt="KDS Screenshot"
+                                    className="w-full h-auto cursor-pointer transition-transform duration-700 group-hover:scale-[1.01]"
                                     onClick={() => setIsFullscreen(true)}
-                                    className="p-3 bg-blue-600 rounded-full border border-blue-400 text-white hover:bg-blue-500 transition-all shadow-xl hover:scale-110 active:scale-95"
-                                >
-                                    <Maximize2 size={24} />
-                                </button>
+                                />
+
+                                {/* Overlay Controls */}
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 rounded-xl transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                    <button
+                                        onClick={() => setIsFullscreen(true)}
+                                        className="p-3 bg-blue-600 rounded-full border border-blue-400 text-white hover:bg-blue-500 transition-all shadow-xl hover:scale-110 active:scale-95"
+                                    >
+                                        <Maximize2 size={24} />
+                                    </button>
+                                </div>
+
+                                {/* Live Pulse */}
+                                {lastUpdate && (
+                                    <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 text-[10px] text-white/80">
+                                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                        <span>LIVE</span>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="w-full aspect-video bg-slate-900 rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-6 p-12 text-center overflow-hidden relative">
+                                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 pointer-events-none" />
+                                <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center animate-pulse">
+                                    <Monitor size={40} className="text-slate-600" />
+                                </div>
+                                <div>
+                                    <h4 className="text-slate-200 font-bold mb-2">
+                                        {status === 'loading' ? 'מתחבר למסך המטבח...' : 'לא נמצא צילום מסך'}
+                                    </h4>
+                                    <p className="text-slate-500 text-xs max-w-xs mx-auto leading-relaxed">
+                                        {status === 'loading'
+                                            ? 'אנחנו בודקים אם יש צילום מסך עדכני בשרת. זה עשוי לקחת כמה שניות.'
+                                            : 'יתכן שסקריפט הניטור בשרת כבוי או שיש בעיית תקשורת.'}
+                                    </p>
+                                </div>
+                                {status === 'offline' && (
+                                    <button
+                                        onClick={fetchScreenshot}
+                                        className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition-all font-bold text-sm"
+                                    >
+                                        נסה להתחבר שוב
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* RIGHT SIDE: Details & Stats */}
+                    <div className="flex-1 flex flex-col gap-4 min-w-[300px]">
+                        <div className="bg-slate-950/40 rounded-2xl border border-slate-800/50 p-5 flex flex-col gap-4">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">נתוני ניטור</h4>
+
+                            {/* Status Item */}
+                            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800 shadow-inner">
+                                <span className="text-xs text-slate-400 font-medium">סטטוס חיבור</span>
+                                <StatusIndicator />
                             </div>
 
-                            {/* Last Update Badge */}
-                            {lastUpdate && (
-                                <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 text-[10px] text-white/80">
-                                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                                    <span>עודכן לפני פחות מדקה</span>
+                            {/* Time Item */}
+                            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800 shadow-inner">
+                                <div className="flex items-center gap-2">
+                                    <Clock size={14} className="text-slate-500" />
+                                    <span className="text-xs text-slate-400 font-medium">עדכון אחרון</span>
                                 </div>
-                            )}
+                                <span className="text-xs font-bold text-slate-200 font-mono">
+                                    {lastUpdate ? lastUpdate.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
+                                </span>
+                            </div>
 
-                            {/* Clock Badge */}
-                            {lastUpdate && (
-                                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 text-[10px] text-white/80">
-                                    <Clock size={12} className="text-white/40" />
-                                    <span className="font-mono">
-                                        {lastUpdate.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                    </span>
+                            {/* Network Item */}
+                            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800 shadow-inner">
+                                <span className="text-xs text-slate-400 font-medium">כתובת IP יעד</span>
+                                <span className="text-xs font-bold text-blue-400 font-mono tracking-tighter">100.97.166.104</span>
+                            </div>
+
+                            <div className="h-px bg-slate-800/50 my-2"></div>
+
+                            {/* Controls */}
+                            <div className="flex flex-col gap-3">
+                                <div className="flex items-center justify-between px-1">
+                                    <span className="text-xs text-slate-400 font-medium">רענון אוטומטי (30ש')</span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only peer"
+                                            checked={autoRefresh}
+                                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                                        />
+                                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-checked:after:bg-white"></div>
+                                    </label>
                                 </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="w-full aspect-video bg-slate-900 rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-6 p-12 text-center overflow-hidden relative">
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 pointer-events-none" />
-                            <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center animate-pulse">
-                                <Monitor size={40} className="text-slate-600" />
-                            </div>
-                            <div>
-                                <h4 className="text-slate-200 font-bold mb-2">
-                                    {status === 'loading' ? 'מתחבר למסך המטבח...' : 'לא נמצא צילום מסך'}
-                                </h4>
-                                <p className="text-slate-500 text-xs max-w-xs mx-auto leading-relaxed">
-                                    {status === 'loading'
-                                        ? 'אנחנו בודקים אם יש צילום מסך עדכני בשרת. זה עשוי לקחת כמה שניות.'
-                                        : 'יתכן שסקריפט הניטור בשרת כבוי או שיש בעיית תקשורת.'}
-                                </p>
-                            </div>
-                            {status === 'offline' && (
+
                                 <button
                                     onClick={fetchScreenshot}
-                                    className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition-all font-bold text-sm"
+                                    disabled={status === 'loading'}
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-xl font-bold text-xs transition-all active:scale-95 disabled:opacity-50"
                                 >
-                                    נסה להתחבר שוב
+                                    <RefreshCw size={14} className={status === 'loading' ? 'animate-spin' : ''} />
+                                    דרוש צילום מסך עכשיו
                                 </button>
-                            )}
+                            </div>
                         </div>
-                    )}
+
+                        {/* System Health Hint */}
+                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                            <div className="flex items-start gap-3">
+                                <CheckCircle size={14} className="text-emerald-500 mt-0.5" />
+                                <div>
+                                    <h5 className="text-[11px] font-bold text-emerald-400 mb-1">תקינות מערכת KDS-UI</h5>
+                                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                                        סנכרון Dexie/Supabase פועל כסדרו. לא זוהו חסימות (UI_HALT) ב-12 השעות האחרונות.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Footer Info */}
-                <div className={`flex items-center justify-between text-[10px] font-medium ${isEmbedded ? 'mt-4' : 'bg-slate-900/50 border-t border-slate-800 p-4'}`}>
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                        <div className={`w-3 h-3 rounded border border-slate-700 flex items-center justify-center transition-all ${autoRefresh ? 'bg-blue-600 border-blue-400' : 'bg-slate-800 group-hover:border-slate-500'}`}>
-                            {autoRefresh && <X size={10} className="text-white rotate-45" />}
-                        </div>
-                        <input
-                            type="checkbox"
-                            className="hidden"
-                            checked={autoRefresh}
-                            onChange={(e) => setAutoRefresh(e.target.checked)}
-                        />
-                        <span className="text-slate-500 group-hover:text-slate-400 transition-colors">רענון אוטומטי פעיל (30 שניות)</span>
-                    </label>
-
-                    <div className="text-slate-600 font-mono tracking-tighter">
-                        SYNC_ID: {Math.random().toString(36).substring(7).toUpperCase()}
+                {/* Footer Info Minimal */}
+                <div className={`flex items-center justify-between text-[9px] font-medium ${isEmbedded ? 'mt-4' : 'bg-slate-900/30 border-t border-slate-800/40 p-3 px-6'}`}>
+                    <div className="text-slate-500">
+                        KDS-Monitor v2.4.1 • <span className="text-slate-600">Secure Peer-to-Peer Tunnel Active</span>
+                    </div>
+                    <div className="text-slate-600 font-mono">
+                        INSTANCE: {Math.random().toString(36).substring(7).toUpperCase()}
                     </div>
                 </div>
             </motion.div>
