@@ -7,7 +7,7 @@
  * 3. If N150 is unreachable, the system works in Offline mode (Dexie).
  */
 
-const CLOUD_URL = 'https://aimanageragentrani-625352399481.europe-west1.run.app';
+export const CLOUD_URL = 'https://aimanageragentrani-625352399481.europe-west1.run.app';
 
 export const isElectron = () => window.navigator.userAgent.toLowerCase().includes('electron');
 
