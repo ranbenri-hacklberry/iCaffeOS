@@ -59,7 +59,6 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
                 if (data) {
                     setPlayback(data);
-                    setIsPlaying(data.is_playing);
                 }
             } catch (err) {
                 console.error('Error fetching playback:', err);
