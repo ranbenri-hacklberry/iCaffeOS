@@ -48,7 +48,7 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
         const { data, error } = await supabase
           .from('businesses')
           .select('settings')
-          .eq('id', '22222222-2222-2222-2222-222222222222') // TODO: Get from auth context/env
+          .eq('id', localStorage.getItem('business_id') || '22222222-2222-2222-2222-222222222222')
           .single();
 
         if (error) throw error;
@@ -100,7 +100,7 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
         body: JSON.stringify({
           embedding: Array.from(embedding),
           threshold: 0.55,
-          businessId: '22222222-2222-2222-2222-222222222222'
+          businessId: localStorage.getItem('business_id') || '22222222-2222-2222-2222-222222222222'
         })
       });
 
@@ -130,7 +130,9 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
 
   // Handle PIN verification success
   const handlePINSuccess = async (employee: any, similarity: number) => {
-    const isAdmin = employee.isSuperAdmin || employee.is_super_admin || employee.accessLevel === 'super-admin' || employee.access_level === 'super-admin';
+    const isAdmin = employee.isSuperAdmin || employee.is_super_admin ||
+      employee.accessLevel === 'super-admin' || employee.access_level === 'super-admin' ||
+      employee.accessLevel === 'owner' || employee.access_level === 'owner';
     const employeeData = {
       id: employee.id,
       name: employee.name,

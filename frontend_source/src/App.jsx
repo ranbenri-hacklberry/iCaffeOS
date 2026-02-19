@@ -4,7 +4,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 import SplashScreen from "./components/SplashScreen";
 
 import LoadingFallback from "./components/LoadingFallback";
-import MayaOverlay from "./components/maya/MayaOverlay";
 
 // Lazy Load Routes to ensure tree-shaking works for LITE mode
 const FullRoutes = lazy(() => import("./Routes"));
@@ -42,7 +41,6 @@ function App() {
   return (
     <ThemeProvider>
       <ConnectionProvider>
-        <MayaOverlay />
         <Suspense fallback={<LoadingFallback message="טוען מודולים..." />}>
           <FullRoutes />
         </Suspense>

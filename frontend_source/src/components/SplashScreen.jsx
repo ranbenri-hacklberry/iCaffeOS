@@ -14,7 +14,7 @@ const SplashScreen = ({ onFinish }) => {
     const [showSkipButton, setShowSkipButton] = useState(false);
     const [tapCount, setTapCount] = useState(0);
     const [containerStatus, setContainerStatus] = useState([]); // 🆕 Container visibility
-
+    const [apiChecks, setApiChecks] = useState(null); // 🆕 API Status
 
     // --- ✨ NEW SMOOTH PROGRESS LOGIC ---
     const [progress, setProgress] = useState(0);
@@ -59,7 +59,7 @@ const SplashScreen = ({ onFinish }) => {
 
     // 🚀 INITIALIZATION ENGINE: Runs once on mount
     useEffect(() => {
-        console.log('🎨 SplashScreen v5.2 Engine Fixed');
+        console.log('🎨 SplashScreen v6.0 - Intelligent Pre-Flight');
 
         // Global Safety Timeout - If NOTHING happens in 15 seconds, just go in.
         const globalRescueTimer = setTimeout(() => {
@@ -73,10 +73,53 @@ const SplashScreen = ({ onFinish }) => {
         // Show skip button after 8 seconds
         const skipButtonTimer = setTimeout(() => setShowSkipButton(true), 8000);
 
+        const validateIntegrations = async () => {
+            // 🆕 INTELLIGENT PRE-FLIGHT CHECK
+            setStatusText('בודק קישוריות API...');
+            try {
+                // Determine Business ID (Helper for backend context)
+                let tempBizId = localStorage.getItem('business_id');
+                if (!tempBizId) {
+                    // Try to peek at user
+                    const { data: { user } } = await supabase.auth.getUser();
+                    tempBizId = user?.user_metadata?.business_id;
+                }
+
+                const url = tempBizId
+                    ? `${API_URL}/api/system/validate-integrations?businessId=${tempBizId}`
+                    : `${API_URL}/api/system/validate-integrations`;
+
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.success && data.checks) {
+                    setApiChecks(data.checks);
+
+                    // Identify Failures
+                    const failures = Object.entries(data.checks)
+                        .filter(([key, val]) => val.status === 'error')
+                        .map(([key, val]) => ({ service: key, ...val }));
+
+                    if (failures.length > 0) {
+                        console.warn('❌ Integration Failures Detected:', failures);
+                        localStorage.setItem('failed_integrations', JSON.stringify(failures));
+                    } else {
+                        localStorage.removeItem('failed_integrations');
+                    }
+                }
+            } catch (e) {
+                console.warn('⚠️ API Validation Packet Loss:', e);
+            }
+        };
+
         const initialize = async () => {
             try {
                 // Phase 1: Environment & Auth (0-30%)
                 setTargetProgress(15);
+
+                // Run checks in parallel (non-blocking visually)
+                validateIntegrations();
+
                 const { APP_VERSION } = await import('../version');
                 localStorage.setItem('app_version', APP_VERSION);
 
@@ -170,7 +213,7 @@ const SplashScreen = ({ onFinish }) => {
             }
         };
 
-        const minTimer = setTimeout(() => setMinTimePassed(true), 1500);
+        const minTimer = setTimeout(() => setMinTimePassed(true), 2500); // Increased slightly for user to see checks
         initialize();
 
         // 🚀 Polling containers during splash
@@ -237,15 +280,28 @@ const SplashScreen = ({ onFinish }) => {
                         </button>
                     )}
 
-                    {/* 🆕 Container Observability Widget */}
-                    {containerStatus.length > 0 && (
+                    {/* 🆕 Container Observability Widget combined with API Checks */}
+                    {(containerStatus.length > 0 || apiChecks) && (
                         <div className="mt-8 grid grid-cols-2 gap-2 w-full max-w-[400px]">
+                            {/* Docker Containers */}
                             {containerStatus.map(c => (
                                 <div key={c.name} className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded border border-white/10 overflow-hidden">
                                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.status.toLowerCase().includes('up') ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse'}`} />
                                     <span className="text-[9px] text-white/50 font-mono truncate">{c.name.replace('supabase_', '').replace('_scarlet-zodiac', '')}</span>
                                 </div>
                             ))}
+
+                            {/* API Checks */}
+                            {apiChecks && Object.entries(apiChecks).map(([key, check]) => {
+                                if (check.status === 'skipped') return null;
+                                return (
+                                    <div key={key} className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded border border-white/10 overflow-hidden">
+                                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${check.status === 'ok' ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-rose-500 animate-ping'
+                                            }`} />
+                                        <span className="text-[9px] text-white/50 font-mono uppercase truncate">{key} API</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>

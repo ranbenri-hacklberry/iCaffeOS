@@ -15,8 +15,12 @@ export const AuthProvider = ({ children }) => {
     const [deviceMode, setDeviceMode] = useState(null); // 'kiosk', 'kds', 'manager', 'music'
     const [isLoading, setIsLoading] = useState(true);
 
-    // 🚀 Session version tracking is now handled in SplashScreen to prevent double-splash reloads
+    // 🚀 רני ביקש: בכל העלאה מחדש להכריח כניסה עם פין
     useEffect(() => {
+        console.log('🔄 [Auth] Fresh Load - Clearing session to force PIN entry');
+        localStorage.removeItem('kiosk_user');
+        localStorage.removeItem('kiosk_auth_time');
+        localStorage.removeItem('kiosk_mode');
         localStorage.setItem('app_version', APP_VERSION);
     }, []);
 
@@ -92,27 +96,89 @@ export const AuthProvider = ({ children }) => {
                         });
 
                         if (data && data.success) {
-                            console.log('✅ [Auth] Device Authorized:', data.user.name);
-                            const deviceUser = {
-                                ...data.user,
+                            // Support both snake_case (business_id) and camelCase (businessId) from RPC
+                            const rawUser = data.user || data;
+                            const bizId = rawUser.business_id || rawUser.businessId || null;
+                            console.log('✅ [Auth] Device Authorized:', rawUser.name, '| business_id:', bizId);
+
+                            let deviceUser = {
+                                ...rawUser,
+                                business_id: bizId,
                                 machine_id: machineId,
                                 is_device: true
                             };
 
-                            setCurrentUser(deviceUser);
-                            // POLICY: No auto-mode. User must pick from Dashboard/Portal.
+                            // 🔑 ALWAYS resolve the real primary employee in device/kiosk mode.
+                            // The device RPC returns a hardware identity (machine name or business name),
+                            // NOT a personal identity. We must always find the real person.
+                            // ⛔ NO fallback to random employees — only elevated roles (super_admin, owner, admin, manager)
+                            if (bizId) {
+                                try {
+                                    console.log('🔍 [Auth] Resolving primary employee for business:', bizId);
+
+                                    // 1. Try super admins first
+                                    const { data: superAdmins, error: saErr } = await cloudSupabase
+                                        .from('employees')
+                                        .select('id, name, access_level, is_super_admin, is_admin, pin_code')
+                                        .eq('business_id', bizId)
+                                        .eq('is_super_admin', true)
+                                        .limit(1);
+                                    console.log('🔍 [Auth] Super admins found:', superAdmins?.length || 0, saErr?.message || '');
+
+                                    // 2. Try owners/admins/managers (elevated roles only)
+                                    // NOTE: DB may have mixed case (e.g. 'Manager' vs 'manager') — include both
+                                    const { data: elevated, error: owErr } = await cloudSupabase
+                                        .from('employees')
+                                        .select('id, name, access_level, is_super_admin, is_admin, pin_code')
+                                        .eq('business_id', bizId)
+                                        .in('access_level', ['owner', 'admin', 'manager', 'Owner', 'Admin', 'Manager'])
+                                        .order('created_at', { ascending: true });
+                                    console.log('🔍 [Auth] Elevated employees found:', elevated?.length || 0, owErr?.message || '');
+
+                                    const primaryEmployee = superAdmins?.[0] || elevated?.[0];
+                                    if (primaryEmployee?.name) {
+                                        console.log(`👤 [Auth] Resolved: ${primaryEmployee.name} | access_level: ${primaryEmployee.access_level}`);
+                                        deviceUser = {
+                                            ...deviceUser,
+                                            id: primaryEmployee.id,
+                                            name: primaryEmployee.name,
+                                            access_level: primaryEmployee.access_level,
+                                            is_super_admin: primaryEmployee.is_super_admin || false,
+                                            is_admin: primaryEmployee.is_admin || primaryEmployee.is_super_admin || false,
+                                            pin_code: primaryEmployee.pin_code || null,
+                                        };
+
+                                        setCurrentUser(deviceUser);
+                                        localStorage.setItem('kiosk_user', JSON.stringify(deviceUser));
+                                        localStorage.setItem('kiosk_auth_time', Date.now().toString());
+                                        console.log('✅ [Auth] Personal identity secured via Machine ID.');
+                                    } else {
+                                        console.warn('⚠️ [Auth] No elevated employee found. Forcing manual login.');
+                                        // Still set context so login screen knows which business we are
+                                        localStorage.setItem('business_id', bizId);
+                                        localStorage.setItem('businessId', bizId);
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ [Auth] Could not fetch primary employee:', e.message);
+                                }
+                            }
+
+                            // POLICY: No auto-mode.
                             setDeviceMode(null);
-                            localStorage.setItem('kiosk_user', JSON.stringify(deviceUser));
-                            localStorage.setItem('kiosk_auth_time', Date.now().toString());
                             localStorage.removeItem('kiosk_mode');
                             setIsLoading(false);
                             return;
                         } else {
-                            console.warn('⚠️ [Auth] Device Unregistered or Banned:', data?.reason);
-                            // If in Electron and hardware auth fails, we stop here to avoid generic user discovery
-                            // which was giving the user "generic identities".
-                            setIsLoading(false);
-                            return;
+                            const isBanned = data?.reason?.toLowerCase?.()?.includes('ban');
+                            if (isBanned) {
+                                console.warn('🚫 [Auth] Device is Banned:', data?.reason);
+                                setIsLoading(false);
+                                return;
+                            } else {
+                                // Device is simply not registered as a kiosk — fall through to web session/auto-discovery
+                                console.warn('⚠️ [Auth] Device not registered as kiosk — falling through to web session check:', data?.reason);
+                                // (do not return — continue to web fallback below)
+                            }
                         }
                     }
                 } catch (err) {
@@ -134,9 +200,19 @@ export const AuthProvider = ({ children }) => {
                     try {
                         let sessionUser = JSON.parse(storedSession);
 
-                        // ALWAYS fetch fresh business_name to prevent stale cache (e.g. "עגלת קפה" persisting)
+                        // 🛡️ GHOST SESSION PURGE: If this is a generic device session without a real human ID, clear it immediately.
+                        // Real employees have UUIDs, ghost devices start with 'device-'.
+                        if (sessionUser.is_device && (!sessionUser.id || sessionUser.id.startsWith('device-'))) {
+                            console.warn('⚠️ [Auth] Purging ghost device session. Official login required.');
+                            localStorage.removeItem('kiosk_user');
+                            localStorage.removeItem('kiosk_auth_time');
+                            localStorage.removeItem('kiosk_mode');
+                            setIsLoading(false);
+                            return;
+                        }
+
+                        // ALWAYS fetch fresh business_name to prevent stale cache
                         if (sessionUser.business_id && navigator.onLine) {
-                            // console.log('🏢 Validating business_name for:', sessionUser.business_id);
                             try {
                                 const { data: businessData } = await supabase
                                     .from('businesses')
@@ -145,9 +221,7 @@ export const AuthProvider = ({ children }) => {
                                     .single();
 
                                 if (businessData?.name && businessData.name !== sessionUser.business_name) {
-                                    console.log(`🏢 Updating stale business name: "${sessionUser.business_name}" -> "${businessData.name}"`);
                                     sessionUser = { ...sessionUser, business_name: businessData.name };
-                                    // Update localStorage with fresh data
                                     localStorage.setItem('kiosk_user', JSON.stringify(sessionUser));
                                 }
                             } catch (e) {
@@ -191,70 +265,31 @@ export const AuthProvider = ({ children }) => {
                 // If no session exists, try to discover who we are from the local backend
                 try {
                     console.log('🔍 [Auth] Attempting Zero-Config auto-discovery...');
-                    // Add timeout to prevent infinite loading if backend is down
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
                     const res = await fetch(`${API_URL}/api/admin/identity`, { signal: controller.signal });
                     clearTimeout(timeoutId);
+
                     if (res.ok) {
                         const { businesses, count } = await res.json();
                         if (count === 1) {
                             const biz = businesses[0];
-                            console.log(`🚀 [Auth] Auto-discovered unique business: ${biz.name}. Fetching identity...`);
+                            console.log(`🚀 [Auth] Auto-discovered unique business: ${biz.name}. Priming context...`);
 
-                            // 👤 PRE-FETCH: Find the primary owner to use as the session identity
-                            // First, try to find super admins (regardless of access_level)
-                            const { data: superAdmins } = await supabase
-                                .from('employees')
-                                .select('*')
-                                .eq('business_id', biz.id)
-                                .eq('is_super_admin', true)
-                                .limit(1);
-
-                            // Then get owners/admins as fallback
-                            const { data: owners } = await supabase
-                                .from('employees')
-                                .select('*')
-                                .eq('business_id', biz.id)
-                                .in('access_level', ['owner', 'admin']);
-
-                            // Prioritize: Super Admin first, then owner named "Netanel/Nati", then any owner
-                            const primaryEmployee = superAdmins?.[0] ||
-                                owners?.find(e => e.is_super_admin) ||
-                                owners?.find(e => e.name?.includes('נתנאל') || e.name?.includes('נתי')) ||
-                                owners?.[0];
-
-                            const deviceUser = {
-                                id: primaryEmployee?.id || `device-${biz.id.slice(0, 8)}`,
-                                name: primaryEmployee?.name || `מסוף ${biz.name}`,
-                                business_id: biz.id,
-                                business_name: biz.name,
-                                access_level: primaryEmployee?.access_level || 'staff',
-                                pin_code: primaryEmployee?.pin_code || null,
-                                is_super_admin: primaryEmployee?.is_super_admin || primaryEmployee?.isSuperAdmin || false,
-                                is_device: true
-                            };
-
-                            console.log(`👤 [Auth] Auto-login as: ${deviceUser.name}`);
-
-                            // Persist for legacy hooks and consistency
+                            // Persist business info for login page context, but DO NOT log in ghost user
                             localStorage.setItem('business_id', biz.id);
                             localStorage.setItem('businessId', biz.id);
                             localStorage.setItem('business_name', biz.name);
 
-                            setCurrentUser(deviceUser);
-                            localStorage.setItem('kiosk_user', JSON.stringify(deviceUser));
-                            localStorage.setItem('kiosk_auth_time', Date.now().toString());
-                            // POLICY: No auto-mode. User must pick from Dashboard/Portal.
-                            console.log(`👑 [Auth] Identity Secured. Waiting for Mode Selection.`);
-                            setDeviceMode(null);
-                            localStorage.removeItem('kiosk_mode');
+                            // IMPORTANT: We do NOT setCurrentUser here.
+                            // This ensures ProtectedRoute catches the missing user and sends to /login
+                            console.log(`🔒 [Auth] Business context set. Redirecting to official login.`);
                         } else if (count > 1) {
-                            console.log(`🏢 [Auth] Multiple businesses discovered (${count}). Waiting for manual selection.`);
+                            console.log(`🏢 [Auth] Multiple businesses discovered (${count}). Waiting for manual login.`);
                         }
                     }
                 } catch (discoveryErr) {
-                    console.warn('ℹ️ [Auth] Auto-discovery skipped (not on local server or API down):', discoveryErr.message);
+                    console.warn('ℹ [Auth] Auto-discovery skipped:', discoveryErr.message);
                 }
             }
 
