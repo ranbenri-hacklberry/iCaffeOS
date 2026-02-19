@@ -131,6 +131,15 @@ export interface ICaffeSDK {
     abrakadabra: AbrakadabraInterface;
 }
 
+export interface AbraIntent {
+    intent_type: 'UI_MODIFICATION' | 'LOGIC_FIX' | 'FEATURE_ADDITION';
+    primary_component_id: string;
+    hebrew_description: string;
+    english_summary: string;
+    affected_entities: string[];
+    risk_assessment: 'low' | 'medium' | 'high';
+}
+
 export type LogLevel = 'info' | 'warn' | 'error' | 'security';
 
 export interface PlatformLog {

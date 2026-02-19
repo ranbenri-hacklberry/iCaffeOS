@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import SystemDiagnostics from '@/components/manager/SystemDiagnostics';
 import SystemMap from '@/components/super-admin/SystemMap';
-import KDSObservability from '@/components/super-admin/KDSObservability';
+import BusinessNodeCard from '@/components/super-admin/BusinessNodeCard';
 
 const SuperAdminPortal = () => {
     const navigate = useNavigate();
@@ -154,84 +154,29 @@ const SuperAdminPortal = () => {
                 ))}
             </div>
 
-            {/* KDS Live Monitor Section */}
-            <div className="w-full max-w-6xl relative z-10 mb-10">
-                <KDSObservability />
-            </div>
-
-            {/* Businesses List Section */}
-            <div className="w-full max-w-6xl relative z-10">
+            {/* Businesses List Section - High Density Observability */}
+            <div className="w-full max-w-6xl relative z-10 mb-12">
                 <div className="flex items-center gap-3 mb-6">
-                    <Building2 className="text-slate-400" size={20} />
-                    <h2 className="text-xl font-bold text-slate-200">גישה מהירה לעסקים ({businesses.length})</h2>
+                    <Activity className="text-blue-400" size={20} />
+                    <h2 className="text-xl font-bold text-slate-200">צמתים פעילים וניהול עסקים ({businesses.length})</h2>
                     <div className="h-px bg-slate-800 flex-1 ml-4"></div>
                 </div>
 
                 {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {[1, 2, 3, 4, 5, 6].map(i => (
-                            <div key={i} className="h-32 bg-slate-900/50 rounded-2xl animate-pulse border border-slate-800/50"></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="h-48 bg-slate-900/50 rounded-2xl animate-pulse border border-slate-800/50"></div>
                         ))}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-12">
-                        {businesses.map((business, idx) => (
-                            <motion.button
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {businesses.map((business) => (
+                            <BusinessNodeCard
                                 key={business.id}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.2 + (idx * 0.05) }}
-                                onClick={() => handleBusinessClick(business)}
-                                className="group relative bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-blue-500/30 rounded-2xl p-5 text-right transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-900/10 flex flex-col justify-between h-full min-h-[140px]"
-                            >
-                                <div className="flex justify-between items-start w-full mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center font-bold text-lg text-slate-300 shadow-inner group-hover:text-white transition-colors">
-                                            {business.name.substring(0, 2)}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-lg text-slate-200 group-hover:text-white transition-colors line-clamp-1">
-                                                {business.name}
-                                            </h3>
-                                            <p className="text-[10px] text-slate-500 font-mono">
-                                                {business.id.substring(0, 8)}...
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {business.is_online && (
-                                        <span className="flex h-2 w-2 relative">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="mt-auto flex items-center justify-between w-full border-t border-slate-800/50 pt-3">
-                                    <span className="text-xs font-bold text-blue-500 group-hover:text-blue-400 flex items-center gap-1 transition-colors">
-                                        כניסה לממשק
-                                        <ChevronRight size={12} className="group-hover:translate-x-[-2px] transition-transform" />
-                                    </span>
-
-                                    <div className="flex items-center gap-2">
-                                        {business.active_orders_count > 0 && (
-                                            <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
-                                                {business.active_orders_count} פעילות
-                                            </span>
-                                        )}
-                                        <div
-                                            role="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDiagnosticsBusiness(business);
-                                            }}
-                                            className="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/20 transition-colors z-20 relative cursor-pointer"
-                                            title="דיאגנוסטיקה"
-                                        >
-                                            <Activity size={14} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </motion.button>
+                                business={business}
+                                onClick={handleBusinessClick}
+                                onDiagnostics={setDiagnosticsBusiness}
+                            />
                         ))}
                     </div>
                 )}

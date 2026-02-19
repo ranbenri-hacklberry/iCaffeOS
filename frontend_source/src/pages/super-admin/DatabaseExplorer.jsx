@@ -946,7 +946,10 @@ DIAGNOSTICS:
 
                 try {
                     const baseUrl = getBackendApiUrl();
-                    const res = await fetch(`${baseUrl}/api/admin/docker-dump/${t.remote}?${queryParams.toString()}`);
+                    // Build query params per table
+                    const qp = new URLSearchParams({ businessId });
+                    if (isHistorical && t.recentDays) qp.set('recentDays', String(t.recentDays));
+                    const res = await fetch(`${baseUrl}/api/admin/docker-dump/${t.remote}?${qp.toString()}`);
                     const json = await res.json();
 
                     if (json.success && json.data && Array.isArray(json.data)) {
@@ -1158,7 +1161,9 @@ DIAGNOSTICS:
                         const historicalTables = ['orders', 'order_items', 'loyalty_transactions'];
                         const isHistorical = historicalTables.includes(tableId);
                         const baseUrl = getBackendApiUrl();
-                        const dexieRes = await fetch(`${baseUrl}/api/admin/docker-dump/${tableId}?${queryParams.toString()}`);
+                        const qp2 = new URLSearchParams({ businessId });
+                        if (isHistorical) qp2.set('recentDays', '3');
+                        const dexieRes = await fetch(`${baseUrl}/api/admin/docker-dump/${tableId}?${qp2.toString()}`);
                         const dexieData = await dexieRes.json(); // Assuming this returns { success: boolean, data: array }
 
                         if (dexieData.success && dexieData.data && Array.isArray(dexieData.data)) {

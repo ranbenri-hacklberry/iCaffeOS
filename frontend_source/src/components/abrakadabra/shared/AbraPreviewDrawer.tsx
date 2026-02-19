@@ -61,12 +61,63 @@ const AbraPreviewDrawer: React.FC = () => {
                             <p className="text-gray-700 mb-6 text-sm">
                                 <b>Proposed:</b> {currentSpell.target_component.proposed_behavior}
                             </p>
+
+                            {/* Live Mutation Preview Section */}
+                            <div className="mt-8 mb-8 p-6 bg-slate-100 rounded-2xl border border-slate-200 shadow-inner">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Live Mutated Component Preview</p>
+                                <div className="scale-90 origin-top pointer-events-auto">
+                                    {/* Dynamic rendering based on spell_id */}
+                                    {currentSpell.spell_id === 'kds-hello-world' && (
+                                        <div className="flex justify-center flex-col items-center gap-4">
+                                            <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 w-64 relative overflow-hidden">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className="text-xl font-black">#42</span>
+                                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">NEW</span>
+                                                </div>
+                                                <div className="space-y-1 mb-4">
+                                                    <div className="text-sm font-bold">1x Cappuccino</div>
+                                                    <div className="text-sm font-bold">1x Croissant</div>
+                                                </div>
+
+                                                {/* ✨ THE HELLO WORLD BADGE ✨ */}
+                                                <motion.div
+                                                    initial={{ scale: 0 }}
+                                                    animate={{ scale: 1 }}
+                                                    className="absolute -right-8 -top-8 w-24 h-24 bg-green-500 rotate-45 flex items-end justify-center pb-2 shadow-lg"
+                                                >
+                                                    <span className="text-[8px] text-white font-black uppercase tracking-tighter">Hello World</span>
+                                                </motion.div>
+                                            </div>
+                                            <p className="text-[10px] text-green-600 font-bold animate-pulse">✨ Logic Mutated Successfully</p>
+                                        </div>
+                                    )}
+                                    {currentSpell.spell_id === 'pos-loyalty-charity' && (
+
+                                        <div className="text-left font-sans">
+                                            <div className="bg-white p-4 rounded-xl shadow border border-indigo-100">
+                                                <div className="flex justify-between mb-2">
+                                                    <span className="font-bold">Total</span>
+                                                    <span className="font-black">₪42.50</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs text-pink-600 font-bold bg-pink-50 p-2 rounded-lg">
+                                                    <div className="w-3 h-3 bg-pink-500 rounded-full animate-pulse" />
+                                                    Round up for Charity? (+₪0.50)
+                                                </div>
+                                                <div className="mt-2 text-[10px] text-indigo-600 font-black">
+                                                    ✨ Loyalty Points: 1,240 $BEAN
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="bg-purple-50 p-4 rounded-lg text-left text-sm text-purple-800 border border-purple-100 font-mono">
                                 <b>Incantation:</b> {currentSpell.incantation}<br />
                                 <b>Effect:</b> {currentSpell.effect}
                             </div>
-
                         </div>
+
                     </div>
 
                     {/* Footer */}
