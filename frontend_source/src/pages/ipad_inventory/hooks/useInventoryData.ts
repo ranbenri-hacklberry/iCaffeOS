@@ -23,12 +23,19 @@ export const useInventoryData = (businessId?: string) => {
             setSuppliers(suppliersData || []);
 
             // 2. Fetch Inventory Items
-            const { data: itemsData, error: itemError } = await supabase
+            const { data: itemsRaw, error: itemError } = await supabase
                 .from('inventory_items')
                 .select('*')
                 .eq('business_id', businessId)
                 .order('name');
             if (itemError) throw itemError;
+
+            // Map DB columns to Frontend Interface if needed
+            // (Handle schema drift: low_stock_threshold_units vs low_stock_alert)
+            const itemsData = (itemsRaw || []).map((i: any) => ({
+                ...i,
+                low_stock_threshold_units: i.low_stock_threshold_units ?? i.low_stock_alert ?? 0
+            }));
 
             // 3. Fetch Menu Items that need inventory tracking
             const { data: menuItemsData, error: menuError } = await supabase

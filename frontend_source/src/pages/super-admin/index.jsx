@@ -424,7 +424,7 @@ const SuperAdminDashboard = () => {
         try {
             console.log('🚀 Impersonating business as Super Admin:', business.name);
             switchBusinessContext(business.id, business.name);
-            navigate('/data-manager-interface');
+            // navigate('/data-manager-interface'); // Removed: handled by switchBusinessContext refresh
         } catch (err) {
             console.error('Impersonation error:', err);
             alert('שגיאה בהתחברות לעסק: ' + err.message);

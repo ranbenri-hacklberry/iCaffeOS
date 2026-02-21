@@ -16,9 +16,16 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // Bypass service worker for Supabase/PostgREST API requests
+    // Bypass service worker for Supabase and all local backend/API requests
     // These should always go directly to the network and never be cached
-    if (url.hostname.includes('supabase.co')) {
+    if (
+        url.hostname.includes('supabase.co') ||
+        url.hostname === 'localhost' ||
+        url.hostname === '127.0.0.1' ||
+        url.hostname.startsWith('192.168.') ||
+        url.hostname.startsWith('10.') ||
+        url.hostname.startsWith('100.')
+    ) {
         return; // Let the browser handle it normally
     }
 

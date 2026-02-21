@@ -3,35 +3,33 @@
     "incantation": "Blue Dessert Pulse",
     "effect": "Dessert items in 'new' status pulse blue after 5 minutes to ensure freshness delivery.",
     "caster": {
-        "employee_id": "current-user-id",
+        "employee_id": "wizard-01",
         "role": "manager",
         "business_id": "22222222-2222-2222-2222-222222222222"
     },
     "correlation_id": "abra-555-glow",
-    "timestamp": "2026-02-17T16:25:00Z",
+    "timestamp": "2026-02-17T16:37:00Z",
     "target_component": {
         "component_id": "pages-kds-components-ordercard",
         "file_path": "pages/kds/components/OrderCard.jsx",
-        "current_behavior": "Order cards show standard aging (warm/critical) for the whole card.",
-        "proposed_behavior": "Individual items in the order card will pulse with a 'Blue Glow' (Framer Motion) if: 1. They are in 'Dessert' category. 2. Item status is 'new'. 3. Time since order creation > 5 mins."
+        "current_behavior": "Order cards show standard aging (warm/critical) for the whole card. No item-level urgency indicators for desserts.",
+        "proposed_behavior": "Individual items in the order card will pulse with a 'Blue Glow' (Framer Motion) if: 1. Category is 'Dessert'. 2. Status is 'new'. 3. Age > 5 mins."
     },
     "impact_analysis": {
         "affected_screens": [
             {
-                "file_path": "pages/kds/index.jsx",
+                "file_path": "src/pages/kds/index.jsx",
                 "impact_type": "UI_RENDER",
-                "description": "Visual pulse in the KDS grid."
+                "description": "Visual pulse in the KDS grid affecting item rows."
             }
         ],
         "affected_supabase_tables": [
             "orders",
-            "order_items",
-            "menu_items"
+            "order_items"
         ],
         "affected_dexie_tables": [
             "orders",
-            "order_items",
-            "menu_items"
+            "order_items"
         ],
         "affected_rpcs": [],
         "risk_level": "medium"
@@ -56,7 +54,9 @@
         "modified": [
             "src/pages/kds/components/OrderCard.jsx"
         ],
-        "created": []
+        "created": [
+            "src/components/abrakadabra/spells/dessert-glow/OrderCard_SpellBound.tsx"
+        ]
     },
     "ui_changes": {
         "modifies_layout": false,

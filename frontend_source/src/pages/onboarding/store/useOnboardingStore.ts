@@ -90,7 +90,12 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         set({ geminiApiKey: key });
         const { businessId } = get();
         if (businessId) {
-            await supabase.from('businesses').update({ gemini_api_key: key }).eq('id', businessId);
+            // 🔒 REFACTORED: Save to business_secrets via RPC
+            await supabase.rpc('upsert_business_secret', {
+                p_business_id: businessId,
+                p_field: 'gemini_api_key',
+                p_value: key
+            });
         }
     },
 
@@ -110,18 +115,20 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         try {
             get().exposeDebug();
 
-            // 🏎️ PARALLEL CORE FETCH: Get business info and items in one go
-            const [businessRes, menuItemsRes] = await Promise.all([
-                supabase.from('businesses').select('name, gemini_api_key, settings').eq('id', businessId).single(),
+            // 🏎️ PARALLEL CORE FETCH: Get business info, menu items, and secrets in one go
+            const [businessRes, menuItemsRes, secretsRes] = await Promise.all([
+                supabase.from('businesses').select('name, settings').eq('id', businessId).single(),
                 supabase.from('menu_items').select('*')
                     .eq('business_id', businessId)
                     .or('is_deleted.is.null,is_deleted.eq.false')
-                    .order('name')
+                    .order('name'),
+                // 🔒 REFACTORED: Fetch API key from business_secrets
+                supabase.from('business_secrets').select('gemini_api_key').eq('business_id', businessId).single()
             ]);
 
             if (businessRes.data) {
                 const bData = businessRes.data;
-                const apiKey = bData.gemini_api_key || (bData.settings as any)?.gemini_api_key;
+                const apiKey = secretsRes.data?.gemini_api_key || (bData.settings as any)?.gemini_api_key;
                 set({ businessName: bData.name, geminiApiKey: apiKey });
             }
 

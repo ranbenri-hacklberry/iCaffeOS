@@ -382,23 +382,15 @@ export const useAlbums = () => {
         }
     }, [currentUser, scanLibrary]);
 
-    // Fetch all songs
+    // Fetch all songs — uses backend API (service key) to bypass RLS on local Supabase
     const fetchAllSongs = useCallback(async () => {
         try {
             setIsLoading(true);
-
-            const { data, error } = await supabase
-                .from('music_songs')
-                .select(`
-          *,
-          album:music_albums(id, name, cover_url),
-          artist:music_artists(id, name)
-        `)
-                .order('title');
-
-            if (error) throw error;
-            setSongs(data || []);
-            return data || [];
+            const res = await fetch(`${MUSIC_API_URL}/music/library/songs`);
+            const json = await res.json();
+            if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch songs');
+            setSongs(json.songs || []);
+            return json.songs || [];
         } catch (err) {
             console.error('Error fetching songs:', err);
             setError(err.message);
@@ -499,24 +491,14 @@ export const useAlbums = () => {
         }
     }, [fetchArtists, fetchAlbums, fetchPlaylists]);
 
-    // Get songs by artist
+    // Get songs by artist — uses backend API (service key) to bypass RLS on local Supabase
     const fetchArtistSongs = useCallback(async (artistId) => {
         try {
             setIsLoading(true);
-
-            const { data, error } = await supabase
-                .from('music_songs')
-                .select(`
-          *,
-          album:music_albums(id, name, cover_url),
-          artist:music_artists(id, name)
-        `)
-                .eq('artist_id', artistId)
-                .order('album_id', { ascending: true })
-                .order('track_number', { ascending: true });
-
-            if (error) throw error;
-            return data || [];
+            const res = await fetch(`${MUSIC_API_URL}/music/library/artists/${artistId}/songs`);
+            const json = await res.json();
+            if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch artist songs');
+            return json.songs || [];
         } catch (err) {
             console.error('Error fetching artist songs:', err);
             setError(err.message);

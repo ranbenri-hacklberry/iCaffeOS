@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Play, Music, Trash2, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getBackendApiUrl } from '@/utils/apiUtils';
@@ -29,6 +29,8 @@ const AlbumCard = ({
     isSelected = false,
     showPlayCount = false
 }) => {
+    const [coverError, setCoverError] = useState(false);
+
     const handlePlay = (e) => {
         e.stopPropagation();
         onPlay?.(album);
@@ -58,6 +60,8 @@ const AlbumCard = ({
     };
 
     const coverUrl = getCoverUrl(album.cover_url, album.id);
+    // Show cover only if URL exists AND the image hasn't errored out
+    const showCover = coverUrl && !coverError;
 
     return (
         <motion.div
@@ -69,7 +73,7 @@ const AlbumCard = ({
         >
             {/* Album Cover Container – always square */}
             <div className="aspect-square relative overflow-hidden bg-zinc-900 shadow-inner">
-                {coverUrl ? (
+                {showCover ? (
                     <div className="w-full h-full relative">
                         <img
                             src={coverUrl}
@@ -77,7 +81,7 @@ const AlbumCard = ({
                             className={`w-full h-full object-cover transition-transform duration-700 brightness-90
                                 ${!selectionMode ? 'group-hover:scale-110 group-hover:brightness-100' : ''}`}
                             loading="lazy"
-                            onError={(e) => { e.target.style.display = 'none'; }}
+                            onError={() => setCoverError(true)}
                         />
 
                         {/* 💿 Vintage Effects Overlay */}

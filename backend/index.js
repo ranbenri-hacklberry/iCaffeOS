@@ -13,6 +13,7 @@ import marketingRoutes from './api/marketingRoutes.js';
 import klingRoutes from './api/klingRoutes.js';
 import adminRoutes from './api/adminRoutes.js';
 import systemRoutes from './api/systemRoutes.js';
+import smsRoutes from './api/smsRoutes.js';
 import { CacheService } from './services/cacheService.js';
 
 const app = express();
@@ -45,6 +46,7 @@ app.use('/api/marketing', marketingRoutes);
 app.use('/api/kling', klingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/sms', smsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

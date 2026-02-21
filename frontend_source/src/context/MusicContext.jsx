@@ -267,7 +267,11 @@ export const MusicProvider = ({ children }) => {
             // Check if file is reachable (optional head check or just rely on error handler)
             // For now, relies on error handler.
 
-            if (useCrossfade && isPlaying) {
+            // Perform Crossfade if requested AND current player is actually playing (check DOM directly)
+            const isActuallyPlaying = !currentPlayer.paused;
+            console.log(`🎵 playSong: Crossfade=${useCrossfade}, IsPlaying=${isActuallyPlaying} (State: ${isPlaying})`);
+
+            if (useCrossfade && isActuallyPlaying) {
                 console.log(`🎚️ Crossfading... Player ${currentActiveIdx} -> ${nextActiveIdx}`);
 
                 // Clear any existing fade

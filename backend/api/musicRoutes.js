@@ -558,6 +558,62 @@ router.get("/youtube/search", async (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────
+// CACHE MANAGEMENT
+// ──────────────────────────────────────────────────────────────
+
+// GET /cache/:songId - Check if a song is cached
+router.get('/cache/:songId', async (req, res) => {
+    try {
+        const { songId } = req.params;
+        const isCached = await CacheService.isCached(songId);
+        const usage = await CacheService.getCacheUsage();
+        res.json({ success: true, isCached, usage });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /cache - Cache a song file locally
+router.post('/cache', async (req, res) => {
+    try {
+        const { songId, filePath } = req.body;
+        if (!songId || !filePath) {
+            return res.status(400).json({ success: false, error: 'Missing songId or filePath' });
+        }
+
+        // Resolve real path (handle external mount aliases like Ran1 vs RANTUNES)
+        let resolvedPath = filePath;
+        if (!fs.existsSync(resolvedPath)) {
+            const activeRoot = PathManager.getExternalRoot();
+            for (const candidate of PathManager.EXTERNAL_CANDIDATES) {
+                if (resolvedPath.startsWith(candidate)) {
+                    const relative = resolvedPath.slice(candidate.length);
+                    const withActive = path.join(activeRoot, relative);
+                    if (fs.existsSync(withActive)) { resolvedPath = withActive; break; }
+                }
+            }
+        }
+
+        const result = await CacheService.cacheSong(songId, resolvedPath);
+        res.json(result);
+    } catch (err) {
+        console.error('❌ Cache POST error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// DELETE /cache/:songId - Remove a song from cache
+router.delete('/cache/:songId', async (req, res) => {
+    try {
+        const { songId } = req.params;
+        const result = await CacheService.removeFromCache(songId);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ──────────────────────────────────────────────────────────────
 // STREAMING & ASSETS
 // ──────────────────────────────────────────────────────────────
 
@@ -566,13 +622,17 @@ router.get("/cover", async (req, res) => {
         let filePath = decodeURIComponent(req.query.path || '');
         const id = req.query.id;
 
-        // 🚀 Local Fallback
+        // 🚀 Local Fallback — tries all known external mount names
         if (filePath && !fs.existsSync(filePath)) {
-            const primaryRoot = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
-            if (filePath.startsWith(primaryRoot)) {
-                const relativePath = filePath.slice(primaryRoot.length);
-                const homeMusicFallback = path.join(os.homedir(), 'Music', 'iCaffe', relativePath);
-                if (fs.existsSync(homeMusicFallback)) filePath = homeMusicFallback;
+            const activeRoot = PathManager.getExternalRoot();
+            for (const candidate of PathManager.EXTERNAL_CANDIDATES) {
+                if (filePath.startsWith(candidate)) {
+                    const relative = filePath.slice(candidate.length);
+                    const withActive = path.join(activeRoot, relative);
+                    if (fs.existsSync(withActive)) { filePath = withActive; break; }
+                    const stagingFallback = path.join(os.homedir(), 'Music', 'iCaffe', relative);
+                    if (fs.existsSync(stagingFallback)) { filePath = stagingFallback; break; }
+                }
             }
         }
 
@@ -630,13 +690,43 @@ router.get('/stream', verifyAlbumToken, async (req, res) => {
 
     let finalPath = requestedPath || song?.file_path;
 
-    // 🚀 Robust Path Fallback (Local)
+    // 🎯 Check internal cache first — serve from local buffer if available
+    if (id) {
+        try {
+            const isCached = await CacheService.isCached(id);
+            if (isCached) {
+                const cachePath = CacheService.getCachePath(id);
+                if (fs.existsSync(cachePath)) {
+                    finalPath = cachePath;
+                    console.log(`📦 [Stream] Serving from cache: ${path.basename(cachePath)}`);
+                }
+            }
+        } catch (cacheErr) {
+            console.warn('⚠️ [Stream] Cache check failed, falling through to original path:', cacheErr.message);
+        }
+    }
+
+    // 🚀 Robust Path Fallback (Local) — tries all known external mount names
     if (finalPath && !fs.existsSync(finalPath)) {
-        const primaryRoot = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
-        if (finalPath.startsWith(primaryRoot)) {
-            const relativePath = finalPath.slice(primaryRoot.length);
-            const homeMusicFallback = path.join(os.homedir(), 'Music', 'iCaffe', relativePath);
-            if (fs.existsSync(homeMusicFallback)) finalPath = homeMusicFallback;
+        const activeRoot = PathManager.getExternalRoot();
+        let resolved = false;
+        // 1. Try swapping any known external mount prefix with the active one
+        for (const candidate of PathManager.EXTERNAL_CANDIDATES) {
+            if (finalPath.startsWith(candidate)) {
+                const relative = finalPath.slice(candidate.length);
+                const withActive = path.join(activeRoot, relative);
+                if (fs.existsSync(withActive)) { finalPath = withActive; resolved = true; break; }
+            }
+        }
+        // 2. Fallback to staging copy (~/Music/iCaffe)
+        if (!resolved) {
+            for (const candidate of PathManager.EXTERNAL_CANDIDATES) {
+                if (finalPath.startsWith(candidate)) {
+                    const relative = finalPath.slice(candidate.length);
+                    const stagingFallback = path.join(os.homedir(), 'Music', 'iCaffe', relative);
+                    if (fs.existsSync(stagingFallback)) { finalPath = stagingFallback; break; }
+                }
+            }
         }
     }
 

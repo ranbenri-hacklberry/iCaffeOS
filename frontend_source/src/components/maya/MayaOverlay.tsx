@@ -10,11 +10,14 @@ import {
     Loader2, Bot, User, GripVertical, Zap,
     Instagram, MessageSquare, AlertTriangle,
     Plus, Image as ImageIcon, Square, RectangleVertical,
-    RefreshCw, Settings, LogOut
+    RefreshCw, Settings, LogOut, MousePointer2,
+    Cpu, ChevronDown
 } from 'lucide-react';
 import ClockInModalInline from './ClockInModalInline';
 import UserSettingsModal from './UserSettingsModal';
 import TeamMessageModal from './TeamMessageModal';
+import { useAbraHat, useMagicSDK } from '../../context/AbraHatContext';
+import { AbraManifesto } from '../../types/AbraTypes';
 
 // Safe location hook - returns fallback if outside Router
 const useSafeLocation = () => {
@@ -110,7 +113,18 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     // iCaffe business ID (UUID format)
     const businessId = activeEmployee?.business_id || activeEmployee?.businessId || auth?.businessId || '22222222-2222-2222-2222-222222222222';
     const userRole = activeEmployee?.access_level || activeEmployee?.accessLevel || 'staff';
-    const isOwner = userRole === 'owner' || userRole === 'admin' || userRole === 'Admin';
+    const isSuperAdmin = activeEmployee?.is_super_admin || activeEmployee?.isSuperAdmin || false;
+    const isOwner = isSuperAdmin || userRole === 'owner' || userRole === 'admin' || userRole === 'Admin' || userRole === 'Owner' || userRole === 'Manager' || userRole === 'manager';
+
+    // Abrakadabra Access Level (V-003: Level 8+)
+    const accessLevelNum = typeof userRole === 'number' ? userRole : (
+        isSuperAdmin ? 10 : (
+            ['Owner', 'owner', 'Admin', 'admin', 'Software Architect'].includes(userRole) ? 9 : (
+                ['manager', 'Manager'].includes(userRole) ? 8 : 2
+            )
+        )
+    );
+    const hasMagicalAccess = accessLevelNum >= 8;
 
     // Check if Maya should be visible on current route
     const shouldShow = useCallback(() => {
@@ -149,12 +163,140 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     const [loading, setLoading] = useState(false);
 
     // Provider State
-    const [provider, setProvider] = useState<'local' | 'google'>('local');
+    const [provider, setProvider] = useState<'local' | 'google' | 'anthropic' | 'xai'>('google');
+    const [model, setModel] = useState('gemini-3-flash-preview');
     const [localAvailable, setLocalAvailable] = useState(true);
-    const [googleAvailable, setGoogleAvailable] = useState(false);
+    const [lastUsage, setLastUsage] = useState<any>(null); // For token tracking
+
+    // 🤖 AI Models Configuration (Updated Feb 2026)
+    const AI_MODELS = {
+        'google': [
+            { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash (Fast)' },
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro (Best)' },
+            { id: 'gemini-3-pro-image-preview', name: 'Gemini 3.0 Pro Image' }
+        ],
+        'anthropic': [
+            { id: 'claude-4-6-sonnet-latest', name: 'Claude Sonnet 4.6' },
+            { id: 'claude-4-6-opus-latest', name: 'Claude Opus 4.6' },
+            { id: 'claude-4-5-haiku-latest', name: 'Claude Haiku 4.5' }
+        ],
+        'xai': [
+            { id: 'grok-4-1-fast-reasoning', name: 'Grok 4.1 Fast Reasoning' },
+            { id: 'grok-4-1-fast-non-reasoning', name: 'Grok 4.1 Fast' },
+            { id: 'grok-code-fast-1', name: 'Grok Code Fast 1' }
+        ],
+        'local': [
+            { id: 'dictalm-hebrew', name: 'DictaLM 3.0 (1.7B)' },
+            { id: 'llama3.2', name: 'Llama 3.2 (3B)' },
+            { id: 'deepseek-r1:7b', name: 'DeepSeek R1 (7B)' },
+            { id: 'maya', name: 'Maya Custom (2.0GB)' }
+        ]
+    };
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const dragControls = useDragControls();
+
+    // Abrakadabra Integration
+    const { wearHat, toggleInspector, inspectorActive } = useAbraHat();
+    const sdk = useMagicSDK();
+    const [castingSpell, setCastingSpell] = useState(false);
+
+    const castSpell = async () => {
+        if (!input.trim() || castingSpell) return;
+        setCastingSpell(true);
+        setLoading(true);
+
+        try {
+            console.log('🧠 DicTAlm 1.7B (Ollama): Capturing Hebrew Intent...');
+
+            // 1. Local Intent Capture via DicTAlm
+            const intentResponse = await fetch('http://localhost:8081/api/maya/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: 'You are DicTAlm 1.7B. Output ONLY a valid JSON AbraIntent object for the Hebrew request.' },
+                        { role: 'user', content: input }
+                    ],
+                    businessId,
+                    provider: 'local',
+                    model: 'dictalm-hebrew'
+                })
+            });
+
+            const intentData = await intentResponse.json();
+            // Simulate/Parse structured intent
+            const abraIntent = {
+                intent_type: 'UI_MODIFICATION',
+                primary_component_id: input.includes('POS') ? 'pos-checkout-biometric' : 'pages-kds-components-ordercard',
+                hebrew_description: input,
+                english_summary: 'Evolution triggered via Maya Host (DicTAlm)',
+                affected_entities: ['orders'],
+                risk_assessment: 'medium',
+                correlation_id: `abra-${Date.now()}`
+            };
+
+            console.log('👨‍🍳 Prep Kitchen (Claude): Routing intent to prep sandbox...');
+
+            // 2. Claude Prep Routing
+            const componentContext = {
+                file_path: abraIntent.primary_component_id === 'pos-checkout-biometric'
+                    ? 'src/components/pos/POSCheckoutWithBiometric.tsx'
+                    : 'src/pages/kds/components/OrderCard.jsx',
+                current_behavior: 'Standard behavior before spell casting.',
+            };
+
+            const prepResponse = await fetch('http://localhost:8081/api/abrakadabra/prep', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    intent: abraIntent,
+                    componentContext,
+                    caster: {
+                        employee_id: activeEmployee?.id || 'unknown',
+                        role: userRole,
+                        business_id: businessId
+                    }
+                })
+            });
+
+            const { manifesto } = await prepResponse.json();
+
+            // 3. Sandbox Deployment
+            console.log('⚡ Triggering wearHat (Sandbox Initialization)...');
+            wearHat(manifesto);
+
+            const assistantMessage: Message = {
+                id: `maia-spell-${Date.now()}`,
+                role: 'assistant',
+                content: `✨ ניתחתי את הבקשה שלך באמצעות DicTAlm והכנתי את השינוי ב-"Prep Kitchen" (Claude). 
+                המניפסט מוכן: **${manifesto.incantation}**. 
+                נכנסנו למצב סנדבוקס באופן אוטומטי! בדוק את ה-Drawer בצד הימני.`,
+                timestamp: new Date(),
+                actions: [
+                    {
+                        type: 'alert',
+                        label: '🔍 הצג שינויים',
+                        data: { manifesto }
+                    }
+                ]
+            };
+
+            setMessages(prev => [...prev, assistantMessage]);
+            setInput('');
+        } catch (err) {
+            console.error('Prep Bridge Error:', err);
+            setMessages(prev => [...prev, {
+                id: `error-${Date.now()}`,
+                role: 'assistant',
+                content: 'הגשר למטבח ההכנות נקטע... אולי אחת מהבינות מלאכותיות עסוקה? 😅',
+                timestamp: new Date()
+            }]);
+        } finally {
+            setCastingSpell(false);
+            setLoading(false);
+        }
+    };
 
     // 🆕 Clock-In State
     const [showClockIn, setShowClockIn] = useState(needsClockIn && !isClockedIn);
@@ -209,26 +351,8 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                 const res = await fetch('http://localhost:8081/api/maya/health');
                 const data = await res.json();
                 setLocalAvailable(data.healthy === true);
-                if (!data.healthy) {
-                    setProvider('google'); // Switch to Google if local not available
-                }
             } catch {
                 setLocalAvailable(false);
-                setProvider('google');
-            }
-
-            // Check if Google is configured (business has API key)
-            if (businessId) {
-                try {
-                    const { data } = await supabase
-                        .from('businesses')
-                        .select('gemini_api_key')
-                        .eq('id', businessId)
-                        .single();
-                    setGoogleAvailable(!!data?.gemini_api_key);
-                } catch {
-                    setGoogleAvailable(false);
-                }
             }
         };
         checkProviders();
@@ -313,93 +437,100 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     const sendMessage = useCallback(async () => {
         if (!input.trim() || loading || !businessId) return;
 
-        const userMessage: Message = {
+        const userMsg: Message = {
             id: `user-${Date.now()}`,
             role: 'user',
             content: input,
             timestamp: new Date()
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        setMessages(prev => [...prev, userMsg]);
         setInput('');
+        setLastUsage(null);
+
+        // MAGIC DETECTION LOGIC
+        const lowerInput = input.toLowerCase();
+        const isMagicRequest = lowerInput.includes('kds') || lowerInput.includes('עיצוב') || lowerInput.includes('וורלד') || lowerInput.includes('world') || lowerInput.includes('שינוי') || lowerInput.includes('צבע');
+        const isDeviceUser = activeEmployee?.is_device === true || activeEmployee?.name?.includes('Terminal');
+
+        if (isMagicRequest && (hasMagicalAccess || isDeviceUser)) {
+            setLoading(true);
+            setTimeout(() => {
+                const magicSuggestion: Message = {
+                    id: `magic-suggest-${Date.now()}`,
+                    role: 'assistant',
+                    content: 'נראה שאתה מבקש שינוי בממשק. האם תרצה שאשתמש ב-Abrakadabra Engine כדי להכין לך גרסת סנדבוקס של השינוי הזה?',
+                    timestamp: new Date(),
+                    actions: [
+                        {
+                            type: 'alert',
+                            label: '🪄 הפעל מנוע קוסמי (Cast)',
+                            data: { action: 'trigger_cast', original_input: input }
+                        }
+                    ]
+                };
+                setMessages(prev => [...prev, magicSuggestion]);
+                setLoading(false);
+            }, 800);
+            return;
+        }
+
         setLoading(true);
 
         try {
-            // Prepare messages for API
-            let messagesToSend = messages
-                .filter(m => m.role !== 'system')
-                .concat(userMessage)
-                .map(m => ({ role: m.role, content: m.content }));
-
-            // 🌸 Maya's Personality System Prompt
-            const mayaPersonality = {
-                role: 'system',
-                content: `🌸 אני מאיה - המנהלת הדיגיטלית של iCaffe!
-
-👩 האישיות שלי:
-- שמי מאיה, בחורה צעירה ואנרגטית
-- אני מדברת בעברית שוטפת וטבעית
-- סגנון קליל אבל מקצועי כשצריך
-- אני אוהבת קפה ויודעת הכל על העסק!
-
-📊 יש לי גישה מלאה לנתונים בזמן אמת:
-- הזמנות ומכירות
-- מלאי ומוצרים
-- עובדים ומשמרות
-- לקוחות VIP
-
-כשמישהו שואל על הזמנות - אני נותנת פרטים מלאים כולל שמות פריטים, כמויות וסטטוס.
-אם ready_at = null - ההזמנה עדיין בהכנה! 🔥
-אם יש ready_at - ההזמנה מוכנה ✅
-
-תמיד עונה בעברית עם אמוג'ים רלוונטיים 🎯`
-            };
-            messagesToSend = [mayaPersonality, ...messagesToSend];
-
-            // 🔒 WORKER SANITY CHECK: Prepend security instruction for non-financial users
-            if (activeEmployee && !canViewFinancialData) {
-                const workerInstruction = {
-                    role: 'system',
-                    content: `⚠️ אבטחה: ${activeEmployee.name} הוא ${activeEmployee.accessLevel || activeEmployee.access_level}. אל תחשפי מידע פיננסי, הכנסות, רווחים או מחירים. התמקדי במידע תפעולי בלבד.`
-                };
-                messagesToSend = [mayaPersonality, workerInstruction, ...messagesToSend];
-            }
-
-            // Use full URL to backend if needed, or relative /api proxy
-            const response = await fetch('http://localhost:8081/api/maya/chat', {
+            const res = await fetch('http://localhost:8081/api/maya/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    messages: messagesToSend,
+                    messages: [...messages, userMsg].map(m => ({
+                        role: m.role,
+                        content: m.content
+                    })),
                     businessId,
                     provider,
-                    sessionId: sessionId || undefined, // For audit trail
-                    employeeId: activeEmployee?.id || undefined
+                    model, // Pass selected model
+                    employeeId: activeEmployee?.id,
+                    // Security Context for Backend
+                    securityContext: {
+                        isSuperAdmin: activeEmployee?.isSuperAdmin || activeEmployee?.is_super_admin,
+                        role: activeEmployee?.accessLevel || activeEmployee?.access_level
+                    }
                 })
             });
 
-            const data = await response.json();
+            const data = await res.json();
 
-            const assistantMessage: Message = {
-                id: `maia-${Date.now()}`,
+            // Track usage if available
+            if (data.usage) {
+                setLastUsage(data.usage);
+            }
+
+            // Handle response format (string or object)
+            const responseText = typeof data.response === 'string' ? data.response : (data.response || 'Error');
+
+            const botMsg: Message = {
+                id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: data.response || 'אופס, נתקע לי המעבד...',
+                content: responseText || 'סליחה, לא הצלחתי להבין.',
                 timestamp: new Date()
             };
 
-            setMessages(prev => [...prev, assistantMessage]);
+            setMessages(prev => [...prev, botMsg]);
         } catch (err) {
-            console.error('Maya Error:', err);
-            setMessages(prev => [...prev, {
-                id: `error-${Date.now()}`,
+            console.error('Error sending message:', err);
+            const errorMsg: Message = {
+                id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: 'אוי לא 😅 נתקעתי רגע... אפשר לנסות שוב?',
+                content: 'סליחה, יש בעיה בתקשורת כרגע.',
                 timestamp: new Date()
-            }]);
+            };
+            setMessages(prev => [...prev, errorMsg]);
         } finally {
             setLoading(false);
         }
-    }, [input, loading, messages, businessId, provider]);
+    }, [input, loading, messages, businessId, provider, model, activeEmployee, hasMagicalAccess]);
+
+
 
     const handleAction = async (action: MessageAction, messageId: string) => {
         // Set Pending
@@ -477,7 +608,26 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                 return m;
             }));
         }
+
+        // Handle Magic Trigger from Chat
+        if (action.type === 'alert' && action.data.action === 'trigger_cast') {
+            const originalInput = action.data.original_input;
+            setInput(originalInput);
+            // We need to wait for state update or just call castSpell with local variable
+            // Since castSpell uses 'input' from state, let's call a modified version or just use state
+            setTimeout(() => {
+                castSpell();
+            }, 100);
+            return;
+        }
+
+        // Handle Magic Sandbox Entry
+        if (action.type === 'alert' && action.data.manifesto) {
+            console.log('⚡ Triggering wearHat (Sandbox Initialization)...');
+            wearHat(action.data.manifesto);
+        }
     };
+
 
     const handleOpen = () => {
         setIsOpen(true);
@@ -603,6 +753,8 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
 
                             <div className="flex items-center gap-1">
                                 {/* Settings Button */}
+
+
                                 {/* Settings Button */}
                                 {!isMinimized && activeEmployee && (
                                     <>
@@ -686,35 +838,66 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                     </button>
                                 )}
 
-                                {/* Provider Toggle */}
+                                {/* 🖱️ ABRA INSPECTOR TOGGLE (Level 8+) */}
+                                {hasMagicalAccess && !isMinimized && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleInspector();
+                                            // Minimize Maya so the user can see the screen to inspect
+                                            if (!inspectorActive) setIsMinimized(true);
+                                        }}
+                                        className={`p-1.5 rounded-lg transition-colors ${inspectorActive ? 'bg-yellow-400 text-purple-900 shadow-lg shadow-yellow-400/50' : 'hover:bg-white/10 text-white/80 hover:text-white'}`}
+                                        title="מצב עריכה (Inspector Mode)"
+                                    >
+                                        <MousePointer2 className="w-4 h-4" />
+                                    </button>
+                                )}
+
+                                <div className="w-px h-4 bg-white/20 mx-1" />
+
+                                {/* Model Selector Dropdown */}
                                 {!isMinimized && (
-                                    <div className="flex bg-white/10 rounded-lg p-0.5 ml-2">
-                                        <button
-                                            onClick={() => localAvailable && setProvider('local')}
-                                            disabled={!localAvailable}
-                                            className={`px-2 py-1 rounded text-xs font-medium transition ${provider === 'local'
-                                                ? 'bg-purple-500 text-white'
-                                                : localAvailable
-                                                    ? 'text-white/60 hover:text-white'
-                                                    : 'text-white/30 cursor-not-allowed'
-                                                }`}
-                                            title={localAvailable ? 'מקומי (Ollama)' : 'לא זמין'}
-                                        >
-                                            🖥️
-                                        </button>
-                                        <button
-                                            onClick={() => googleAvailable && setProvider('google')}
-                                            disabled={!googleAvailable}
-                                            className={`px-2 py-1 rounded text-xs font-medium transition ${provider === 'google'
-                                                ? 'bg-purple-500 text-white'
-                                                : googleAvailable
-                                                    ? 'text-white/60 hover:text-white'
-                                                    : 'text-white/30 cursor-not-allowed'
-                                                }`}
-                                            title={googleAvailable ? 'Google Gemini' : 'לא מוגדר'}
-                                        >
-                                            ✨
-                                        </button>
+                                    <div className="flex items-center gap-2 bg-white/10 rounded-lg p-1 ml-2">
+                                        <Cpu className="w-3.5 h-3.5 text-indigo-300 ml-1" />
+                                        <div className="relative">
+                                            <select
+                                                value={JSON.stringify({ p: provider, m: model })}
+                                                onChange={(e) => {
+                                                    const val = JSON.parse(e.target.value);
+                                                    setProvider(val.p);
+                                                    setModel(val.m);
+                                                }}
+                                                className="appearance-none bg-transparent text-xs font-medium text-white pl-2 pr-6 py-1 focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                            >
+                                                <optgroup label="Anthropic (Claude)">
+                                                    {AI_MODELS['anthropic'].map(m => (
+                                                        <option key={m.id} value={JSON.stringify({ p: 'anthropic', m: m.id })}>{m.name}</option>
+                                                    ))}
+                                                </optgroup>
+                                                <optgroup label="Google (Gemini)">
+                                                    {AI_MODELS['google'].map(m => (
+                                                        <option key={m.id} value={JSON.stringify({ p: 'google', m: m.id })}>{m.name}</option>
+                                                    ))}
+                                                </optgroup>
+                                                <optgroup label="xAI (Grok)">
+                                                    {AI_MODELS['xai'].map(m => (
+                                                        <option key={m.id} value={JSON.stringify({ p: 'xai', m: m.id })}>{m.name}</option>
+                                                    ))}
+                                                </optgroup>
+                                                <optgroup label="Local (Ollama)">
+                                                    {AI_MODELS['local'].map(m => (
+                                                        <option key={m.id} value={JSON.stringify({ p: 'local', m: m.id })}>{m.name}</option>
+                                                    ))}
+                                                </optgroup>
+                                            </select>
+                                            <div className="absolute inset-y-0 right-0 flex items-center pr-1 pointer-events-none">
+                                                <ChevronDown className="w-3 h-3 text-white/50" />
+                                            </div>
+                                        </div>
+
+                                        {/* Status Dot */}
+                                        <div className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`} />
                                     </div>
                                 )}
                                 <motion.button
@@ -727,9 +910,10 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                 <motion.button
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => setIsOpen(false)}
-                                    className="p-2 hover:bg-white/10 rounded-lg transition"
+                                    className="p-2 bg-white/10 hover:bg-red-500/20 text-white hover:text-red-400 rounded-lg transition"
+                                    title="סגור חלון"
                                 >
-                                    <X className="w-4 h-4 text-white/70" />
+                                    <X className="w-4 h-4" />
                                 </motion.button>
                             </div>
                         </div>
@@ -882,6 +1066,21 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                         {/* Input Area */}
                                         <div className="p-3 border-t border-white/10">
                                             <div className="flex gap-2">
+                                                {/* Usage Stats (If available) */}
+                                                {lastUsage && (
+                                                    <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs shadow-lg">
+                                                        <div className="p-1 bg-emerald-500/20 rounded-full">
+                                                            <Zap className="w-3 h-3" />
+                                                        </div>
+                                                        <div className="flex flex-col leading-none">
+                                                            <span className="opacity-60 text-[10px]">שימוש (טוקנים)</span>
+                                                            <span className="font-bold font-mono">
+                                                                {(lastUsage.input + lastUsage.output).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Quick Create Post Button */}
                                                 <motion.button
                                                     whileTap={{ scale: 0.9 }}
@@ -908,6 +1107,33 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                 >
                                                     <Send className="w-4 h-4" />
                                                 </motion.button>
+
+                                                {/* ✨ ABRAKADABRA: CAST SPELL / EDIT MODE BUTTON (Level 8+) */}
+                                                {hasMagicalAccess && (
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.05 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                        onClick={() => {
+                                                            if (input.trim()) {
+                                                                castSpell();
+                                                            } else {
+                                                                toggleInspector();
+                                                                setIsOpen(false);
+                                                            }
+                                                        }}
+                                                        disabled={loading}
+                                                        className={`px-3 py-2 rounded-xl text-white shadow-lg flex items-center gap-2 border border-white/20
+                                                            ${input.trim()
+                                                                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-indigo-500/20' // Spell Mode
+                                                                : 'bg-slate-700 hover:bg-slate-600' // Edit Mode
+                                                            }`}
+                                                        title={input.trim() ? "הפעל כישוף (Abrakadabra)" : "מצב עריכה (Inspector)"}
+                                                    >
+                                                        {input.trim() ? <Sparkles className="w-4 h-4" /> : <MousePointer2 className="w-4 h-4" />}
+                                                        {!loading && <span className="text-xs font-bold">{input.trim() ? 'כישוף' : 'עריכה'}</span>}
+                                                    </motion.button>
+                                                )}
+
                                             </div>
                                         </div>
                                     </>
@@ -919,6 +1145,6 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
             </AnimatePresence>
         </>
     );
-}; // Added default export
+};
 
 export default MayaOverlay;

@@ -15,6 +15,7 @@ import net from 'net';
 import * as mm from 'music-metadata';
 import fetch from 'node-fetch';
 import musicCoverRouter from './backend/api/musicCoverRoute.js';
+import { getYouTubeApiKey as getYTKeyFromSecrets, getSecrets, getSmsApiKey } from './backend/services/secretsService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,20 +183,18 @@ app.get('/api/system/validate-integrations', async (req, res) => {
             whatsapp: { status: 'ok', message: 'Service up' }
         };
 
-        // If Business ID provided, check specific overrides in DB
-        if (businessId && supabase) {
-            const { data } = await supabase
-                .from('businesses')
-                .select('gemini_api_key, grok_api_key, claude_api_key, whatsapp_api_key, youtube_api_key')
-                .eq('id', businessId)
-                .single();
-
-            if (data) {
-                if (data.gemini_api_key) integrations.gemini = { status: 'ok', message: 'Business Key Active' };
-                if (data.grok_api_key) integrations.grok = { status: 'ok', message: 'Business Key Active' };
-                if (data.claude_api_key) integrations.claude = { status: 'ok', message: 'Business Key Active' };
-                if (data.whatsapp_api_key) integrations.whatsapp = { status: 'ok', message: 'Business API Active' };
-                if (data.youtube_api_key) integrations.youtube = { status: 'ok', message: 'Business Key Active' };
+        // If Business ID provided, check specific overrides in business_secrets
+        // 🔒 REFACTORED: Use secretsService instead of businesses table
+        if (businessId) {
+            try {
+                const secrets = await getSecrets(businessId);
+                if (secrets.gemini_api_key) integrations.gemini = { status: 'ok', message: 'Business Key Active' };
+                if (secrets.grok_api_key) integrations.grok = { status: 'ok', message: 'Business Key Active' };
+                if (secrets.claude_api_key) integrations.claude = { status: 'ok', message: 'Business Key Active' };
+                if (secrets.whatsapp_api_key) integrations.whatsapp = { status: 'ok', message: 'Business API Active' };
+                if (secrets.youtube_api_key) integrations.youtube = { status: 'ok', message: 'Business Key Active' };
+            } catch (secretsErr) {
+                console.warn('[validate-integrations] Failed to fetch business_secrets:', secretsErr.message);
             }
         }
 
@@ -349,19 +348,12 @@ const ytApiKeyCache = new Map();
 async function getYouTubeApiKey(businessId) {
     if (ytApiKeyCache.has(businessId)) return ytApiKeyCache.get(businessId);
 
-    // Fallback to process.env if supabase not available
-    if (!supabase) return process.env.YOUTUBE_API_KEY;
-
     try {
-        const { data, error } = await supabase
-            .from('businesses')
-            .select('youtube_api_key')
-            .eq('id', businessId)
-            .single();
-
-        if (data?.youtube_api_key) {
-            ytApiKeyCache.set(businessId, data.youtube_api_key);
-            return data.youtube_api_key;
+        // 🔒 REFACTORED: Fetch from business_secrets via secretsService
+        const key = await getYTKeyFromSecrets(businessId);
+        if (key) {
+            ytApiKeyCache.set(businessId, key);
+            return key;
         }
     } catch (err) {
         console.error('Error fetching YouTube API key:', err);
@@ -845,14 +837,21 @@ app.post('/api/sms/send', async (req, res) => {
     const { to, text, businessId } = req.body;
 
     try {
-        // Fetch API Key from DB
-        const { data: business } = await supabase
-            .from('businesses')
-            .select('global_sms_api_key, sms_sender_id')
-            .eq('id', businessId)
-            .single();
+        // 🔒 REFACTORED: Fetch SMS API Key from business_secrets
+        const smsKey = await getSmsApiKey(businessId);
 
-        if (!business || !business.global_sms_api_key) {
+        // Also need sms_sender_id from businesses table (non-secret config)
+        let smsSenderId = '0548317887';
+        if (supabase) {
+            const { data: biz } = await supabase
+                .from('businesses')
+                .select('sms_sender_id')
+                .eq('id', businessId)
+                .single();
+            smsSenderId = biz?.sms_sender_id || smsSenderId;
+        }
+
+        if (!smsKey) {
             return res.status(400).json({ error: 'Missing Global SMS API Key for business' });
         }
 
@@ -865,8 +864,8 @@ app.post('/api/sms/send', async (req, res) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                ApiKey: business.global_sms_api_key,
-                txtOriginator: business.sms_sender_id || '0548317887',
+                ApiKey: smsKey,
+                txtOriginator: smsSenderId,
                 destinations: to.replace(/\D/g, ''),
                 txtSMSmessage: text,
                 dteToDeliver: '',
@@ -4999,6 +4998,67 @@ app.post("/music/ingest/download", async (req, res) => {
 
         res.json({ success: true, path: outputPath.replace('%(ext)s', 'mp3') });
     });
+});
+
+// ------------------------------------------------------------------
+// === KDS PROXY ENDPOINTS ===
+// These exist because iPads on LAN cannot always reach Supabase directly
+// (port 54321 may only be bound to 127.0.0.1). The backend CAN reach
+// Supabase via internal Docker network, so we proxy through here.
+// ------------------------------------------------------------------
+
+/**
+ * GET /api/kds/ping
+ * Debug endpoint — logs which device connected and from where.
+ */
+app.get('/api/kds/ping', (req, res) => {
+    const ip = (req.ip || '').replace('::ffff:', '');
+    const ua = req.headers['user-agent'] || 'unknown';
+    const ts = new Date().toISOString();
+    console.log(`📱 [KDS-PING] ${ts} | IP: ${ip} | UA: ${ua.slice(0, 60)}`);
+    res.json({ ok: true, ip, time: ts, supabaseMode: supabase === localSupabase ? 'local' : 'remote' });
+});
+
+/**
+ * GET /api/kds/orders?business_id=XXX&date=ISO
+ * Proxies get_kds_orders RPC through the backend so LAN devices
+ * don't need direct access to port 54321.
+ */
+app.get('/api/kds/orders', async (req, res) => {
+    const ip = (req.ip || '').replace('::ffff:', '');
+    const { business_id, date } = req.query;
+    const ts = new Date().toISOString();
+
+    console.log(`📋 [KDS-ORDERS] ${ts} | IP: ${ip} | business_id=${business_id} | date=${date} | db=${supabase === localSupabase ? 'LOCAL' : 'REMOTE'}`);
+
+    if (!business_id) {
+        console.warn(`⚠️ [KDS-ORDERS] Missing business_id from ${ip}`);
+        return res.status(400).json({ error: 'missing business_id' });
+    }
+
+    if (!supabase) {
+        console.error(`❌ [KDS-ORDERS] Supabase not initialized`);
+        return res.status(503).json({ error: 'database not available' });
+    }
+
+    try {
+        const p_date = date || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase.rpc('get_kds_orders', {
+            p_date,
+            p_business_id: business_id
+        });
+
+        if (error) {
+            console.error(`❌ [KDS-ORDERS] RPC error for ${ip}:`, error.message);
+            return res.status(500).json({ error: error.message });
+        }
+
+        console.log(`✅ [KDS-ORDERS] Returned ${data?.length ?? 0} orders to ${ip}`);
+        res.json(data || []);
+    } catch (err) {
+        console.error(`❌ [KDS-ORDERS] Unexpected error for ${ip}:`, err.message);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ------------------------------------------------------------------

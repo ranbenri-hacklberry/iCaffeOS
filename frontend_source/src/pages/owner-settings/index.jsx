@@ -29,23 +29,26 @@ const OwnerSettings = () => {
             // Fetch Google connection status
             // Note: We only check IF keys exist, not the actual values (security!)
             try {
-                const { data, error } = await supabase
+                // 🔒 REFACTORED: Check Google status from businesses + key existence from business_secrets
+                const { data: bizData, error: bizError } = await supabase
                     .from('businesses')
-                    .select('is_google_connected, gemini_api_key, grok_api_key')
+                    .select('is_google_connected')
                     .eq('id', currentUser.business_id)
                     .single();
 
-                if (error) throw error;
+                if (bizError) throw bizError;
+                setGoogleStatus(bizData?.is_google_connected ? 'connected' : 'disconnected');
 
-                if (data?.is_google_connected) {
-                    setGoogleStatus('connected');
-                } else {
-                    setGoogleStatus('disconnected');
-                }
+                // Check key existence from business_secrets (RLS-protected)
+                const { data: secretsData } = await supabase
+                    .from('business_secrets')
+                    .select('gemini_api_key, grok_api_key')
+                    .eq('business_id', currentUser.business_id)
+                    .single();
 
                 // Only set boolean flags - don't expose actual keys to browser!
-                setHasGeminiKey(!!data?.gemini_api_key);
-                setHasGrokKey(!!data?.grok_api_key);
+                setHasGeminiKey(!!secretsData?.gemini_api_key);
+                setHasGrokKey(!!secretsData?.grok_api_key);
             } catch (err) {
                 console.error('Error fetching settings:', err);
                 setGoogleStatus('disconnected');
@@ -59,10 +62,12 @@ const OwnerSettings = () => {
         if (!currentUser?.business_id || !geminiKey) return;
         setIsSavingGemini(true);
         try {
-            const { error } = await supabase
-                .from('businesses')
-                .update({ gemini_api_key: geminiKey })
-                .eq('id', currentUser.business_id);
+            // 🔒 REFACTORED: Save to business_secrets via RPC
+            const { error } = await supabase.rpc('upsert_business_secret', {
+                p_business_id: currentUser.business_id,
+                p_field: 'gemini_api_key',
+                p_value: geminiKey
+            });
 
             if (error) throw error;
             alert('✅ מפתח Gemini נשמר בהצלחה!');
@@ -80,10 +85,12 @@ const OwnerSettings = () => {
         if (!currentUser?.business_id || !grokKey) return;
         setIsSavingGrok(true);
         try {
-            const { error } = await supabase
-                .from('businesses')
-                .update({ grok_api_key: grokKey })
-                .eq('id', currentUser.business_id);
+            // 🔒 REFACTORED: Save to business_secrets via RPC
+            const { error } = await supabase.rpc('upsert_business_secret', {
+                p_business_id: currentUser.business_id,
+                p_field: 'grok_api_key',
+                p_value: grokKey
+            });
 
             if (error) throw error;
             alert('✅ מפתח Grok נשמר בהצלחה!');

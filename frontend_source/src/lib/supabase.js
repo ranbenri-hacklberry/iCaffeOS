@@ -7,7 +7,28 @@ const cloudUrl = import.meta.env?.VITE_SUPABASE_URL || FALLBACK_URL;
 const cloudKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || FALLBACK_KEY;
 
 // Standardized Hybrid Logic: Local vs Cloud
-const localUrl = import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://localhost:54321';
+// Standardized Hybrid Logic: Local vs Cloud
+const getLocalUrl = () => {
+    // 1. Electron/Localhost: Use explicit localhost
+    if (typeof window !== 'undefined' && (window.navigator?.userAgent?.includes('Electron') || window.location?.hostname === 'localhost' || window.location?.hostname === '127.0.0.1')) {
+        return 'http://127.0.0.1:54321';
+    }
+
+    // 2. LAN Access (iPad/Tablet): Use the detected IP address
+    if (typeof window !== 'undefined' && window.location?.hostname && (
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.') ||
+        window.location.hostname.startsWith('100.') ||
+        window.location.hostname.startsWith('172.')
+    )) {
+        return `http://${window.location.hostname}:54321`;
+    }
+
+    // Fallback
+    return import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://localhost:54321';
+};
+
+const localUrl = getLocalUrl();
 const localKey = import.meta.env?.VITE_LOCAL_SUPABASE_ANON_KEY || 'no-key';
 
 if (!cloudUrl || !cloudKey) {
@@ -117,9 +138,20 @@ export const initSupabase = async () => {
     }
 
     if (isLikelyLocal) {
+        // 🛡️ LAN FIX: Check if this is a LAN IP (iPad/tablet on local network).
+        // For LAN access, NEVER fall back to cloud — the local Supabase IS the source of truth.
+        // Falling back to cloud causes ~5 minute delays because orders exist in local DB, not cloud.
+        const isLanAccess = typeof window !== 'undefined' && (
+            window.location.hostname.startsWith('192.168.') ||
+            window.location.hostname.startsWith('10.') ||
+            window.location.hostname.startsWith('100.') ||
+            window.location.hostname.startsWith('172.')
+        );
+
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 1500);
+            // 🛡️ LAN FIX: Increase timeout for LAN (was 1500ms — too short, causes cloud fallback)
+            const timeoutId = setTimeout(() => controller.abort(), isLanAccess ? 5000 : 1500);
 
             const response = await fetch(`${localUrl}/rest/v1/`, {
                 method: 'GET',
@@ -132,16 +164,28 @@ export const initSupabase = async () => {
                 isLocal = true;
                 activeClient = getClient(localUrl, localKey);
                 console.log('🏘️ LOCAL: Connected to local DB');
-            } else if (safeCloudUrl) {
-                console.warn('⚠️ Local unreachable, switching to Cloud');
+            } else if (safeCloudUrl && !isLanAccess) {
+                // Only fall back to cloud for localhost (dev), NOT for LAN tablets
+                console.warn('⚠️ Local unreachable, switching to Cloud (localhost only)');
                 isLocal = false;
                 activeClient = getClient(safeCloudUrl, cloudKey);
+            } else {
+                // LAN access: stay on local even if health check returned non-ok
+                console.warn(`⚠️ Local health check returned non-ok (${response?.status}), but staying LOCAL for LAN access`);
+                isLocal = true;
+                activeClient = getClient(localUrl, localKey);
             }
         } catch (e) {
-            console.warn('⚠️ Local DB check failed');
-            if (safeCloudUrl) {
+            console.warn('⚠️ Local DB check failed:', e.message);
+            if (safeCloudUrl && !isLanAccess) {
+                // Only fall back to cloud for localhost (dev), NOT for LAN tablets
                 isLocal = false;
                 activeClient = getClient(safeCloudUrl, cloudKey);
+            } else {
+                // LAN access: stay on local, work in offline mode if needed
+                console.warn('🏠 LAN access — staying LOCAL despite health check failure');
+                isLocal = true;
+                activeClient = getClient(localUrl, localKey);
             }
         }
     } else if (safeCloudUrl) {

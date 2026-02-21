@@ -4,15 +4,22 @@ import { useNavigate } from 'react-router-dom';
 import MiniMusicPlayer from './music/MiniMusicPlayer';
 import ConnectivityStatus from './ConnectivityStatus';
 
+import { useAuth } from '../context/AuthContext';
+
 const UnifiedHeader = ({
-    title,
-    subtitle,
+    title: propTitle,
+    subtitle: propSubtitle,
     onHome,
     children, // For Tabs or specific controls
     className = '',
     forceMusicDark = false
 }) => {
     const navigate = useNavigate();
+    const { currentUser } = useAuth();
+
+    // Fallback logic for title/subtitle
+    const title = propTitle || currentUser?.business_name || currentUser?.businessName || currentUser?.impersonating_business_name || 'icaffeOS';
+    const subtitle = propSubtitle || (currentUser?.is_impersonating ? `מצב התחזות: ${currentUser.name}` : '');
 
     const handleHome = () => {
         if (onHome) onHome();

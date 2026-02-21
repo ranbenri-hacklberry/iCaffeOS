@@ -136,8 +136,8 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
 
             const localData = localDataNum.length > 0 ? localDataNum : localDataStr;
 
-            // 🔥 Also fetch inventory stock from local DB
-            const localInventory = await db.prepared_items_inventory.toArray();
+            // 🔥 OPTIMIZED: Fetch inventory stock only for this business
+            const localInventory = await db.prepared_items_inventory.where('business_id').equals(searchId).toArray();
             const inventoryMap = new Map(localInventory.map(inv => [inv.item_id, inv.current_stock]));
 
             if (localData.length > 0) {
@@ -147,7 +147,7 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                     current_stock: inventoryMap.get(item.id) ?? item.current_stock
                 }));
                 setRawMenuData(enrichedData);
-                setMenuLoading(false);
+                setMenuLoading(false); // 🔓 Unblock UI immediately
             }
 
             // ☁️ STEP 2: Background Sync (Non-blocking if local exists)
@@ -163,25 +163,46 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                 .eq('business_id', effectiveId);
 
             if (localData.length === 0) {
-                const [{ data: cloudData }, { data: cloudInventory }] = await Promise.all([syncPromise, inventoryPromise]);
+                console.log('☁️ [First Load] Creating Cloud Promises...');
+                const dataFetchPromise = Promise.all([syncPromise, inventoryPromise])
+                    .then(async ([{ data: cloudData }, { data: cloudInventory }]) => {
+                        if (cloudData && cloudData.length > 0) {
+                            console.log(`✅ [First Load] Pulled ${cloudData.length} items from server (Delayed)`);
 
-                if (cloudData && cloudData.length > 0) {
-                    console.log(`✅ [First Load] Pulled ${cloudData.length} items from server`);
+                            // Merge inventory
+                            const invMap = new Map((cloudInventory || []).map(inv => [inv.item_id, inv.current_stock]));
+                            const enrichedCloudData = cloudData.map(item => ({
+                                ...item,
+                                current_stock: invMap.get(item.id) ?? null
+                            }));
 
-                    // Merge inventory
-                    const invMap = new Map((cloudInventory || []).map(inv => [inv.item_id, inv.current_stock]));
-                    const enrichedCloudData = cloudData.map(item => ({
-                        ...item,
-                        current_stock: invMap.get(item.id) ?? null
-                    }));
+                            setRawMenuData(enrichedCloudData);
+                            await db.menu_items.bulkPut(cloudData);
+                            if (cloudInventory) await db.prepared_items_inventory.bulkPut(cloudInventory);
 
-                    setRawMenuData(enrichedCloudData);
-                    await db.menu_items.bulkPut(cloudData);
-                    if (cloudInventory) await db.prepared_items_inventory.bulkPut(cloudInventory);
+                            // 🖼️ Cache images lazily (after data is safe)
+                            import('@/services/imageSyncService').then(m => m.syncMenuImages(cloudData));
+                        }
+                        return true;
+                    })
+                    .catch(err => {
+                        console.error('❌ [First Load] Cloud Fetch Failed:', err);
+                        return false;
+                    });
 
-                    // 🖼️ Cache images for offline use
-                    import('@/services/imageSyncService').then(m => m.syncMenuImages(cloudData));
-                }
+                // 🛑 TIMEOUT PROTECTION: If network is slow, unblock UI after 10s but let fetch continue!
+                const timeoutPromise = new Promise(resolve => setTimeout(() => {
+                    console.warn('⚠️ [First Load] Slow Network - Unblocking UI while fetch continues...');
+                    resolve(false);
+                }, 10000));
+
+                // Wait for either data or timeout
+                await Promise.race([dataFetchPromise, timeoutPromise]);
+
+                // We don't need to do anything here because dataFetchPromise updates state internally .then()
+                // If timeout won, we just continue to setMenuLoading(false) below.
+                // If data won, state is already updated.
+
             } else {
                 // Background update
                 Promise.all([syncPromise, inventoryPromise]).then(async ([{ data: cloudData }, { data: cloudInventory }]) => {
