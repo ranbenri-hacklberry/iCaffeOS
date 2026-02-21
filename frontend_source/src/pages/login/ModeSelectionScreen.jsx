@@ -13,10 +13,12 @@ const ModeSelectionScreen = () => {
     const [showWhatsNew, setShowWhatsNew] = useState(true);
     const [integrationErrors, setIntegrationErrors] = useState(null);
 
-    // 🚀 Auto-redirect Super Admin to Super Admin portal
+    // 🚀 Auto-redirect Super Admin to Super Admin portal (UNLESS Impersonating)
     React.useEffect(() => {
         const isSuper = currentUser?.is_super_admin || currentUser?.user_metadata?.is_super_admin || localStorage.getItem('is_super_admin') === 'true';
-        if (isSuper && window.location.pathname !== '/super-admin') {
+        const isImpersonating = currentUser?.is_impersonating === true || localStorage.getItem('original_super_admin');
+
+        if (isSuper && !isImpersonating && window.location.pathname !== '/super-admin') {
             console.log('👑 Super Admin detected on ModeSelection - Redirecting to Portal...');
             navigate('/super-admin', { replace: true });
         }

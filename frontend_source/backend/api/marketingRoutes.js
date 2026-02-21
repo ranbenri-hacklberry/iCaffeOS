@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import fetch from 'node-fetch';
 import path from 'path';
 import fs from 'fs';
+import * as secretsService from '../services/secretsService.js';
 
 const router = express.Router();
 
@@ -22,12 +23,8 @@ router.get('/providers/:businessId', async (req, res) => {
     try {
         const { businessId } = req.params;
 
-        // Fetch keys from DB
-        const { data: business } = await supabase
-            .from('businesses')
-            .select('gemini_api_key, grok_api_key, claude_api_key')
-            .eq('id', businessId)
-            .single();
+        // Fetch keys from secretsService
+        const business = await secretsService.getSecrets(businessId);
 
         // Check ComfyUI (Local)
         let comfyAvailable = false;

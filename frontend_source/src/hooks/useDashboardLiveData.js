@@ -138,21 +138,11 @@ export const useDashboardLiveData = (businessId) => {
                 try {
                     const result = await supabase
                         .from('inventory_items')
-                        .select('id, name, current_stock, low_stock_alert')
+                        .select('id, name, current_stock, low_stock_threshold_units, weight_per_unit')
                         .eq('business_id', businessId);
 
-                    if (result.error?.code === '42703' || result.error?.message?.includes('low_stock_alert')) {
-                        console.warn('⚠️ [Inventory] low_stock_alert column missing, falling back to id, name, current_stock');
-                        const fallback = await supabase
-                            .from('inventory_items')
-                            .select('id, name, current_stock')
-                            .eq('business_id', businessId);
-                        inventoryItems = fallback.data || [];
-                        invErr = fallback.error;
-                    } else {
-                        inventoryItems = result.data || [];
-                        invErr = result.error;
-                    }
+                    inventoryItems = result.data || [];
+                    invErr = result.error;
                 } catch (e) {
                     console.error('⚠️ [Inventory] Fetch failed:', e);
                 }
@@ -162,24 +152,24 @@ export const useDashboardLiveData = (businessId) => {
                     throw invErr;
                 }
 
-                console.log(`📦 [Inventory] Fetched ${(inventoryItems || []).length} items from Supabase`);
-
                 const lowStockItems = (inventoryItems || []).filter(item => {
-                    const currentStock = Number(item.current_stock) || 0;
-                    // FIX: Only alert if low_stock_alert is explicitly set (not null/undefined)
-                    // If undefined/null, treat as 0 (no alert)
-                    const minStock = (item.low_stock_alert !== null && item.low_stock_alert !== undefined)
-                        ? Number(item.low_stock_alert)
-                        : 0;
+                    const currentStock = Number(item.current_stock) ?? 0;
+                    // Use low_stock_threshold_units as per newer schema
+                    const minUnits = Number(item.low_stock_threshold_units) || Number(item.low_stock_alert) || 0;
+                    const wpu = Number(item.weight_per_unit) || 0;
 
-                    const isBelowMin = minStock > 0 && currentStock < minStock;
-                    if (isBelowMin) {
-                        console.log(`  ⚠️ ${item.name}: ${currentStock} < ${minStock}`);
+                    // Match logic from InventoryItemsGrid.tsx
+                    // thresholdGrams = minUnits * (wpu || 1)
+                    const threshold = minUnits * (wpu || 1);
+
+                    if (minUnits > 0 && currentStock <= threshold) {
+                        return true;
                     }
-                    return isBelowMin;
+
+                    return false;
                 });
 
-                console.log(`📦 [Inventory] Found ${lowStockItems.length} items below minimum`);
+                console.log(`📦 [Inventory] Found ${lowStockItems.length} items below minimum`, lowStockItems.map(i => i.name));
 
                 setData({
                     kds: { activeOrders, readyOrders },
@@ -254,11 +244,13 @@ export const useDashboardLiveData = (businessId) => {
                     .toArray();
 
                 const lowStockItems = inventoryItems.filter(item => {
-                    const currentStock = Number(item.current_stock) || 0;
-                    const minStock = (item.low_stock_alert !== null && item.low_stock_alert !== undefined)
-                        ? Number(item.low_stock_alert)
-                        : 0;
-                    return minStock > 0 && currentStock < minStock;
+                    const currentStock = Number(item.current_stock) ?? 0;
+                    const minUnits = Number(item.low_stock_alert) || 0;
+                    const wpu = Number(item.weight_per_unit) || 0;
+                    const threshold = minUnits * (wpu || 1);
+
+                    if (minUnits > 0 && currentStock <= threshold) return true;
+                    return false;
                 });
 
                 setData({

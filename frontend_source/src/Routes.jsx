@@ -12,6 +12,7 @@ import ConnectivityStatus from "./components/ConnectivityStatus";
 import MiniMusicBar from './components/music/MiniMusicBar';
 // SyncManager removed as per user request
 import LoginGateway from './components/LoginGateway';
+import OrderPusher from './components/OrderPusher';
 import { isElectron } from "./utils/apiUtils";
 
 // Abrakadabra Engine
@@ -426,7 +427,8 @@ const Routes = () => {
               {/* <SyncStatusModal /> - USER REQUESTED TO HIDE THIS MODAL */}
               <MusicProvider>
                 <ScrollToTop />
-                <MayaOverlay />
+                {/* <MayaOverlay /> */}
+                <OrderPusher /> {/* 🔄 Added Background Sync inside AuthProvider */}
                 <AppRoutes />
 
                 <AbraPreviewDrawer />

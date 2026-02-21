@@ -340,18 +340,14 @@ function buildContextPrompt(context) {
     return p;
 }
 
+import * as secretsService from './secretsService.js';
+
 /**
  * Get Gemini API key from business
  */
 async function getGeminiKey(businessId) {
-    if (!supabase) return null;
     try {
-        const { data } = await supabase
-            .from('businesses')
-            .select('gemini_api_key')
-            .eq('id', businessId)
-            .single();
-        return data?.gemini_api_key || null;
+        return await secretsService.getProviderKey(businessId, 'gemini');
     } catch (e) {
         console.error('Error fetching Gemini key:', e);
         return null;
@@ -361,16 +357,30 @@ async function getGeminiKey(businessId) {
 /**
  * צ'אט עם Gemini
  */
-async function chatWithGemini(messages, systemPrompt, businessId) {
+// Import Tools
+import { mayaTools, toolHandler } from '../utils/mayaTools.js';
+
+/**
+ * צ'אט עם Gemini (תומך ב-Tools)
+ */
+async function chatWithGemini(messages, systemPrompt, businessId, tools = null) {
     const apiKey = await getGeminiKey(businessId);
     if (!apiKey) {
         throw new Error('Gemini API key not configured');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    // Configure model with tools if provided (Super Admin only)
+    const modelParams = { model: 'gemini-1.5-flash' };
+    if (tools) {
+        modelParams.tools = [{ functionDeclarations: tools }];
+    }
+
+    const model = genAI.getGenerativeModel(modelParams);
 
     // Build chat history for Gemini
+    // Note: Gemini strict history requires alternating user/model roles.
     const history = messages.slice(0, -1).map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
@@ -381,9 +391,64 @@ async function chatWithGemini(messages, systemPrompt, businessId) {
         systemInstruction: systemPrompt
     });
 
-    const lastMessage = messages[messages.length - 1];
-    const result = await chat.sendMessage(lastMessage.content);
-    return result.response.text();
+    const lastMessage = messages[messages.length - 1].content;
+    let result = await chat.sendMessage(lastMessage);
+    let response = result.response;
+
+    // --- Loop for handling Function Calls ---
+    // Gemini might return a function call instead of text. We must execute it and send result back.
+    const MAX_LOOPS = 5;
+    let loopCount = 0;
+
+    while (loopCount < MAX_LOOPS) {
+        const calls = response.functionCalls();
+
+        if (calls && calls.length > 0) {
+            console.log('⚡ Gemini requests function execution:', calls.map(c => c.name));
+
+            // Execute all requested calls in parallel
+            const functionResponses = await Promise.all(
+                calls.map(async (call) => {
+                    const fn = toolHandler[call.name];
+                    if (!fn) {
+                        return {
+                            functionResponse: {
+                                name: call.name,
+                                response: { error: `Function ${call.name} not found` }
+                            }
+                        };
+                    }
+
+                    const args = call.args;
+                    console.log(`   ▶ Executing ${call.name} with:`, JSON.stringify(args).substring(0, 100));
+
+                    // Specific mapping for known tools since args come as object
+                    let output;
+                    if (call.name === 'runSafeQuery') output = await fn(args.sqlQuery);
+                    else if (call.name === 'getDatabaseSchema') output = await fn();
+                    else output = { error: 'Unknown tool signature' };
+
+                    return {
+                        functionResponse: {
+                            name: call.name,
+                            response: output
+                        }
+                    };
+                })
+            );
+
+            // Send function results back to model
+            console.log('   ◀ Sending results back to Gemini...');
+            result = await chat.sendMessage(functionResponses);
+            response = result.response;
+            loopCount++;
+        } else {
+            // No more function calls, we have the final text response
+            break;
+        }
+    }
+
+    return response.text();
 }
 
 /**
@@ -413,22 +478,35 @@ export async function chatWithMaya(messages, businessId, provider = 'local', emp
 
     // 🔒 Prepend absolute safety instruction for workers
     let finalSystemPrompt = systemPrompt;
-    if (employee && ['Worker', 'Chef', 'Barista', 'Checker', 'Software Architect'].includes(employee.accessLevel)) {
+    let availableTools = null;
+
+    if (employee && ['Worker', 'Chef', 'Barista', 'Checker'].includes(employee.accessLevel)) {
         const workerSafetyPrefix = `⚠️ CRITICAL SECURITY CONSTRAINT ⚠️
 You are assisting a STAFF MEMBER (${employee.name}, ${employee.accessLevel}).
-ABSOLUTELY PROHIBITED: Providing financial data, revenue figures, profit margins, sales totals, owner-level business metrics, or any sensitive financial information.
-If asked about revenue, profits, or financial details, respond: "אני לא יכולה לגשת לנתונים פיננסיים. רק הבעלים יכול לראות את זה."
-
-`;
+ABSOLUTELY PROHIBITED: Providing financial data...`;
         finalSystemPrompt = workerSafetyPrefix + systemPrompt;
         console.log('🔒 Worker safety constraints applied');
+    } else if (employee && employee.isSuperAdmin) {
+        // 🦸 Super Admin Mode
+        availableTools = mayaTools;
+        console.log('🦸 Super Admin detected - Activating Database Tools');
+        finalSystemPrompt += `
+        
+---
+🤖 **SYSTEM ADMIN MODE ACTIVATED**
+You are chatting with a SUPER ADMIN. You have access to the database via tools.
+- Use 'runSafeQuery' to answer complex questions about data.
+- Use 'getDatabaseSchema' if you need to understand the table structure.
+- You can query ANY table (users, orders, inventory, configs).
+- BE PRECISE and technical if asked.
+`;
     }
 
-    // Use Gemini if requested
-    if (provider === 'google' || provider === 'gemini') {
-        console.log('🌐 Using Google Gemini...');
+    // Use Gemini if requested OR if tools are needed (Ollama doesn't support tools yet in this code)
+    if (provider === 'google' || provider === 'gemini' || availableTools) {
+        console.log('🌐 Using Google Gemini (Tools Active:', !!availableTools, ')');
         try {
-            const response = await chatWithGemini(messages, finalSystemPrompt, businessId);
+            const response = await chatWithGemini(messages, finalSystemPrompt, businessId, availableTools);
             console.log('✅ Gemini response:', response?.substring(0, 200));
             return response || 'לא קיבלתי תשובה מגוגל...';
         } catch (err) {

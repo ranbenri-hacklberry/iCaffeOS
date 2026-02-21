@@ -48,8 +48,25 @@ const dockerSupabase = createClient(DOCKER_URL, DOCKER_KEY, {
 const transformData = (table, data, target) => {
     if (!data || data.length === 0) return data;
 
+    // Columns that exist in Cloud but NOT in Docker local schema
+    // These cause PGRST204 errors during upsert
+    const DOCKER_MISSING_COLUMNS = {
+        businesses: [], // Columns now exist in Docker
+        employees: ['face_descriptor', 'face_enrollment_date'], // gender now exists
+        customers: [], // gender now exists
+        orders: [], // is_local_only now exists
+        order_items: [], // status now exists
+        menu_items: [],
+    };
+
     return data.map(row => {
         const newRow = { ...row };
+
+        // Strip columns not present in Docker schema
+        const missingCols = DOCKER_MISSING_COLUMNS[table] || [];
+        for (const col of missingCols) {
+            delete newRow[col];
+        }
 
         // 1. inventory_items Mapping
         if (table === 'inventory_items') {
@@ -76,6 +93,15 @@ const transformData = (table, data, target) => {
             // Cloud schema doesn't have cashier_id yet
             delete newRow.cashier_id;
             delete newRow.face_match_confidence;
+        }
+
+        // 3. Businesses - Default API Keys
+        if (table === 'businesses') {
+            const DEFAULT_GEMINI = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || 'AIzaSyAJr90X8_a2qJpCqJ-H3Z_s5X1xY5x_a3c';
+            const DEFAULT_GROK = process.env.VITE_GROK_API_KEY || 'xai-8AlRjQI4PBNJuGTGWnbl2S5Z5aKODCxDAaCyOqIIRv1zCIqpZo72nhEnCtrI89iuePPeCqfk4OHlAcj3';
+
+            if (!newRow.gemini_api_key) newRow.gemini_api_key = DEFAULT_GEMINI;
+            if (!newRow.grok_api_key) newRow.grok_api_key = DEFAULT_GROK;
         }
 
         return newRow;

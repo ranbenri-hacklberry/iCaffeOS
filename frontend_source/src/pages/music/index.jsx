@@ -271,30 +271,44 @@ const MusicPageContent = () => {
         return Array.from(groups.values());
     }, [albums]);
 
-    const filteredAlbums = processedAlbums.filter(album =>
-        ((album.song_count > 1 || album.song_count === undefined) || (album.song_count === 0)) &&
-        (album.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            album.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    // Count songs per album from allSongs — used for both filteredAlbums and filteredSingles
+    const albumCounts = React.useMemo(() => {
+        const counts = {};
+        (allSongs || []).forEach(s => {
+            if (s.album_id) counts[s.album_id] = (counts[s.album_id] || 0) + 1;
+        });
+        return counts;
+    }, [allSongs]);
+
+    const filteredAlbums = processedAlbums.filter(album => {
+        // Use DB song_count if available, otherwise use computed count from allSongs
+        const count = album.song_count ?? albumCounts[album.id];
+        // Albums with exactly 1 song belong in the Singles tab, not here
+        return (count === undefined || count !== 1) &&
+            (album.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                album.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+    });
 
     const filteredPlaylists = (playlists || []).filter(playlist =>
         playlist.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const filteredSingles = React.useMemo(() => {
-        // Real songs with no album_id
+        // Real songs with no album_id (true standalone singles)
         const realSingles = (allSongs || []).filter(song => !song.album_id);
 
-        // Count songs per album to find single-song albums
-        const albumCounts = {};
-        (allSongs || []).forEach(s => {
-            if (s.album_id) albumCounts[s.album_id] = (albumCounts[s.album_id] || 0) + 1;
-        });
-
-        // Single-song albums (converted to song-like objects for the tab)
-        // We check song_count property OR the calculated count
-        const albumSingles = (albums || [])
-            .filter(a => (a.song_count == 1) || (albumCounts[a.id] == 1))
+        // Single-song albums — use processedAlbums (already deduplicated by name+artist)
+        const seenAlbumIds = new Set();
+        const albumSingles = (processedAlbums || [])
+            .filter(a => {
+                const count = a.song_count ?? albumCounts[a.id];
+                return count === 1;
+            })
+            .filter(a => {
+                if (seenAlbumIds.has(a.id)) return false;
+                seenAlbumIds.add(a.id);
+                return true;
+            })
             .map(a => ({
                 id: a.id,
                 title: a.name,
@@ -302,30 +316,27 @@ const MusicPageContent = () => {
                 album: a,
                 isAlbumSingle: true,
                 track_id: a.id,
-                // Ensure we have a cover
                 cover_url: a.cover_url,
                 thumbnail_url: a.cover_url,
-                // Add the song ID if we found it via count, for direct playback
                 actual_song_id: (allSongs || []).find(s => s.album_id === a.id)?.id
             }));
 
-        const combined = [...realSingles, ...albumSingles];
+        // Deduplicate realSingles too (songs that also appear as album singles)
+        const albumSingleSongIds = new Set(albumSingles.map(a => a.actual_song_id).filter(Boolean));
+        const uniqueRealSingles = realSingles.filter(s => !albumSingleSongIds.has(s.id));
+
+        const combined = [...uniqueRealSingles, ...albumSingles];
         return combined.filter(song =>
             song.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             song.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
-    }, [allSongs, albums, searchQuery]);
+    }, [allSongs, albums, searchQuery, albumCounts]);
 
-    // Load songs for singles tab
+    // Load ALL songs on mount — needed for albumCounts used by both Albums and Singles tabs
     useEffect(() => {
-        if (activeTab === 'singles') {
-            const loadAll = async () => {
-                const results = await fetchAllSongs();
-                setAllSongs(results || []);
-            };
-            loadAll();
-        }
-    }, [activeTab, fetchAllSongs]);
+        fetchAllSongs().then(results => setAllSongs(results || []));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Once on mount
 
     // Check Sync Status
     const checkSyncStatus = useCallback(async () => {
@@ -548,10 +559,7 @@ const MusicPageContent = () => {
     // Load favorites when opening the favorites tab
     useEffect(() => {
         if (activeTab === 'favorites') loadFavorites();
-        if (activeTab === 'singles' && allSongs.length === 0) {
-            fetchAllSongs().then(setAllSongs);
-        }
-    }, [activeTab, loadFavorites, allSongs.length, fetchAllSongs]);
+    }, [activeTab, loadFavorites]);
 
     // Get songs to display (current album or playlist)
     const displaySongs = currentAlbumSongs.length > 0 ? currentAlbumSongs : playlist;

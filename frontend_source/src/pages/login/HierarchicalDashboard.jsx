@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 import {
     Coffee, Monitor, ChefHat, Package, BarChart3, Palette,
     Lock, ShieldAlert, Settings, LogOut, AlertTriangle, UserCircle,
-    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music
+    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database
 } from 'lucide-react';
 import HeroCard from '../../components/HeroCard';
 import { PosWireframe, KdsWireframe } from '../../components/DashboardWireframes';
@@ -39,7 +39,7 @@ const HierarchicalDashboard = () => {
 
     // User permissions
     const isAdmin = currentUser?.access_level === 'admin' || currentUser?.role === 'admin';
-    const isSuperAdmin = currentUser?.is_super_admin || currentUser?.role === 'super_admin';
+    const isSuperAdmin = currentUser?.is_super_admin || currentUser?.role === 'super_admin' || currentUser?.user_metadata?.is_super_admin || localStorage.getItem('is_super_admin') === 'true';
 
     // App visibility helpers
     const isAppVisible = (appId) => {
@@ -74,13 +74,27 @@ const HierarchicalDashboard = () => {
         setTimeout(() => setSudoAccess(null), 5 * 60 * 1000);
     };
 
+    // Determine display name — filter out placeholder values like 'Main Terminal'
+    const GENERIC_PLACEHOLDERS = ['Main Terminal', 'main terminal', 'Terminal', 'Device', 'מסוף'];
+    const isPlaceholder = (str) => !str || GENERIC_PLACEHOLDERS.some(p => str.trim() === p) || str.trim().startsWith('מסוף ');
+
+    const rawName =
+        currentUser?.user_metadata?.full_name ||
+        currentUser?.user_metadata?.name ||
+        currentUser?.full_name ||
+        currentUser?.name;
+
+    const displayName = !isPlaceholder(rawName)
+        ? rawName
+        : (currentUser?.business_name || 'iCaffe');
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 sm:p-6 font-heebo" dir="rtl">
             <div className="max-w-7xl w-full">
                 {/* Header */}
                 <div className="text-center mb-4 sm:mb-8">
                     <h1 className="text-2xl sm:text-3xl font-black text-white mb-2">
-                        שלום, {currentUser?.full_name || currentUser?.name || 'עובד'} 👋
+                        שלום, {displayName} 👋
                     </h1>
                     <SmsBalanceWidget />
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/30 rounded-full">
@@ -366,31 +380,7 @@ const HierarchicalDashboard = () => {
                         </motion.button>
                     )}
 
-                    {/* Super Admin Access Box (New) */}
-                    {isSuperAdmin && (
-                        <motion.button
-                            onClick={() => navigate('/super-admin')}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.7, duration: 0.5 }}
-                            whileHover={{ scale: 1.04, y: -5 }}
-                            whileTap={{ scale: 0.96 }}
-                            className="relative bg-gradient-to-br from-red-50 via-white to-rose-50 rounded-3xl p-5 shadow-md overflow-hidden select-none touch-none border border-red-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-red-200/30"
-                        >
-                            <div className="absolute -top-3 -right-3 w-14 h-14 bg-red-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
-                            <div className="absolute bottom-2 left-2 w-8 h-8 bg-rose-200/30 rounded-full group-hover:translate-y-[-4px] transition-transform duration-700" />
 
-                            <div className="relative z-10" dir="rtl">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-400/30 group-hover:rotate-[-6deg] transition-transform duration-300">
-                                        <ShieldAlert size={24} className="text-white" />
-                                    </div>
-                                </div>
-                                <h3 className="text-lg font-black text-slate-800">Super Admin</h3>
-                                <p className="text-xs text-red-600 font-bold mt-1">ניהול מערכת גלובלי 👑</p>
-                            </div>
-                        </motion.button>
-                    )}
                 </div>
 
                 {/* ========== TIER 3: ADMIN ROW (Compact Icons) ========== */}
@@ -414,6 +404,18 @@ const HierarchicalDashboard = () => {
                             title="Super Admin"
                         >
                             <ShieldAlert size={20} className="text-red-400" />
+                        </motion.button>
+                    )}
+
+                    {/* DB Sync - Super Admin only */}
+                    {isSuperAdmin && (
+                        <motion.button
+                            onClick={() => navigate('/super-admin/db')}
+                            whileTap={{ scale: 0.95 }}
+                            className="w-12 h-12 bg-cyan-500/20 backdrop-blur-sm border border-cyan-400/30 rounded-xl flex items-center justify-center select-none touch-none"
+                            title="סנכרון מסד נתונים"
+                        >
+                            <Database size={20} className="text-cyan-400" />
                         </motion.button>
                     )}
 

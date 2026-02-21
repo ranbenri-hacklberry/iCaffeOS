@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Shield, Camera, Key, CheckCircle, Loader2, Save } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, Camera, Key, Loader2, Save } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface SecuritySettingsProps {
@@ -85,6 +85,7 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({ businessId }) => {
 
     return (
         <motion.div
+            layout
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 overflow-hidden relative"
@@ -123,26 +124,29 @@ const SecuritySettings: React.FC<SecuritySettingsProps> = ({ businessId }) => {
                 <AnimatePresence>
                     {faceEnabled && (
                         <motion.div
+                            layout
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="flex items-center justify-between p-4 bg-slate-900/40 rounded-xl border border-slate-700/30"
+                            className="bg-slate-900/40 rounded-xl border border-slate-700/30 overflow-hidden"
                         >
-                            <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-lg ${faceRequired ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-500'}`}>
-                                    <Key size={20} />
+                            <div className="flex items-center justify-between p-4">
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-2 rounded-lg ${faceRequired ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-500'}`}>
+                                        <Key size={20} />
+                                    </div>
+                                    <div className="max-w-[250px]">
+                                        <h4 className="text-white font-bold text-sm">חובה לסריקת פנים בהחתמת שעון</h4>
+                                        <p className="text-slate-400 text-[10px]">מחייב סריקה ביומטרית כדי להחתים כניסה/יציאה (מונע זיופים)</p>
+                                    </div>
                                 </div>
-                                <div className="max-w-[250px]">
-                                    <h4 className="text-white font-bold text-sm">חובה לסריקת פנים בהחתמת שעון</h4>
-                                    <p className="text-slate-400 text-[10px]">מחייב סריקה ביומטרית כדי להחתים כניסה/יציאה (מונע זיופים)</p>
-                                </div>
+                                <button
+                                    onClick={handleToggleFaceRequired}
+                                    className={`w-12 h-6 rounded-full transition-colors relative ${faceRequired ? 'bg-amber-500' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${faceRequired ? 'left-7' : 'left-1'}`} />
+                                </button>
                             </div>
-                            <button
-                                onClick={handleToggleFaceRequired}
-                                className={`w-12 h-6 rounded-full transition-colors relative ${faceRequired ? 'bg-amber-500' : 'bg-slate-700'}`}
-                            >
-                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${faceRequired ? 'left-7' : 'left-1'}`} />
-                            </button>
                         </motion.div>
                     )}
                 </AnimatePresence>

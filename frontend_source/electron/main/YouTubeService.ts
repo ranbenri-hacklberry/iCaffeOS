@@ -64,16 +64,17 @@ export class YouTubeService {
         if (!this.supabase) return;
 
         try {
+            // 🔒 REFACTORED: Fetch from business_secrets table
             const { data, error } = await this.supabase
-                .from('businesses')
+                .from('business_secrets')
                 .select('youtube_api_key')
-                .eq('id', this.businessId)
+                .eq('business_id', this.businessId)
                 .single();
 
             if (data?.youtube_api_key) {
                 this.apiKey = data.youtube_api_key;
-                console.log('🔑 [YouTube] API Key Loaded');
-            } else if (error) {
+                console.log('🔑 [YouTube] API Key Loaded from business_secrets');
+            } else if (error && error.code !== 'PGRST116') {
                 console.error('❌ [YouTube] Failed to fetch API key:', error.message);
             }
         } catch (err) {
@@ -90,16 +91,17 @@ export class YouTubeService {
     private setupRealtimeWatcher() {
         if (!this.supabase) return;
 
-        console.log(`👀 [YouTube] Watching settings for Business: ${this.businessId}`);
+        // 🔒 REFACTORED: Watch business_secrets table instead of businesses
+        console.log(`👁️ [YouTube] Watching business_secrets for Business: ${this.businessId}`);
 
         this.supabase
-            .channel('public:businesses')
+            .channel('public:business_secrets')
             .on('postgres_changes',
-                { event: 'UPDATE', schema: 'public', table: 'businesses', filter: `id=eq.${this.businessId}` },
-                (payload) => {
+                { event: 'UPDATE', schema: 'public', table: 'business_secrets', filter: `business_id=eq.${this.businessId}` },
+                (payload: any) => {
                     const newKey = payload.new.youtube_api_key;
                     if (newKey && newKey !== this.apiKey) {
-                        console.log('🔄 [YouTube] Hot-Reload: API Key Updated!');
+                        console.log('🔄 [YouTube] Hot-Reload: API Key Updated from business_secrets!');
                         this.apiKey = newKey;
                     }
                 }

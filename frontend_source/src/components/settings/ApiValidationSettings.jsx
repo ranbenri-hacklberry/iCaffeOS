@@ -209,14 +209,15 @@ export default function ApiValidationSettings() {
 
     const fetchKeys = async () => {
         try {
+            // 🔒 REFACTORED: Fetch from business_secrets table (governed by RLS)
             const { data, error } = await supabase
-                .from('businesses')
+                .from('business_secrets')
                 .select('gemini_api_key, grok_api_key, claude_api_key, kling_access_key, kling_secret_key, global_sms_api_key, whatsapp_api_key, youtube_api_key')
-                .eq('id', currentUser.business_id)
+                .eq('business_id', currentUser.business_id)
                 .single();
 
-            if (error) throw error;
-            if (data) setKeys(data);
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows (OK for new business)
+            if (data) setKeys(prev => ({ ...prev, ...data }));
         } catch (err) {
             console.error('Error fetching keys:', err);
         } finally {
@@ -251,10 +252,12 @@ export default function ApiValidationSettings() {
 
     const handleFieldSave = async (field, value) => {
         try {
-            const { error } = await supabase
-                .from('businesses')
-                .update({ [field]: value })
-                .eq('id', currentUser.business_id);
+            // 🔒 REFACTORED: Save to business_secrets via upsert_business_secret RPC
+            const { error } = await supabase.rpc('upsert_business_secret', {
+                p_business_id: currentUser.business_id,
+                p_field: field,
+                p_value: value
+            });
 
             if (error) throw error;
 

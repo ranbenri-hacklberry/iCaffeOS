@@ -759,8 +759,13 @@ const KdsScreen = () => {
     <div className="h-screen w-screen bg-gray-900 flex items-center justify-center p-4 font-heebo overflow-hidden" dir="rtl">
       <style>{kdsStyles}</style>
 
+      {/* 🔴 NETWORK DEBUG BAR */}
+      <div className="absolute top-0 left-0 w-full z-[100]">
+        <ConnectionStatusBar />
+      </div>
+
       {/* מסגרת מלאה */}
-      <div className="bg-slate-50 w-full h-full rounded-[24px] overflow-hidden shadow-2xl flex flex-col relative ring-4 ring-gray-800">
+      <div className="bg-slate-50 w-full h-full rounded-[24px] overflow-hidden shadow-2xl flex flex-col relative ring-4 ring-gray-800 pt-6">
         {isLoading && (
           <div className="kds-loader-bar">
             <div className="kds-loader-progress" />

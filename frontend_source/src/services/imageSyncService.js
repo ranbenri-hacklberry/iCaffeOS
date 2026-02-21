@@ -5,9 +5,13 @@ import { db, cached_images } from '@/db/database';
  * This ensures images are available even when completely offline
  */
 export const syncMenuImages = async (menuItems) => {
+    // 🛑 OPTIMIZATION: Don't run this immediately on load.
+    // Wait for the UI to settle (5 seconds delay)
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
     if (!menuItems || menuItems.length === 0) return;
 
-    console.log(`🖼️ [ImageSync] Starting sync for ${menuItems.length} items...`);
+    console.log(`🖼️ [ImageSync] Starting lazy sync for ${menuItems.length} items...`);
 
     let syncedCount = 0;
     let failedCount = 0;

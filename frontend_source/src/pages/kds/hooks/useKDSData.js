@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase, isLocalInstance } from '@/lib/supabase';
+import { getBackendApiUrl } from '@/utils/apiUtils';
 import { useAuth } from '@/context/AuthContext';
 import { sendSms } from '@/services/smsService';
 import { groupOrderItems, sortItems } from '@/utils/kdsUtils';
@@ -140,6 +141,24 @@ export const useKDSData = () => {
     // --- 🔋 LITE MODE SUPPORT ---
     const isLiteMode = localStorage.getItem('lite_mode') === 'true';
 
+    // 🔍 DEBUG + BACKEND PING on mount
+    useEffect(() => {
+        const isLan = window.location.hostname.startsWith('192.168.') ||
+            window.location.hostname.startsWith('10.') ||
+            window.location.hostname.startsWith('100.') ||
+            window.location.hostname.startsWith('172.');
+        console.log(`🔗 [KDS-INIT] isLocal=${isLocalInstance()}, isLAN=${isLan}, hostname=${window.location.hostname}, LiteMode=${isLiteMode}`);
+
+        // 📱 Ping backend so we can see in backend logs that the iPad opened KDS
+        if (isLan) {
+            const backendUrl = getBackendApiUrl();
+            fetch(`${backendUrl}/api/kds/ping`)
+                .then(r => r.json())
+                .then(d => console.log(`✅ [KDS-INIT] Backend ping OK:`, d))
+                .catch(e => console.error(`❌ [KDS-INIT] Backend ping FAILED — cannot reach backend at ${backendUrl}:`, e.message));
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // 🛠️ GLOBAL AUTO-HEAL: Run once on mount to fix ALL Dexie inconsistencies
     /**
      * 🧹 AGGRESSIVE CLEANUP: Remove ANY order from previous business days
@@ -176,6 +195,10 @@ export const useKDSData = () => {
      * Extracted from fetchOrders to allow multiple call points (SWR)
      */
     const processAndSetUI = useCallback(async (ordersData, menuMapFromRef) => {
+        // 🔍 VERSION CHECK: If iPad shows "KDS v2" in title, it loaded the new code
+        if (typeof document !== 'undefined' && !document.title.includes('v2')) {
+            document.title = document.title.replace(/\s*v\d+/, '') + ' v2';
+        }
         if (!ordersData || ordersData.length === 0) {
             setCurrentOrders([]);
             setCompletedOrders([]);
@@ -495,6 +518,7 @@ export const useKDSData = () => {
 
             // 🕒 KDS ANCHOR: The day starts at 5:00 AM. 
             // Everything before 5:00 AM is "yesterday" and should be cleared.
+            // 🚨 MAYA FIX: Fetch active orders for last 7 days to ensure old/stuck orders are seen!
             const fetchStartTime = new Date();
             const anchor = new Date(fetchStartTime);
             anchor.setHours(5, 0, 0, 0);
@@ -504,8 +528,11 @@ export const useKDSData = () => {
                 anchor.setDate(anchor.getDate() - 1);
             }
 
+            // Go back 7 days for active orders
+            anchor.setDate(anchor.getDate() - 7);
+
             const today = anchor;
-            log(`📅 [KDS] Use 5:00 AM anchor for HISTORY, but fetch ALL active orders regardless of date. (Anchor: ${today.toISOString()})`);
+            log(`📅 [KDS] Use T-7 days anchor for Active Orders (Anchor: ${today.toISOString()})`);
 
             let ordersData = [];
             let supabaseFailed = false;
@@ -515,11 +542,13 @@ export const useKDSData = () => {
             let localPendingOrders = [];
 
             try {
-                // 🕒 BUSINESS DAY ANCHOR (Same as server)
+                // 🕒 BUSINESS DAY ANCHOR (Same as server - T-7 Days)
                 const now = new Date();
                 const businessDayStart = new Date(now);
                 businessDayStart.setHours(5, 0, 0, 0);
                 if (now.getHours() < 5) businessDayStart.setDate(businessDayStart.getDate() - 1);
+                // 🚨 MAYA FIX: Look back 7 days for local orders too!
+                businessDayStart.setDate(businessDayStart.getDate() - 7);
 
                 // ALWAYS load pending/unsynced orders from Dexie first.
                 // 🛡️ CRITICAL: Only load orders from TODAY'S business day.
@@ -660,10 +689,15 @@ export const useKDSData = () => {
                     console.warn('Queue sync failed or timed out, continuing:', syncErr);
                 }
 
-                // ONLINE: Try Supabase
+                // ONLINE: Try fetching orders
+                // ✅ UNIFIED PATH: All devices (including iPad/tablets on LAN) call Supabase RPC directly.
+                // Kong listens on 0.0.0.0:54321 and is accessible from LAN.
+                // The previous backend proxy path (/api/kds/orders) was causing iPad to show 0 orders.
                 try {
+                    let ordersData_raw = null;
+
                     log(`📡 [KDS] Calling RPC get_kds_orders: date=${today.toISOString()}, businessId=${businessId}`);
-                    const { data, error } = await supabase.rpc('get_kds_orders', {
+                    const { data: rpcData, error } = await supabase.rpc('get_kds_orders', {
                         p_date: today.toISOString(),
                         p_business_id: businessId || null
                     }).abortSignal(signal);
@@ -672,6 +706,15 @@ export const useKDSData = () => {
                         console.error('❌ [KDS-ERROR] RPC get_kds_orders failed:', error.message, error.details);
                         throw error;
                     }
+                    ordersData_raw = rpcData;
+
+                    // Ping backend for connection logging (non-blocking)
+                    try {
+                        const backendUrl = getBackendApiUrl();
+                        fetch(`${backendUrl}/api/kds/ping`).catch(() => { });
+                    } catch (_) { }
+
+                    const data = ordersData_raw;
 
                     log(`📦 [KDS] RPC returned ${data?.length || 0} orders from Supabase`);
                     if (data && data.length > 0) {
@@ -2035,12 +2078,14 @@ export const useKDSData = () => {
             }
             isInitialFetch = false;
             // Removed navigator.onLine check here - fetchOrders handles hybrid logic internally
-            fetchOrders(controller.signal);
+            fetchOrders(false, controller.signal);
         };
 
         runFetch(); // Initial fetch (bypasses cooldown)
 
-        const intervalMs = isLiteMode ? 30000 : 10000;
+        // 📱 iPad NOTE: Even in Lite Mode, keep polling at max 10s.
+        // 30s was causing ~3 minute delays on iPad due to iOS timer freezing.
+        const intervalMs = isLiteMode ? 10000 : 3000;
         const interval = setInterval(runFetch, intervalMs);
 
         return () => {
@@ -2048,6 +2093,34 @@ export const useKDSData = () => {
             clearInterval(interval);
         };
     }, [fetchOrders, currentUser]); // ✅ Runs on mount AND when fetchOrders/auth changes
+
+    // 📱 iOS FIX: Visibility Change Handler
+    // iOS Safari freezes setInterval when the screen locks or the tab goes to background.
+    // When the user returns to the KDS tab, we trigger an immediate fetch so orders
+    // don't sit stale for minutes waiting for the next polling cycle.
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                log('👁️ [VISIBILITY] Tab became visible - triggering immediate fetch');
+                fetchOrders(true); // isForced=true bypasses anti-jump cooldown
+            }
+        };
+
+        const handleFocus = () => {
+            log('🔆 [FOCUS] Window focused - triggering immediate fetch');
+            fetchOrders(true);
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleFocus);
+        };
+    }, [currentUser, fetchOrders]);
 
     // Realtime
     useEffect(() => {
@@ -2306,68 +2379,81 @@ export const useKDSData = () => {
             let historyData = [];
             let usedRpc = false;
 
-            // 1. Try RPC V2 (Preferred)
-            // 1. Try RPC V3 (Fixed for items/payment)
-            // FIX: Use local date components instead of ISOString to avoid jumping back a day in non-UTC timezones
-            const dateStr = `${startOfDay.getFullYear()}-${String(startOfDay.getMonth() + 1).padStart(2, '0')}-${String(startOfDay.getDate()).padStart(2, '0')}`;
+            // 1. Determine if we should fetch a range (Last 7 Days) or Single Date
+            // If the user selected "Today", we default to showing the last 7 days of history.
+            const today = new Date();
+            const isRequestingToday = startOfDay.getDate() === today.getDate() &&
+                startOfDay.getMonth() === today.getMonth() &&
+                startOfDay.getFullYear() === today.getFullYear();
 
-            console.log(`📜 [HISTORY-FETCH] p_date=${dateStr}, p_business_id=${currentUser?.business_id}`);
-            const { data: v2Data, error: v2Error } = await supabase
-                .rpc('get_kds_history_orders_v3', {
-                    p_date: dateStr,
-                    p_business_id: currentUser?.business_id, // Pass business_id for security
-                    p_limit: 500,
-                    p_offset: 0
-                })
-                .abortSignal(signal);
-
-            if (v2Error) {
-                console.error(`❌ [HISTORY-ERROR] get_kds_history_orders_v3 failed:`, v2Error.message, v2Error.details);
+            let targetDates = [startOfDay];
+            if (isRequestingToday) {
+                console.log('📜 [HISTORY] "Today" selected - Fetching last 7 days of history...');
+                targetDates = [];
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(startOfDay);
+                    d.setDate(d.getDate() - i);
+                    targetDates.push(d);
+                }
             }
 
-            if (!v2Error && v2Data && v2Data.length > 0) {
-                console.log(`📜 [HISTORY-DEBUG] Fetched ${v2Data.length} raw orders from RPC V3`);
+            console.log(`📜 [HISTORY-FETCH] Fetching ${targetDates.length} dates (Pallelled)...`);
 
-                // Simplified Filter for History: Show everything that is paid, completed, OR cancelled.
-                // If the user is in the history tab, they want to see all closed/settled orders.
-                historyData = v2Data.filter(o => {
+            // Helper to fetch a single date
+            const fetchSingleDate = async (dateObj) => {
+                const dStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+
+                // Try V3
+                const { data, error } = await supabase
+                    .rpc('get_kds_history_orders_v3', {
+                        p_date: dStr,
+                        p_business_id: currentUser?.business_id,
+                        p_limit: 500,
+                        p_offset: 0
+                    })
+                    .abortSignal(signal);
+
+                if (!error && data) return data;
+
+                // Fallback V1 (Only if V3 failed/empty and not aborted)
+                if (!signal?.aborted) {
+                    const dateStart = new Date(dateObj); dateStart.setHours(0, 0, 0, 0);
+                    const dateEnd = new Date(dateObj); dateEnd.setHours(23, 59, 59, 999);
+
+                    const { data: v1Data } = await supabase
+                        .rpc('get_kds_history_orders', {
+                            p_start_date: dateStart.toISOString(),
+                            p_end_date: dateEnd.toISOString(),
+                            p_business_id: currentUser?.business_id
+                        })
+                        .abortSignal(signal);
+
+                    if (v1Data) return v1Data;
+                }
+
+                return [];
+            };
+
+            // Execute Parallel Fetches
+            const results = await Promise.all(targetDates.map(d => fetchSingleDate(d)));
+            const rawAll = results.flat();
+
+            // Deduplicate by ID (Safety)
+            const uniqueHistory = Array.from(new Map(rawAll.map(item => [item.id, item])).values());
+
+            if (uniqueHistory.length > 0) {
+                console.log(`📜 [HISTORY-DEBUG] Total unique orders fetched: ${uniqueHistory.length}`);
+
+                historyData = uniqueHistory.filter(o => {
                     const isCancelled = o.order_status === 'cancelled';
                     const isCompleted = o.order_status === 'completed';
-
-                    // Rule: Only show truly completed or cancelled orders in history.
-                    // This prevents active/ready orders from appearing in both tabs.
+                    // Rule: Only show truly completed or cancelled orders.
                     return isCompleted || isCancelled;
                 });
 
                 usedRpc = true;
             } else {
-                if (v2Error && v2Error.name !== 'AbortError') {
-                    console.warn('⚠️ RPC V2/V3 failed or empty, trying V1...', v2Error?.message);
-                }
-
-                // If it wasn't an abort, and V3 was empty or failed, try V1
-                if (!signal?.aborted) {
-                    console.log('🔄 RPC V3 was empty/failed. Falling back to RPC V1...');
-                    const { data: v1Data, error: v1Error } = await supabase
-                        .rpc('get_kds_history_orders', {
-                            p_start_date: startOfDay.toISOString(),
-                            p_end_date: endOfDay.toISOString(),
-                            p_business_id: businessId || null
-                        })
-                        .limit(500)
-                        .abortSignal(signal);
-
-                    if (!v1Error && v1Data) {
-                        console.log(`📜 [HISTORY RPC] Fetched ${v1Data.length} raw orders from V1`);
-                        historyData = v1Data.filter(o => {
-                            const isCancelled = o.order_status === 'cancelled';
-                            const isCompleted = o.order_status === 'completed';
-
-                            return isCompleted || isCancelled;
-                        });
-                        usedRpc = true;
-                    }
-                }
+                console.warn('⚠️ No history orders found for the requested period.');
             }
 
             // NORMALIZE: Ensure order_items is a valid array

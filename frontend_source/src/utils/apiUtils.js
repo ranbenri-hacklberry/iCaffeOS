@@ -33,9 +33,9 @@ export const resolveUrl = async () => {
         hostname.startsWith('100.') ||
         hostname.startsWith('172.');
 
-    // For browser development, return direct Backend URL to avoid Vite Proxy issues with /music routes
+    // For browser development, return current hostname to allow LAN access (iPad)
     if (isLocalOrLan && protocol.startsWith('http')) {
-        return 'http://127.0.0.1:8081'; // Direct connection
+        return `http://${hostname}:8081`;
     }
 
     // 3. Remote/Cloud Access (e.g. external management)
@@ -57,6 +57,6 @@ export const getBackendApiUrl = () => {
         hostname.startsWith('100.') ||
         hostname.startsWith('172.');
 
-    // For browser development, return direct Backend URL to avoid Vite Proxy issues with /music routes
-    return (isLocalOrLan && protocol.startsWith('http')) ? 'http://localhost:8081' : CLOUD_URL;
+    // For browser development, return current hostname to allow LAN access (iPad)
+    return (isLocalOrLan && protocol.startsWith('http')) ? `http://${hostname}:8081` : CLOUD_URL;
 };

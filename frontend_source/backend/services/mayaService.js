@@ -6,7 +6,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai'; // For Grok (compatible API)
 import fetch from 'node-fetch'; // or built-in in Node 18+
+import { getProviderKey as getProviderKeyFromSecrets } from './secretsService.js';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const MODEL_NAME = process.env.MAYA_MODEL || 'dictalm-hebrew';
@@ -249,21 +252,38 @@ export async function getBusinessContext(businessId) {
         }
     } catch (e) { console.error('Error calculating top items:', e); }
 
-    // 6. מלאי נמוך (אמיתי) - This replaces the previous logic with correct filters
+    // 7. תפריט ומחירים (מוגבל ל-50 פריטים פופולריים או הכל)
+    try {
+        const { data: menu } = await supabase
+            .from('menu_items')
+            .select('name, price, category')
+            .eq('business_id', businessId)
+            .limit(50); // Limit to avoid context overflow
+
+        if (menu) {
+            context.menuItems = menu.map(m => `${m.name} (${m.price}₪)`);
+        }
+    } catch (e) {
+        console.error('Error fetching menu:', e);
+    }
+
+    // 2. מלאי נמוך (אמיתי) - This replaces the previous logic with correct filters
     try {
         const { data: lowStock } = await supabase
             .from('inventory_items')
-            .select('name, current_stock, unit, low_stock_threshold_units, weight_per_unit')
+            .select('name, current_stock, unit, low_stock_threshold_units')
             .eq('business_id', businessId);
 
         if (lowStock) {
             context.lowStockItems = lowStock
                 .filter(i => {
-                    const threshold = (parseFloat(i.low_stock_threshold_units) || 0) * (parseFloat(i.weight_per_unit) || 1);
+                    // Simple check: current < threshold
+                    // If no stored threshold, assume 0 (no alert)
+                    const threshold = i.low_stock_threshold_units || 0;
                     return threshold > 0 && i.current_stock <= threshold;
                 })
-                .map(i => `${i.name} (${i.current_stock} גרם/יח׳)`)
-                .slice(0, 5);
+                .map(i => `${i.name} (${i.current_stock} ${i.unit})`)
+                .slice(0, 10);
         }
     } catch (e) {
         console.error('Error fetching inventory:', e);
@@ -285,6 +305,7 @@ const MAYA_PERSONALITY = `אתה מאיה, עוזרת וקופירייטרית �
 - לשאלות לא קשורות לקפה/עסק - ענה: אני רק יודעת על קפה
 - כשמבקשים סכומים או סטטיסטיקות - אז תשתמש בנתונים למטה
 - כשמבקשים הזמנות - אז תן פרטים רלוונטיים
+- סוג כסף: ש"ח (NIS)
 
 הנתונים למטה זמינים לך אבל השתמש בהם רק כשרלוונטי!`;
 
@@ -310,7 +331,8 @@ export function applyWorkerConstraints(context, employee) {
         // Keep operational data
         recentOrders: context.recentOrders?.map(o => ({ ...o, total: '[מוסתר]' })),
         lowStockItems: context.lowStockItems,
-        topSellingItems: context.topSellingItems
+        topSellingItems: context.topSellingItems,
+        menuItems: context.menuItems // Workers can see prices
     };
 }
 
@@ -347,6 +369,11 @@ function buildContextPrompt(context) {
         });
     }
 
+    // תפריט ומחירים
+    if (context.menuItems && context.menuItems.length > 0) {
+        p += `\n\nתפריט ומחירים: ${context.menuItems.join(', ')}`;
+    }
+
     // פריטים פופולריים
     if (context.topSellingItems && context.topSellingItems.length > 0) {
         p += `\n\nלהיטים: ${context.topSellingItems.join(', ')}`;
@@ -354,43 +381,92 @@ function buildContextPrompt(context) {
 
     // מלאי נמוך
     if (context.lowStockItems && context.lowStockItems.length > 0) {
-        p += `\n\nמלאי נמוך: ${context.lowStockItems.join(', ')}`;
+        p += `\n\n⚠️ מלאי נמוך (מומלץ להזמין): ${context.lowStockItems.join(', ')}`;
     }
 
     return p;
 }
 
 /**
- * Get Gemini API key from business
+ * Get API Key for specific provider
+ * 🔒 REFACTORED: Now delegates to secretsService (reads from business_secrets table)
  */
-async function getGeminiKey(businessId) {
-    if (!supabase) return null;
-    try {
-        const { data } = await supabase
-            .from('businesses')
-            .select('gemini_api_key')
-            .eq('id', businessId)
-            .single();
-        return data?.gemini_api_key || null;
-    } catch (e) {
-        console.error('Error fetching Gemini key:', e);
-        return null;
-    }
+async function getProviderKey(businessId, provider) {
+    return getProviderKeyFromSecrets(businessId, provider);
 }
 
 /**
- * צ'אט עם Gemini
+ * Chat with Anthropic (Claude)
  */
-async function chatWithGemini(messages, systemPrompt, businessId) {
-    const apiKey = await getGeminiKey(businessId);
-    if (!apiKey) {
-        throw new Error('Gemini API key not configured');
-    }
+async function chatWithClaude(messages, systemPrompt, businessId, model = 'claude-4-6-sonnet-latest') {
+    const apiKey = await getProviderKey(businessId, 'claude');
+    if (!apiKey) throw new Error('Claude API key not configured');
+
+    const anthropic = new Anthropic({ apiKey });
+
+    // Format messages for Claude (alternating user/assistant)
+    // System prompt goes in top-level parameter
+    const claudeMessages = messages.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+    }));
+
+    const response = await anthropic.messages.create({
+        model: model, // e.g. 'claude-3-opus-20240229'
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: claudeMessages
+    });
+
+    return {
+        text: response.content[0].text,
+        usage: {
+            input: response.usage.input_tokens,
+            output: response.usage.output_tokens
+        }
+    };
+}
+
+/**
+ * Chat with xAI (Grok) - uses OpenAI compatible API
+ */
+async function chatWithGrok(messages, systemPrompt, businessId, model = 'grok-4-1-fast-non-reasoning') {
+    const apiKey = await getProviderKey(businessId, 'grok');
+    if (!apiKey) throw new Error('Grok API key not configured');
+
+    const openai = new OpenAI({
+        apiKey: apiKey,
+        baseURL: 'https://api.x.ai/v1'
+    });
+
+    const completion = await openai.chat.completions.create({
+        model: model,
+        messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages
+        ]
+    });
+
+    return {
+        text: completion.choices[0].message.content,
+        usage: {
+            input: completion.usage.prompt_tokens,
+            output: completion.usage.completion_tokens
+        }
+    };
+}
+
+/**
+ * Chat with Gemini
+ */
+async function chatWithGemini(messages, systemPrompt, businessId, modelName = 'gemini-3-flash-preview') {
+    const apiKey = await getProviderKey(businessId, 'gemini');
+    if (!apiKey) throw new Error('Gemini API key not configured');
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Use specified model or default
+    const model = genAI.getGenerativeModel({ model: modelName });
 
-    // Build chat history for Gemini
     const history = messages.slice(0, -1).map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
@@ -403,18 +479,33 @@ async function chatWithGemini(messages, systemPrompt, businessId) {
 
     const lastMessage = messages[messages.length - 1];
     const result = await chat.sendMessage(lastMessage.content);
-    return result.response.text();
+    const response = await result.response;
+
+    // Gemini doesn't always return usage easily in the standard response object wrapper
+    // but let's try to infer or check metadata if available
+    const usageMetadata = response.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0 };
+
+    return {
+        text: response.text(),
+        usage: {
+            input: usageMetadata.promptTokenCount,
+            output: usageMetadata.candidatesTokenCount
+        }
+    };
 }
 
 /**
  * צ'אט עם Maia - תומך בספקים שונים
  */
-export async function chatWithMaya(messages, businessId, provider = 'local', employee = null) {
+/**
+ * צ'אט עם Maia - תומך בספקים שונים
+ */
+export async function chatWithMaya(messages, businessId, provider = 'local', employee = null, model = null) {
     console.log('═══════════════════════════════════════════════');
     console.log('🤖 Maya Chat');
     console.log('   Provider:', provider);
+    console.log('   Model:', model);
     console.log('   BusinessId:', businessId);
-    console.log('   Employee:', employee?.name, `(${employee?.accessLevel})`);
     console.log('   User message:', messages[messages.length - 1]?.content);
     console.log('═══════════════════════════════════════════════');
 
@@ -427,58 +518,88 @@ export async function chatWithMaya(messages, businessId, provider = 'local', emp
 
     const systemPrompt = buildContextPrompt(context);
 
-    console.log('📝 System Prompt (first 500 chars):');
-    console.log(systemPrompt.substring(0, 500));
-    console.log('...');
-
-    // 🔒 Prepend absolute safety instruction for workers
+    // 🔒 Prepend absolute safety instruction for non-privileged staff
     let finalSystemPrompt = systemPrompt;
-    if (employee && ['Worker', 'Chef', 'Barista', 'Checker', 'Software Architect'].includes(employee.accessLevel)) {
+
+    const isSuperAdmin = employee?.isSuperAdmin || employee?.is_super_admin;
+    const isManager = ['Owner', 'Manager', 'Admin'].includes(employee?.accessLevel) || ['Owner', 'Manager', 'Admin'].includes(employee?.access_level);
+
+    if (employee && !isSuperAdmin && !isManager) {
         const workerSafetyPrefix = `⚠️ CRITICAL SECURITY CONSTRAINT ⚠️
-You are assisting a STAFF MEMBER (${employee.name}, ${employee.accessLevel}).
+You are assisting a STAFF MEMBER (${employee.name}, Role: ${employee.accessLevel}).
 ABSOLUTELY PROHIBITED: Providing financial data, revenue figures, profit margins, sales totals, owner-level business metrics, or any sensitive financial information.
 If asked about revenue, profits, or financial details, respond: "אני לא יכולה לגשת לנתונים פיננסיים. רק הבעלים יכול לראות את זה."
 
 `;
         finalSystemPrompt = workerSafetyPrefix + systemPrompt;
-        console.log('🔒 Worker safety constraints applied');
     }
 
-    // Use Gemini if requested
-    if (provider === 'google' || provider === 'gemini') {
-        console.log('🌐 Using Google Gemini...');
-        try {
-            const response = await chatWithGemini(messages, finalSystemPrompt, businessId);
-            console.log('✅ Gemini response:', response?.substring(0, 200));
-            return response || 'לא קיבלתי תשובה מגוגל...';
-        } catch (err) {
-            console.error('❌ Gemini Chat Error:', err);
-            return `שגיאה בחיבור לגוגל: ${err.message}`;
-        }
-    }
-
-    // Default: Use Ollama (local)
-    const systemMsg = { role: 'system', content: finalSystemPrompt };
-    const allMessages = [systemMsg, ...messages];
-
+    // 🧠 Route to Provider
     try {
-        const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: MODEL_NAME,
-                messages: allMessages,
-                stream: false
-            })
-        });
+        let responseData = { text: '', usage: null };
 
-        if (!response.ok) throw new Error(`Ollama API Error: ${response.statusText}`);
+        if (provider === 'google' || provider === 'gemini') {
+            console.log(`🌐 Using Google Gemini (${model || 'default'})...`);
+            responseData = await chatWithGemini(messages, finalSystemPrompt, businessId, model || 'gemini-3-flash-preview');
+        }
+        else if (provider === 'anthropic' || provider === 'claude') {
+            console.log(`🧠 Using Anthropic Claude (${model || 'default'})...`);
+            responseData = await chatWithClaude(messages, finalSystemPrompt, businessId, model || 'claude-4-6-sonnet-latest');
+        }
+        else if (provider === 'xai' || provider === 'grok') {
+            console.log(`🚀 Using xAI Grok (${model || 'default'})...`);
+            responseData = await chatWithGrok(messages, finalSystemPrompt, businessId, model || 'grok-4-1-fast-non-reasoning');
+        }
+        else {
+            // Default: Use Ollama (local)
+            const targetModel = model || MODEL_NAME;
+            console.log(`🖥️ Using Local Ollama (${targetModel})...`);
 
-        const data = await response.json();
-        return data.message?.content || 'משהו נדפק בחיבור למוח שלי...';
+            const systemMsg = { role: 'system', content: finalSystemPrompt };
+            const allMessages = [systemMsg, ...messages];
+
+            const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: targetModel,
+                    messages: allMessages,
+                    stream: false
+                })
+            });
+
+            if (!response.ok) throw new Error(`Ollama API Error: ${response.statusText}`);
+            const data = await response.json();
+
+            // Extract usage from Ollama response
+            const usage = {
+                input: data.prompt_eval_count || 0,
+                output: data.eval_count || 0
+            };
+
+            responseData = { text: data.message?.content, usage };
+        }
+
+        console.log('✅ Response generated length:', responseData.text?.length);
+        // Return object with text AND metadata (usage) if available
+        // Older clients expect just string, so we might need backward compat
+        // But for the new features we need the object. We'll return an Enhanced String if possible or just the string and handle metadata separately?
+        // Actually, let's return a JSON object if the caller supports it?
+        // Wait, the API route currently sends `res.json({ response: ... })`.
+        // I should stick to returning the text for now to avoid breaking other consumers, 
+        // OR return an object and update the route handler to unpack it.
+        // Let's update the route handler too.
+
+        return {
+            content: responseData.text || 'לא קיבלתי תשובה...',
+            usage: responseData.usage,
+            provider,
+            model
+        };
+
     } catch (err) {
-        console.error('Maia Chat Error:', err);
-        return 'סליחה רני, השרת נפל או שאני בחופש.';
+        console.error(`❌ Chat Error (${provider}):`, err);
+        return { content: `שגיאה בחיבור ל-${provider}: ${err.message}`, error: true };
     }
 }
 

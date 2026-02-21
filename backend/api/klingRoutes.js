@@ -10,6 +10,7 @@ import jwt from 'jsonwebtoken';
 import FormData from 'form-data';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { getKlingKeys } from '../services/secretsService.js';
 
 dotenv.config();
 
@@ -84,19 +85,10 @@ router.post('/generate-video', upload.fields([
     console.log('📝 Prompt:', prompt);
     console.log('🏢 Business ID:', business_id);
 
-    // Get Kling API keys from business settings
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('kling_access_key, kling_secret_key')
-      .eq('id', business_id)
-      .single();
+    // Get Kling API keys from business_secrets (via secretsService)
+    const { accessKey, secretKey } = await getKlingKeys(business_id);
 
-    if (businessError || !business) {
-      console.error('❌ Failed to fetch business:', businessError);
-      return res.status(500).json({ message: 'Failed to fetch business settings' });
-    }
-
-    if (!business.kling_access_key || !business.kling_secret_key) {
+    if (!accessKey || !secretKey) {
       return res.status(400).json({
         message: 'Kling API keys not configured. Please add them in Business Settings.'
       });
@@ -106,8 +98,8 @@ router.post('/generate-video', upload.fields([
 
     // Generate JWT token
     const jwtToken = generateKlingToken(
-      business.kling_access_key,
-      business.kling_secret_key
+      accessKey,
+      secretKey
     );
 
     console.log('✅ JWT token generated');
@@ -191,21 +183,17 @@ router.get('/video-status/:taskId', async (req, res) => {
 
     console.log('🔍 Checking video status for task:', taskId);
 
-    // Get Kling API keys
-    const { data: business, error: businessError } = await supabase
-      .from('businesses')
-      .select('kling_access_key, kling_secret_key')
-      .eq('id', business_id)
-      .single();
+    // Get Kling API keys from business_secrets (via secretsService)
+    const { accessKey, secretKey } = await getKlingKeys(business_id);
 
-    if (businessError || !business || !business.kling_access_key) {
+    if (!accessKey) {
       return res.status(500).json({ message: 'Failed to fetch business settings' });
     }
 
     // Generate JWT token
     const jwtToken = generateKlingToken(
-      business.kling_access_key,
-      business.kling_secret_key
+      accessKey,
+      secretKey
     );
 
     // Check status with Kling API

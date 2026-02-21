@@ -33,6 +33,50 @@ const DOCKER_KEY = process.env.LOCAL_SUPABASE_ANON_KEY || process.env.VITE_LOCAL
 const dockerSupabase = createClient(DOCKER_URL, DOCKER_KEY);
 
 /**
+ * GET /api/admin/identity
+ * Zero-Config Auto-Discovery: returns businesses known to the local DB.
+ * Used by the frontend to auto-login when exactly one business exists.
+ */
+router.get('/identity', async (req, res) => {
+    try {
+        const { data, error } = await dockerSupabase
+            .from('businesses')
+            .select('id, name, settings')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.warn('[AdminRoutes/identity] Local DB query failed:', error.message);
+            // Fallback: try Cloud Supabase
+            const { data: cloudData, error: cloudError } = await cloudSupabase
+                .from('businesses')
+                .select('id, name, settings')
+                .order('created_at', { ascending: true });
+
+            if (cloudError) {
+                return res.status(500).json({ success: false, error: cloudError.message });
+            }
+
+            return res.json({
+                success: true,
+                source: 'cloud',
+                businesses: cloudData || [],
+                count: cloudData?.length || 0
+            });
+        }
+
+        return res.json({
+            success: true,
+            source: 'local',
+            businesses: data || [],
+            count: data?.length || 0
+        });
+    } catch (err) {
+        console.error('[AdminRoutes/identity] Error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * GET /api/admin/docker-dump/:table
  * Fetch all data from a specific table in Docker Local Supabase
  */

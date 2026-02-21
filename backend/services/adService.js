@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url';
 import WebSocket from 'ws';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import { getBusinessApiKeys as getBusinessApiKeysFromSecrets } from './secretsService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,30 +35,11 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANO
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 /**
- * Fetch API keys securely from database (server-side only!)
+ * Fetch API keys securely from business_secrets table (server-side only!)
+ * 🔒 REFACTORED: Now uses secretsService
  */
 async function getBusinessApiKeys(businessId) {
-    if (!supabase || !businessId) {
-        return { geminiKey: null, grokKey: null };
-    }
-
-    try {
-        const { data, error } = await supabase
-            .from('businesses')
-            .select('gemini_api_key, grok_api_key')
-            .eq('id', businessId)
-            .single();
-
-        if (error) throw error;
-
-        return {
-            geminiKey: data?.gemini_api_key || null,
-            grokKey: data?.grok_api_key || null
-        };
-    } catch (err) {
-        console.error('[AdService] Error fetching API keys:', err);
-        return { geminiKey: null, grokKey: null };
-    }
+    return getBusinessApiKeysFromSecrets(businessId);
 }
 
 /**
@@ -466,7 +448,7 @@ export async function generateImageGrok(prompt, options = {}) {
             try {
                 const errorData = JSON.parse(errorText);
                 errorMsg = errorData.error?.message || errorMsg;
-            } catch (e) {}
+            } catch (e) { }
             throw new Error(errorMsg);
         }
 

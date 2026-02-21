@@ -17,6 +17,13 @@ export const AuthProvider = ({ children }) => {
 
     // 🚀 רני ביקש: בכל העלאה מחדש להכריח כניסה עם פין
     useEffect(() => {
+        // If we are in the middle of an impersonation flow, DO NOT clear the session
+        const isImpersonating = localStorage.getItem('original_super_admin');
+        if (isImpersonating) {
+            console.log('🎭 [Auth] Impersonation active - Preserving session across reload');
+            return;
+        }
+
         console.log('🔄 [Auth] Fresh Load - Clearing session to force PIN entry');
         localStorage.removeItem('kiosk_user');
         localStorage.removeItem('kiosk_auth_time');
@@ -502,6 +509,16 @@ export const AuthProvider = ({ children }) => {
                 localStorage.removeItem('return_to_super_portal');
                 localStorage.removeItem('last_full_sync'); // Clear sync state from the other business
 
+                // 🔄 RESET Business ID in localStorage to prevent data mixing!
+                const bId = originalAdmin.business_id || originalAdmin.businessId;
+                if (bId) {
+                    localStorage.setItem('business_id', bId);
+                    localStorage.setItem('businessId', bId);
+                }
+                if (originalAdmin.business_name) {
+                    localStorage.setItem('business_name', originalAdmin.business_name);
+                }
+
                 window.location.href = '/super-admin';
                 return;
             } catch (e) {
@@ -543,6 +560,7 @@ export const AuthProvider = ({ children }) => {
         const impersonatedUser = {
             ...currentUser,
             business_id: businessId,
+            business_name: businessName, // Sync business_name for UI components
             access_level: 'owner', // Elevate to owner for full access
             is_admin: true,
             impersonating_business_name: businessName,
@@ -555,6 +573,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('kiosk_user', JSON.stringify(impersonatedUser));
         localStorage.setItem('business_id', businessId);
         localStorage.setItem('businessId', businessId);
+        localStorage.setItem('business_name', businessName); // Ensure localStorage is also updated
         localStorage.setItem('return_to_super_portal', 'true');
 
         // Force sync for new business
@@ -564,6 +583,9 @@ export const AuthProvider = ({ children }) => {
         // Clear mode so they can choose
         setDeviceMode(null);
         localStorage.removeItem('kiosk_mode');
+
+        // 🔄 FORCE REFRESH: This ensures all hooks (like useMenuItems) reset with the new business identity
+        window.location.href = '/mode-selection';
     };
 
     return (

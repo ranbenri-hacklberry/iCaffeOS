@@ -8,15 +8,31 @@ import fs from 'fs';
  * EXTERNAL_PATH: External drive (/Volumes/RANTUNES)
  */
 export const PathManager = {
-    EXTERNAL_ROOT: process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd',
+    // All known external mount candidates (macOS: /Volumes/*, Linux: /mnt/*)
+    EXTERNAL_CANDIDATES: process.platform === 'darwin'
+        ? ['/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
+        : ['/mnt/music_ssd', '/mnt/rantunes'],
     STAGING_ROOT: path.join(os.homedir(), 'Music', 'iCaffe'),
 
+    // Returns the first mounted external candidate (or the first candidate as default)
+    getExternalRoot() {
+        for (const candidate of this.EXTERNAL_CANDIDATES) {
+            if (fs.existsSync(candidate)) return candidate;
+        }
+        return this.EXTERNAL_CANDIDATES[0];
+    },
+
+    // Legacy alias — always returns the currently-mounted root
+    get EXTERNAL_ROOT() {
+        return this.getExternalRoot();
+    },
+
     isExternalMounted() {
-        return fs.existsSync(this.EXTERNAL_ROOT);
+        return this.EXTERNAL_CANDIDATES.some(c => fs.existsSync(c));
     },
 
     getPrimaryPath() {
-        return this.isExternalMounted() ? this.EXTERNAL_ROOT : this.STAGING_ROOT;
+        return this.isExternalMounted() ? this.getExternalRoot() : this.STAGING_ROOT;
     },
 
     ensureStagingExists() {

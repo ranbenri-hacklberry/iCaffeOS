@@ -55,7 +55,7 @@ const IPadMenuEditor = () => {
         if (!isUnlocked || !currentUser?.business_id) return;
 
         const loadItems = async () => {
-            console.log(`🔄 Loading items for business ${currentUser.business_id}...`);
+            console.log(`🔄 [MenuEditor] Loading items for business:`, currentUser?.business_id);
             try {
                 const { data, error } = await supabase
                     .from('menu_items')
@@ -63,11 +63,18 @@ const IPadMenuEditor = () => {
                     .eq('business_id', currentUser.business_id)
                     .order('name');
 
-                if (!error && data) {
-                    setLocalItems(data);
+                if (error) {
+                    console.error('❌ [MenuEditor] Fetch Error:', error);
+                } else {
+                    console.log(`✅ [MenuEditor] Fetched ${data?.length || 0} items.`);
+                    if (data?.length === 0) {
+                        // Debug: Check if business ID matches what's in DB
+                        console.warn('⚠️ [MenuEditor] No items found through RLS/Filter.');
+                    }
+                    setLocalItems(data || []);
                 }
             } catch (err) {
-                console.error('Failed to fetch items:', err);
+                console.error('❌ [MenuEditor] Critical Failure:', err);
             }
         };
         loadItems();
@@ -258,6 +265,8 @@ const IPadMenuEditor = () => {
         <div className={`flex flex-col h-screen w-full overflow-hidden ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'}`} dir="rtl">
             {/* UnifiedHeader Header */}
             <UnifiedHeader
+                title={`עורך תפריט - ${currentUser?.business_name || 'טוען...'}`}
+                subtitle={`פריטים: ${localItems?.length || 0}`}
                 onHome={() => navigate('/mode-selection')}
             >
                 <div className="flex items-center gap-2">
