@@ -124,7 +124,19 @@ const SplashScreen = ({ onFinish }) => {
                 localStorage.setItem('app_version', APP_VERSION);
 
                 // 🤖 ELECTRON AUTO-LOGIN (Hardware ID)
-                if (window.electron?.auth) {
+                let isImpersonating = false;
+                try {
+                    const storedUser = localStorage.getItem('kiosk_user');
+                    if (storedUser) {
+                        const parsedUser = JSON.parse(storedUser);
+                        if (parsedUser.is_impersonating || localStorage.getItem('original_super_admin')) {
+                            isImpersonating = true;
+                            console.log('👑 Super Admin Impersonation detected. Skipping Hardware ID Login.');
+                        }
+                    }
+                } catch (e) { }
+
+                if (window.electron?.auth && !isImpersonating) {
                     setStatusText('מאמת חומרה...');
                     try {
                         const machineId = await window.electron.auth.getMachineId();
@@ -151,7 +163,9 @@ const SplashScreen = ({ onFinish }) => {
                     }
                 }
 
-                const { data: { user } } = await supabase.auth.getUser();
+                // 🚀 FAST PATH: use getSession() to check local auth cache instead of hitting auth server
+                const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+                const user = session?.user;
                 setTargetProgress(40);
 
                 if (user) {
@@ -159,45 +173,70 @@ const SplashScreen = ({ onFinish }) => {
                     let businessId = user.user_metadata?.business_id;
 
                     if (!businessId) {
-                        const { data: emp } = await supabase.from('employees').select('business_id').eq('auth_user_id', user.id).maybeSingle();
-                        if (emp) businessId = emp.business_id;
+                        try {
+                            // FAST 3 second timeout for secondary business_id lookup
+                            const empAbort = new AbortController();
+                            const empTimer = setTimeout(() => empAbort.abort(), 3000);
+                            const { data: emp } = await supabase
+                                .from('employees')
+                                .select('business_id')
+                                .eq('auth_user_id', user.id)
+                                .abortSignal(empAbort.signal)
+                                .maybeSingle();
+
+                            clearTimeout(empTimer);
+                            if (emp) businessId = emp.business_id;
+                        } catch (e) {
+                            console.warn('⚠️ Network slow during employee business_id fetch, skipping');
+                        }
                     }
 
                     if (businessId) {
                         setTargetProgress(45);
                         const { db } = await import('../db/database');
-                        const localItemCount = await db.menu_items.count();
 
-                        if (localItemCount > 20) {
-                            setStatusText('טוען נתונים...');
-                            // Removed: initialLoad(businessId).catch(e => console.warn('Silent sync skipped:', e));
-                            setTargetProgress(90);
-                            setTimeout(() => {
+                        try {
+                            const localItemCount = await db.menu_items.count();
+
+                            if (localItemCount > 20) {
+                                setStatusText('טוען נתונים...');
+                                setTargetProgress(90);
+                                setTimeout(() => {
+                                    setSyncComplete(true);
+                                    setAuthChecked(true);
+                                    setTargetProgress(100);
+                                }, 500); // reduced from 1000
+                            } else {
+                                setStatusText('מכין סביבת עבודה...');
+                                setTargetProgress(100);
                                 setSyncComplete(true);
                                 setAuthChecked(true);
-                                setTargetProgress(100);
-                            }, 1000);
-                        } else {
-                            setStatusText('מכין סביבת עבודה...');
-                            try {
-                                // await initialLoad(businessId);
-                            } catch (e) {
-                                console.warn('Silent sync skipped:', e);
                             }
+                        } catch (dexieErr) {
+                            console.error('Dexie Error:', dexieErr);
                             setTargetProgress(100);
                             setSyncComplete(true);
                             setAuthChecked(true);
                         }
                     } else {
+                        // User exists but NO Business ID
                         setTargetProgress(100);
+                        setSyncComplete(true);
+                        setAuthChecked(true);
                     }
                 } else {
+                    setStatusText('מעבר למסך כניסה...');
                     setTargetProgress(100);
+                    // 🛡️ CRITICAL BUG FIX: Ensure splash can finish if no user found
+                    setSyncComplete(true);
+                    setAuthChecked(true);
                 }
                 setTargetProgress(100);
             } catch (err) {
                 console.error('Initialization error:', err);
                 setTargetProgress(100);
+                setSyncComplete(true);
+                setAuthChecked(true);
             }
         };
 

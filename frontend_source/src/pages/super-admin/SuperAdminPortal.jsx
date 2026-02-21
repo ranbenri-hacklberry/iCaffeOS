@@ -183,7 +183,7 @@ const SuperAdminPortal = () => {
             </div>
 
             {/* SYSTEM DIRECTORY (NEW) */}
-            <div className="w-full max-w-6xl relative z-10 mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="w-full max-w-6xl relative z-0 mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <SystemMap />
             </div>
 
