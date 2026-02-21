@@ -85,7 +85,19 @@ export const AuthProvider = ({ children }) => {
         const checkAuth = async () => {
             // 🤖 ELECTRON AUTO-LOGIN (Machine ID)
             // If running in Electron, prioritize Hardware ID over localStorage
-            if (window.electron && window.electron.auth) {
+            let isImpersonating = false;
+            try {
+                const storedUser = localStorage.getItem('kiosk_user');
+                if (storedUser) {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.is_impersonating || localStorage.getItem('original_super_admin')) {
+                        isImpersonating = true;
+                        console.log('👑 Super Admin Impersonation detected. Skipping Machine-ID Strategy in AuthContext.');
+                    }
+                }
+            } catch (e) { }
+
+            if (window.electron && window.electron.auth && !isImpersonating) {
                 console.log('⚡ Detected Electron Environment. Applying Machine-ID Strategy...');
                 try {
                     const machineId = await window.electron.auth.getMachineId();

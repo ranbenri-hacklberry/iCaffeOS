@@ -16,6 +16,7 @@ import {
     updateContactName,
     searchMessages
 } from '../../db/smsDatabase';
+import { useNavigate } from 'react-router-dom';
 
 // Icons
 const SearchIcon = () => (
@@ -77,6 +78,7 @@ const SMS_API_URL = 'http://localhost:8085/api/sms';
 
 export default function SMSDashboard() {
     // State
+    const navigate = useNavigate();
     const [contacts, setContacts] = useState([]);
     const [selectedContact, setSelectedContact] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -320,10 +322,18 @@ export default function SMSDashboard() {
                 {/* Header */}
                 <div className="p-4 border-b border-gray-700">
                     <div className="flex items-center justify-between mb-4">
-                        <h1 className="text-xl font-bold flex items-center gap-2">
-                            <PhoneIcon />
-                            הודעות SMS
-                        </h1>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => navigate('/super-admin')}
+                                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                <BackIcon />
+                            </button>
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <PhoneIcon />
+                                הודעות SMS
+                            </h1>
+                        </div>
                         <div className="flex items-center gap-3">
                             <SignalIcon strength={signalStrength} />
                             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -436,8 +446,8 @@ export default function SMSDashboard() {
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
                                     className={`p-3 rounded-full transition-colors ${newMessage.trim()
-                                            ? 'bg-purple-600 hover:bg-purple-700'
-                                            : 'bg-gray-700 cursor-not-allowed'
+                                        ? 'bg-purple-600 hover:bg-purple-700'
+                                        : 'bg-gray-700 cursor-not-allowed'
                                         }`}
                                 >
                                     {isLoading ? (
@@ -603,8 +613,8 @@ function MessageBubble({ message, index }) {
         >
             <div
                 className={`max-w-[70%] rounded-2xl px-4 py-2 ${isOutgoing
-                        ? 'bg-purple-600 rounded-br-sm'
-                        : 'bg-gray-700 rounded-bl-sm'
+                    ? 'bg-purple-600 rounded-br-sm'
+                    : 'bg-gray-700 rounded-bl-sm'
                     }`}
             >
                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
