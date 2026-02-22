@@ -1,102 +1,31 @@
-# ============================================================
-#  🚀 Full Stack Application - Docker Compose
-# ============================================================
-#  Services:
-#    - Frontend (Vite) - Port 4028
-#    - Backend (Express) - Port 8080
-#    - Nginx Proxy Manager - Ports 80, 81 (Admin), 443
-# ============================================================
+version: '3.8'
 
 services:
-  # ============================================
-  # 🔀 NGINX PROXY MANAGER
-  # ============================================
-  # Admin Panel: http://localhost:81
-  # Default login: admin@example.com / changeme
-  # ============================================
-  nginx-proxy-manager:
-    image: 'jc21/nginx-proxy-manager:latest'
-    container_name: nginx-proxy-manager
-    restart: unless-stopped
-    ports:
-      - '80:80' # HTTP - Public traffic
-      - '81:81' # Admin Web Portal
-      - '443:443' # HTTPS - Secure traffic
-    volumes:
-      - ./nginx-proxy-manager/data:/data
-      - ./nginx-proxy-manager/letsencrypt:/etc/letsencrypt
-    networks:
-      - app-network
-    depends_on:
-      - frontend
-      - backend
-    healthcheck:
-      test: [ "CMD", "/bin/check-health" ]
-      interval: 10s
-      timeout: 3s
-
-  # ============================================
-  # 🎨 FRONTEND - Vite React App
-  # ============================================
-  frontend:
+  cortex-gateway:
     build:
-      context: ./frontend_source
-      dockerfile: Dockerfile.frontend
-    container_name: frontend
-    restart: unless-stopped
+      context: ./services/cortex-gateway
+      dockerfile: Dockerfile
     ports:
-      - '4028:4028' # Development port (can be removed in production)
-    environment:
-      - NODE_ENV=development
-      - VITE_API_URL=http://backend:8080
-    volumes:
-      # Mount source for hot reload in development
-      - ./frontend_source:/app
-      - /app/node_modules # Preserve container's node_modules
-    networks:
-      - app-network
-    depends_on:
-      - backend
+      - "8000:8000"
+    env_file: .env.local
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
 
-  # ============================================
-  # ⚙️ BACKEND - Express API Server
-  # ============================================
-  backend:
-    build:
-      context: ./frontend_source
-      dockerfile: Dockerfile.backend
-    container_name: backend
-    restart: unless-stopped
-    ports:
-      - '8080:8080' # API port (internal, NPM will proxy to this)
-    environment:
-      - NODE_ENV=development
-      - PORT=8080
-    env_file:
-      - ./frontend_source/.env # Load environment variables
+  icaffeos:
+    image: node:18-alpine
+    working_dir: /app
     volumes:
       - ./frontend_source:/app
-      - /app/node_modules
-    networks:
-      - app-network
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_CORTEX_API_URL=https://cortex-api.hacklberryfinn.com
+    command: npm run dev -- --host
 
-# ============================================
-# 🌐 NETWORKS
-# ============================================
-networks:
-  app-network:
-    driver: bridge
-    name: sfat-hamidbar-network
-
-# ============================================
-# 💾 VOLUMES (Optional persistent storage)
-# ============================================
-volumes:
-  npm-data:
-  npm-letsencrypt:
+  rantunes:
+    image: node:18-alpine
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    command: npm start
