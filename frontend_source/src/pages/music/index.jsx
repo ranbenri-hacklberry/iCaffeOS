@@ -271,18 +271,42 @@ const MusicPageContent = () => {
         return Array.from(groups.values());
     }, [albums]);
 
-    // Count songs per album from allSongs — used for both filteredAlbums and filteredSingles
+    // Build album folder-path lookup: normalized_folder -> album.id
+    // Sorted LONGEST-FIRST so nested paths match before their parents
+    // (e.g. /Music/Artist/Album matches before /Music/Artist)
+    const albumFolderMap = React.useMemo(() => {
+        const pairs = (albums || [])
+            .filter(a => a.folder_path)
+            .map(a => [a.folder_path.replace(/\/+$/, ''), a.id]);
+        // Sort longest path first for correct prefix matching
+        pairs.sort((a, b) => b[0].length - a[0].length);
+        return new Map(pairs);
+    }, [albums]);
+
+    // Count songs per album from allSongs.
+    // Handles both: songs with album_id set (normal) and songs with album_id = null
+    // (scan race condition) by falling back to file_path prefix matching.
     const albumCounts = React.useMemo(() => {
         const counts = {};
         (allSongs || []).forEach(s => {
-            if (s.album_id) counts[s.album_id] = (counts[s.album_id] || 0) + 1;
+            if (s.album_id) {
+                counts[s.album_id] = (counts[s.album_id] || 0) + 1;
+            } else if (s.file_path) {
+                // Fallback: match song to album by folder prefix
+                for (const [folderPath, albumId] of albumFolderMap) {
+                    if (s.file_path.startsWith(folderPath + '/') || s.file_path === folderPath) {
+                        counts[albumId] = (counts[albumId] || 0) + 1;
+                        break;
+                    }
+                }
+            }
         });
         return counts;
-    }, [allSongs]);
+    }, [allSongs, albumFolderMap]);
 
     const filteredAlbums = processedAlbums.filter(album => {
-        // Use DB song_count if available, otherwise use computed count from allSongs
-        const count = album.song_count ?? albumCounts[album.id];
+        // Prefer folder-based count (handles album_id = null songs) over DB song_count = 0
+        const count = albumCounts[album.id] || album.song_count;
         // Albums with exactly 1 song belong in the Singles tab, not here
         return (count === undefined || count !== 1) &&
             (album.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -294,14 +318,23 @@ const MusicPageContent = () => {
     );
 
     const filteredSingles = React.useMemo(() => {
-        // Real songs with no album_id (true standalone singles)
-        const realSingles = (allSongs || []).filter(song => !song.album_id);
+        // Build set of album folder prefixes (with trailing slash) for fast membership check
+        const albumFolderPrefixes = Array.from(albumFolderMap.keys()).map(fp => fp + '/');
+
+        // Real singles: songs with no album_id AND whose file_path doesn't belong to any album folder.
+        // (Prevents all songs from appearing here when album_id = null due to scan bug.)
+        const realSingles = (allSongs || []).filter(song => {
+            if (song.album_id) return false; // belongs to an album → not a single
+            if (!song.file_path) return true; // no path info → treat as single
+            // If it starts with any album folder prefix, it's an album track, not a single
+            return !albumFolderPrefixes.some(fp => song.file_path.startsWith(fp));
+        });
 
         // Single-song albums — use processedAlbums (already deduplicated by name+artist)
         const seenAlbumIds = new Set();
         const albumSingles = (processedAlbums || [])
             .filter(a => {
-                const count = a.song_count ?? albumCounts[a.id];
+                const count = albumCounts[a.id] || a.song_count;
                 return count === 1;
             })
             .filter(a => {
@@ -318,7 +351,10 @@ const MusicPageContent = () => {
                 track_id: a.id,
                 cover_url: a.cover_url,
                 thumbnail_url: a.cover_url,
-                actual_song_id: (allSongs || []).find(s => s.album_id === a.id)?.id
+                actual_song_id: (allSongs || []).find(s =>
+                    s.album_id === a.id ||
+                    (s.file_path && a.folder_path && s.file_path.startsWith(a.folder_path.replace(/\/+$/, '') + '/'))
+                )?.id
             }));
 
         // Deduplicate realSingles too (songs that also appear as album singles)
@@ -330,7 +366,7 @@ const MusicPageContent = () => {
             song.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             song.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
-    }, [allSongs, albums, searchQuery, albumCounts]);
+    }, [allSongs, processedAlbums, searchQuery, albumCounts, albumFolderMap]);
 
     // Load ALL songs on mount — needed for albumCounts used by both Albums and Singles tabs
     useEffect(() => {
@@ -338,18 +374,34 @@ const MusicPageContent = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Once on mount
 
-    // Check Sync Status
+    // Re-fetch allSongs whenever the album list changes (e.g. after a scan)
+    // so album song counts and in-memory filtering stay in sync.
+    const albumCount = albums?.length || 0;
+    useEffect(() => {
+        if (albumCount === 0) return;
+        fetchAllSongs().then(results => setAllSongs(results || []));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [albumCount]);
+
+    // Auto-repair album_id links on mount — fixes songs saved with album_id = null
+    // due to scan race conditions. Runs silently in background; refreshes songs if repairs made.
+    useEffect(() => {
+        fetch(`${MUSIC_API_URL}/music/repair-album-links`, { method: 'POST' })
+            .then(r => r.json())
+            .then(result => {
+                if (result.repaired > 0) {
+                    console.log(`🔧 Auto-repaired ${result.repaired} album_id links — refreshing songs`);
+                    fetchAllSongs().then(results => setAllSongs(results || []));
+                }
+            })
+            .catch(() => { /* silent — repair endpoint may not exist yet */ });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Once on mount
+
+    // Check Sync Status (Obsolete, route removed)
     const checkSyncStatus = useCallback(async () => {
-        try {
-            const res = await fetch(`${MUSIC_API_URL}/api/music/sync/status`);
-            const data = await res.json();
-            if (data.success && data.count > 0) {
-                setMismatchDetected(true);
-                setPendingSyncCount(data.count);
-            } else {
-                setMismatchDetected(false);
-            }
-        } catch (err) { }
+        // Obsolete route, just set mismatch detected false
+        setMismatchDetected(false);
     }, []);
 
     useEffect(() => {
@@ -388,13 +440,30 @@ const MusicPageContent = () => {
                     const songs = await fetchArtistSongs(selectedAlbum.id);
                     setCurrentAlbumSongs(songs);
                 } else {
-                    const songs = await fetchAlbumSongs(selectedAlbum.id);
-                    setCurrentAlbumSongs(songs);
+                    // Try to match songs from the already-loaded allSongs first.
+                    // This works regardless of whether album_id FK links are set in the DB.
+                    const folderPath = selectedAlbum.folder_path?.replace(/\/+$/, '');
+                    const fromMemory = folderPath
+                        ? (allSongs || []).filter(s =>
+                            s.album_id === selectedAlbum.id ||
+                            (s.file_path && s.file_path.startsWith(folderPath + '/')) ||
+                            s.file_path === folderPath
+                        ).sort((a, b) => (a.track_number || 0) - (b.track_number || 0))
+                        : (allSongs || []).filter(s => s.album_id === selectedAlbum.id);
+
+                    if (fromMemory.length > 0) {
+                        // Found songs in memory — use them immediately (no network needed)
+                        setCurrentAlbumSongs(fromMemory);
+                    } else {
+                        // Fallback: fetch from backend (e.g. allSongs not yet loaded)
+                        const songs = await fetchAlbumSongs(selectedAlbum.id);
+                        setCurrentAlbumSongs(songs);
+                    }
                 }
             }
         };
         loadSongs();
-    }, [selectedAlbum, fetchAlbumSongs, fetchPlaylistSongs, fetchArtistSongs]);
+    }, [selectedAlbum, allSongs, fetchAlbumSongs, fetchPlaylistSongs, fetchArtistSongs]);
 
     // Handle artist click
     const handleArtistClick = async (artist) => {
@@ -534,8 +603,21 @@ const MusicPageContent = () => {
                         const songs = await fetchPlaylistSongs(selectedAlbum.id);
                         setCurrentAlbumSongs(songs);
                     } else {
-                        const songs = await fetchAlbumSongs(selectedAlbum.id);
-                        setCurrentAlbumSongs(songs);
+                        // Prefer in-memory allSongs to avoid 0-song issue from DB album_id = null
+                        const fp = selectedAlbum.folder_path?.replace(/\/+$/, '');
+                        const fromMem = fp
+                            ? (allSongs || []).filter(s =>
+                                s.album_id === selectedAlbum.id ||
+                                (s.file_path && s.file_path.startsWith(fp + '/')) ||
+                                s.file_path === fp
+                            ).sort((a, b) => (a.track_number || 0) - (b.track_number || 0))
+                            : (allSongs || []).filter(s => s.album_id === selectedAlbum.id);
+                        if (fromMem.length > 0) {
+                            setCurrentAlbumSongs(fromMem);
+                        } else {
+                            const songs = await fetchAlbumSongs(selectedAlbum.id);
+                            setCurrentAlbumSongs(songs);
+                        }
                     }
                 }
                 // Refresh favorites if we're on that tab
@@ -573,19 +655,25 @@ const MusicPageContent = () => {
                 onHome={() => navigate('/mode-selection')}
                 forceMusicDark={true}
                 className="music-header"
-            >
-                <div className="flex items-center gap-3">
-                    {/* Library Tools / Edit Actions */}
-                    <div className="flex items-center gap-2">
+                rightContent={
+                    <div className="flex items-center gap-2 border-r border-white/10 pr-4 mr-4">
+                        {/* Source Indicator */}
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight shadow-sm w-fit mr-2 ml-2
+                            ${isMusicDriveConnected ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
+                            {isMusicDriveConnected ? <HardDrive className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                            <span className="uppercase tracking-wider">{isMusicDriveConnected ? 'RANTUNES' : 'Local Disk'}</span>
+                        </div>
+
+                        {/* Library Tools / Edit Actions */}
                         {isEditMode ? (
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleBulkDelete}
                                     disabled={selectedItems.length === 0}
-                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-bold text-xs transition-all
-                                        ${selectedItems.length > 0 ? 'bg-red-500 text-white shadow-lg' : 'bg-white/5 text-white/30 cursor-not-allowed'}`}
+                                    className={`flex items-center gap-2 px-4 h-10 rounded-2xl font-bold text-xs transition-all active:scale-95
+                                        ${selectedItems.length > 0 ? 'bg-red-500 text-white shadow-lg' : 'bg-white/5 text-white/30 cursor-not-allowed border border-white/10'}`}
                                 >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-4 h-4" />
                                     <span>מחק {selectedItems.length}</span>
                                 </button>
                                 <button
@@ -593,7 +681,7 @@ const MusicPageContent = () => {
                                         setIsEditMode(false);
                                         setSelectedItems([]);
                                     }}
-                                    className="px-4 py-1.5 rounded-xl bg-white/10 text-white font-bold text-xs hover:bg-white/20"
+                                    className="px-4 h-10 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 border border-white/10 transition-all active:scale-95"
                                 >
                                     ביטול
                                 </button>
@@ -602,9 +690,9 @@ const MusicPageContent = () => {
                             isManager && (
                                 <button
                                     onClick={() => setIsEditMode(true)}
-                                    className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold text-xs hover:bg-indigo-500/30 transition-all"
+                                    className="flex items-center gap-2 px-4 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold text-xs hover:bg-indigo-500/30 transition-all active:scale-95 shadow-sm"
                                 >
-                                    <List className="w-3.5 h-3.5" />
+                                    <List className="w-4 h-4" />
                                     <span>עריכה</span>
                                 </button>
                             )
@@ -615,7 +703,7 @@ const MusicPageContent = () => {
                                 {isCdMounted && (
                                     <button
                                         onClick={() => setShowCDImport(true)}
-                                        className="w-9 h-9 rounded-full bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 flex items-center justify-center animate-pulse"
+                                        className="w-10 h-10 rounded-2xl bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 flex items-center justify-center animate-pulse"
                                         title="דיסק פיזי זוהה"
                                     >
                                         <Disc className="w-4 h-4 text-blue-400" />
@@ -624,7 +712,7 @@ const MusicPageContent = () => {
 
                                 <button
                                     onClick={() => setShowYouTubeIngest(true)}
-                                    className="w-9 h-9 rounded-full bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 flex items-center justify-center transition-all active:scale-90 shadow-lg"
+                                    className="w-10 h-10 rounded-2xl bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 flex items-center justify-center transition-all active:scale-95 shadow-sm"
                                     title="ייבוא מ-YouTube"
                                 >
                                     <Download className="w-4 h-4 text-red-400" />
@@ -632,7 +720,7 @@ const MusicPageContent = () => {
 
                                 <button
                                     onClick={() => setShowScanner(true)}
-                                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all active:scale-90"
+                                    className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all active:scale-95 shadow-sm"
                                     title="סרוק ספרייה"
                                 >
                                     <FolderOpen className="w-4 h-4 text-white/70" />
@@ -640,8 +728,8 @@ const MusicPageContent = () => {
 
                                 <button
                                     onClick={refreshAll}
-                                    className={`w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all active:scale-90
-                                           ${isLoading ? 'animate-spin' : ''}`}
+                                    className={`w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all active:scale-95 shadow-sm
+                                            ${isLoading ? 'animate-spin' : ''}`}
                                     title="רענן"
                                 >
                                     <RefreshCw className="w-4 h-4 text-white/70" />
@@ -649,17 +737,8 @@ const MusicPageContent = () => {
                             </>
                         )}
                     </div>
-
-                    <div className="w-px h-6 bg-white/10 mx-1" />
-
-                    {/* Source Indicator */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight transition-all shadow-sm
-                        ${isMusicDriveConnected ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
-                        {isMusicDriveConnected ? <HardDrive className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                        <span className="uppercase tracking-wider">{isMusicDriveConnected ? 'RANTUNES' : 'Local Disk'}</span>
-                    </div>
-                </div>
-            </UnifiedHeader>
+                }
+            />
 
             {/* Sync Notification Banner */}
             <AnimatePresence>

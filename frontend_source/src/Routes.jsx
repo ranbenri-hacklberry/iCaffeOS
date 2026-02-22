@@ -37,6 +37,7 @@ import PrepPage from './pages/prep';
 import MusicPage from './pages/music';
 import DexieAdminPanel from './pages/dexie-admin';
 import MayaAssistant from './pages/maya';
+import CortexPage from './pages/cortex/CortexPage';
 
 import DexieTestPage from './pages/DexieTestPage';
 import KanbanPage from './pages/kanban';
@@ -127,6 +128,21 @@ const ProtectedRoute = ({ children }) => {
 
   if (isSuperAdminPath) {
     // Super Admin routes don't need device mode
+    return <PageTransition>{children}</PageTransition>;
+  }
+
+  // Routes that are accessible from the dashboard without requiring a device mode
+  const DEVICE_MODE_EXEMPT = [
+    '/cortex',
+    '/profile-settings',
+    '/maya',
+    '/owner-settings',
+  ];
+  const isDeviceModeExempt = DEVICE_MODE_EXEMPT.some(
+    (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+  );
+
+  if (isDeviceModeExempt) {
     return <PageTransition>{children}</PageTransition>;
   }
 
@@ -273,6 +289,12 @@ const AppRoutes = () => {
       <Route path="/maya" element={
         <ProtectedRoute>
           <MayaAssistant />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/cortex" element={
+        <ProtectedRoute>
+          <CortexPage />
         </ProtectedRoute>
       } />
 

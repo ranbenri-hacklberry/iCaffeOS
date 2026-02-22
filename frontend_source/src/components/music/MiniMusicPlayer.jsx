@@ -1,187 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Pause, SkipBack, ThumbsUp, ThumbsDown, Music, ChevronLeft } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
+import React, { useContext } from 'react';
+import { Play, Pause, SkipBack, ThumbsUp, ThumbsDown, Music } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import MusicContext from '../../context/MusicContext';
 
 /**
  * Compact Mini music player for headers
- * Connects to RanTunes via Supabase music_current_playback table
- * Uses business email for playback sync
+ * Uses MusicContext directly for instant sync - no Supabase polling needed.
  * Light/white theme, ~1/3 screen width
  */
 const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false }) => {
-    // 🛑 [DISABLED] Per user request: Cancel mini player from all screens for now
-    return null;
     const { isDarkMode: themeDarkMode } = useTheme();
     const isDarkMode = forceDark ? true : (forceLight ? false : themeDarkMode);
-    const { currentUser } = useAuth();
-    const [playback, setPlayback] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [businessEmail, setBusinessEmail] = useState(null);
 
-    // Fetch business email first
-    useEffect(() => {
-        const fetchBusinessEmail = async () => {
-            if (!currentUser?.business_id) return;
-
-            try {
-                const { data } = await supabase
-                    .from('businesses')
-                    .select('email')
-                    .eq('id', currentUser.business_id)
-                    .single();
-
-                if (data?.email) {
-                    setBusinessEmail(data.email);
-                } else {
-                    // Fallback to user email if business email not set
-                    setBusinessEmail(currentUser.email);
-                }
-            } catch (err) {
-                console.error('Error fetching business email:', err);
-                setBusinessEmail(currentUser.email);
-            }
-        };
-
-        fetchBusinessEmail();
-    }, [currentUser?.business_id, currentUser?.email]);
-
-    // Fetch initial playback state from RanTunes
-    useEffect(() => {
-        const fetchPlayback = async () => {
-            if (!businessEmail) return;
-
-            try {
-                const { data } = await supabase
-                    .from('music_current_playback')
-                    .select('*')
-                    .eq('user_email', businessEmail)
-                    .maybeSingle();
-
-                if (data) {
-                    setPlayback(data);
-                }
-            } catch (err) {
-                console.error('Error fetching playback:', err);
-            }
-        };
-
-        fetchPlayback();
-    }, [businessEmail]);
-
-    // Subscribe to realtime updates from RanTunes
-    useEffect(() => {
-        if (!businessEmail) return;
-
-        const channel = supabase
-            .channel('mini-playback-updates')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'music_current_playback',
-                    filter: `user_email=eq.${businessEmail}`
-                },
-                (payload) => {
-                    if (payload.new) {
-                        setPlayback(payload.new);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [businessEmail]);
-
-    // Send command to RanTunes
-    const sendCommand = async (command) => {
-        console.log('🎮 [MiniPlayer] sendCommand called:', { command, businessEmail, isLoading });
-
-        if (!businessEmail || isLoading) {
-            console.log('🎮 [MiniPlayer] Command blocked:', { noEmail: !businessEmail, isLoading });
-            return;
-        }
-
-        setIsLoading(true);
-        try {
-            console.log('🎮 [MiniPlayer] Inserting command to music_commands table...');
-            const { data, error } = await supabase
-                .from('music_commands')
-                .insert({
-                    user_email: businessEmail,
-                    user_id: currentUser?.id,
-                    command: command,
-                    created_at: new Date().toISOString()
-                })
-                .select();
-
-            if (error) {
-                console.error('🎮 [MiniPlayer] Insert error:', error);
-            } else {
-                console.log('🎮 [MiniPlayer] Command inserted successfully:', data);
-            }
-
-            // Optimistic UI update
-            if (command === 'pause') {
-                setPlayback(prev => prev ? { ...prev, is_playing: false } : prev);
-            } else if (command === 'play') {
-                setPlayback(prev => prev ? { ...prev, is_playing: true } : prev);
-            }
-        } catch (err) {
-            console.error('🎮 [MiniPlayer] Error sending command:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Rate the current song
-    // Rating 1 = dislike (song will be skipped in future plays)
-    // Rating 5 = like
-    // Rating 0 = remove rating
-    const rateSong = async (rating) => {
-        if (!playback?.song_id || !currentUser?.id) return;
-
-        try {
-            console.log('🎵 [MiniPlayer] Rating song:', { song_id: playback.song_id, rating });
-
-            await supabase
-                .from('rantunes_ratings')
-                .upsert({
-                    song_id: playback.song_id,
-                    user_id: currentUser.id,
-                    rating: rating,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id, song_id' });
-
-            // Optimistic update
-            setPlayback(prev => ({ ...prev, userRating: rating }));
-
-            // If disliked (rating = 1), skip to next song automatically
-            if (rating === 1) {
-                console.log('🎵 [MiniPlayer] Song disliked, skipping to next...');
-                await sendCommand('next');
-            }
-        } catch (err) {
-            console.error('Error rating song:', err);
-        }
-    };
+    // Use context directly (returns null if not in MusicProvider)
+    const music = useContext(MusicContext);
 
     // Open RanTunes in new tab
     const openRanTunes = () => {
         window.open('https://music.hacklberryfinn.com', '_blank');
     };
 
-    // Don't render if no playback data
-    if (!currentUser || !playback || !playback.song_title) {
+    // Don't render if no music context or no current song
+    if (!music || !music.currentSong || !music.currentSong.title) {
         return null;
     }
 
-    const isLiked = playback.userRating === 5;
-    const isDisliked = playback.userRating === 1;
+    const { currentSong, isPlaying, togglePlay, handleNext, rateSong } = music;
+
+    const isLiked = currentSong.myRating === 5;
+    const isDisliked = currentSong.myRating === 1;
+
+    const handleRate = async (rating) => {
+        if (!currentSong?.id) return;
+        // Toggle off if clicking the same rating, otherwise set new rating
+        const newRating = currentSong.myRating === rating ? 0 : rating;
+        await rateSong(currentSong.id, newRating);
+    };
+
+    const coverUrl = currentSong.album?.cover_url || currentSong.cover_url || currentSong.thumbnail_url;
+    const artistName = currentSong.artist?.name || currentSong.artist_name || 'Unknown Artist';
 
     return (
         <div
@@ -194,17 +51,17 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
             {/* Mini Vinyl Record */}
             <div
                 className={`w-8 h-8 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20
-                    ${playback.is_playing ? 'animate-[spin_4s_linear_infinite]' : ''}`}
+                    ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}
                 onClick={openRanTunes}
             >
                 {/* Vinyl Grooves */}
                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_transparent_30%,_rgba(255,255,255,0.1)_35%,_transparent_40%,_rgba(255,255,255,0.1)_45%,_transparent_50%)]" />
 
                 <div className="w-4 h-4 rounded-full overflow-hidden border border-black/20 flex items-center justify-center bg-white z-10">
-                    {playback.cover_url ? (
+                    {coverUrl ? (
                         <img
-                            src={playback.cover_url}
-                            alt={playback.album_name || 'Album'}
+                            src={coverUrl}
+                            alt={currentSong.album?.name || 'Album'}
                             className="w-full h-full object-cover"
                         />
                     ) : (
@@ -219,10 +76,10 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
             {/* Song & Artist */}
             <div className="min-w-0 flex-1 cursor-pointer text-right" onClick={openRanTunes}>
                 <p className={`text-sm font-semibold truncate leading-tight ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                    {playback.song_title}
+                    {currentSong.title}
                 </p>
                 <p className={`text-xs truncate leading-tight ${isDarkMode ? 'text-white/60' : 'text-gray-500'}`}>
-                    {playback.artist_name}
+                    {artistName}
                 </p>
             </div>
 
@@ -230,7 +87,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
             <div className="flex items-center gap-1 shrink-0">
                 {/* Like */}
                 <button
-                    onClick={() => rateSong(isLiked ? 0 : 5)}
+                    onClick={() => handleRate(5)}
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all
                         ${isLiked
                             ? 'bg-green-100 text-green-600'
@@ -243,7 +100,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
                 {/* Dislike */}
                 <button
-                    onClick={() => rateSong(isDisliked ? 0 : 1)}
+                    onClick={() => handleRate(1)}
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all
                         ${isDisliked
                             ? 'bg-red-100 text-red-600'
@@ -254,17 +111,16 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     <ThumbsDown className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Play/Pause with left arrow indicator */}
+                {/* Play/Pause */}
                 <button
-                    onClick={() => sendCommand(playback.is_playing ? 'pause' : 'play')}
-                    disabled={isLoading}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isLoading
-                        ? (isDarkMode ? 'bg-slate-800 opacity-50' : 'bg-gray-200 opacity-50')
-                        : (isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gray-200 hover:bg-gray-300')
+                    onClick={togglePlay}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDarkMode
+                        ? 'bg-slate-700 hover:bg-slate-600'
+                        : 'bg-gray-200 hover:bg-gray-300'
                         }`}
-                    title={playback.is_playing ? 'השהה' : 'נגן'}
+                    title={isPlaying ? 'השהה' : 'נגן'}
                 >
-                    {playback.is_playing ? (
+                    {isPlaying ? (
                         <Pause className={`w-4 h-4 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
                     ) : (
                         <Play className={`w-4 h-4 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
@@ -273,11 +129,10 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
                 {/* Next Song - arrow pointing left for RTL */}
                 <button
-                    onClick={() => sendCommand('next')}
-                    disabled={isLoading}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isLoading
-                        ? (isDarkMode ? 'text-slate-700' : 'text-gray-300')
-                        : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200')
+                    onClick={handleNext}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isDarkMode
+                        ? 'text-slate-400 hover:text-white hover:bg-slate-700'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
                         }`}
                     title="שיר הבא"
                 >

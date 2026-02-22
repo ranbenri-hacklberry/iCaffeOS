@@ -309,10 +309,14 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
     const availableCategories = useMemo(() => {
         if (menuLoading && categories.length > 0) return categories;
 
-        const usedCategoryIds = new Set(menuItems.map(item => item.category));
+        const usedCategories = new Set();
+        menuItems.forEach(item => {
+            if (item.category) usedCategories.add(item.category);
+            if (item.db_category) usedCategories.add(item.db_category);
+        });
 
         return categories
-            .filter(cat => usedCategoryIds.has(cat.id))
+            .filter(cat => usedCategories.has(cat.id) || usedCategories.has(cat.name) || usedCategories.has(cat.name_he) || usedCategories.has(cat.db_name))
             .sort((a, b) => (a.position || 0) - (b.position || 0));
     }, [categories, menuItems, menuLoading]);
 

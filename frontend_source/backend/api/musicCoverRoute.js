@@ -2,7 +2,41 @@ import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import fs from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
+import * as mm from 'music-metadata';
+
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const AUDIO_EXTS = new Set(['.mp3', '.flac', '.m4a', '.aac', '.ogg', '.wav']);
+const PRIORITY_COVERS = ['cover.jpg', 'folder.jpg', 'album.jpg', 'cover.png', 'folder.png', 'front.jpg', 'artwork.jpg'];
+
+/** Find any cover image in a local folder (priority names first, then any image) */
+function findCoverInFolder(folderPath) {
+    if (!folderPath || !existsSync(folderPath)) return null;
+    try {
+        const files = readdirSync(folderPath);
+        for (const name of PRIORITY_COVERS) {
+            const match = files.find(f => f.toLowerCase() === name);
+            if (match) return path.join(folderPath, match);
+        }
+        const anyImg = files.find(f => !f.startsWith('.') && IMAGE_EXTS.has(path.extname(f).toLowerCase()));
+        if (anyImg) return path.join(folderPath, anyImg);
+    } catch (_) {}
+    return null;
+}
+
+/** Extract embedded artwork from the first audio file found in a folder */
+async function extractEmbeddedArt(folderPath) {
+    if (!folderPath || !existsSync(folderPath)) return null;
+    try {
+        const files = readdirSync(folderPath);
+        const audioFile = files.find(f => !f.startsWith('.') && AUDIO_EXTS.has(path.extname(f).toLowerCase()));
+        if (!audioFile) return null;
+        const meta = await mm.parseFile(path.join(folderPath, audioFile), { duration: false, skipCovers: false });
+        const pic = meta.common?.picture?.[0];
+        if (pic?.data?.length > 0) return { data: pic.data, mime: pic.format || 'image/jpeg' };
+    } catch (_) {}
+    return null;
+}
 
 const router = express.Router();
 
@@ -61,6 +95,26 @@ router.get('/', async (req, res) => {
                     const fileBuffer = await fs.readFile(safePath);
                     return res.send(fileBuffer);
                 }
+
+                // Path given but file missing — try the folder for any cover image
+                const folder = path.dirname(safePath);
+                const folderCover = findCoverInFolder(folder);
+                if (folderCover) {
+                    const ext = path.extname(folderCover).toLowerCase();
+                    const ct = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+                    res.setHeader('Content-Type', ct);
+                    res.setHeader('Cache-Control', 'public, max-age=86400');
+                    res.send(await fs.readFile(folderCover));
+                    return;
+                }
+
+                // Last resort: embedded ID3 artwork
+                const embedded = await extractEmbeddedArt(folder);
+                if (embedded) {
+                    res.setHeader('Content-Type', embedded.mime);
+                    res.setHeader('Cache-Control', 'public, max-age=86400');
+                    return res.send(embedded.data);
+                }
             } catch (fileError) {
                 console.warn(`⚠️ [MusicCover] Local file access failed: ${coverPath}`);
             }
@@ -81,28 +135,40 @@ router.get('/', async (req, res) => {
                 let remoteUrl = song?.cover_url || song?.album?.cover_url;
                 let localFolder = song?.album?.folder_path;
 
-                // Fallback: If no cover_url, look for common image files in the album folder
-                if (!remoteUrl && localFolder && existsSync(localFolder)) {
-                    const commonNames = ['cover.jpg', 'folder.jpg', 'album.jpg', 'cover.png', 'folder.png'];
-                    for (const name of commonNames) {
-                        const testPath = path.join(localFolder, name);
-                        if (existsSync(testPath)) {
-                            res.setHeader('Content-Type', name.endsWith('png') ? 'image/png' : 'image/jpeg');
-                            const fileBuffer = await fs.readFile(testPath);
-                            return res.send(fileBuffer);
-                        }
-                    }
+                // Helper: serve a local file path
+                const serveLocal = async (filePath) => {
+                    const ext = path.extname(filePath).toLowerCase();
+                    const ct = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+                    res.setHeader('Content-Type', ct);
+                    res.setHeader('Cache-Control', 'public, max-age=86400');
+                    res.send(await fs.readFile(filePath));
+                    return true;
+                };
+
+                // 1. Try cover_url stored on song/album (may be local path or http)
+                if (remoteUrl) {
+                    if (remoteUrl.startsWith('http')) return res.redirect(remoteUrl);
+                    if (existsSync(remoteUrl)) return serveLocal(remoteUrl);
                 }
 
-                if (remoteUrl) {
-                    if (remoteUrl.startsWith('http')) {
-                        return res.redirect(remoteUrl);
+                // 2. Search album folder for any cover image
+                if (localFolder) {
+                    const found = findCoverInFolder(localFolder);
+                    if (found) return serveLocal(found);
+
+                    // 3. Try parent folder (for compilation sub-artist folders)
+                    const parentFolder = path.dirname(localFolder);
+                    if (parentFolder !== localFolder) {
+                        const parentFound = findCoverInFolder(parentFolder);
+                        if (parentFound) return serveLocal(parentFound);
                     }
-                    if (existsSync(remoteUrl)) {
-                        const ext = path.extname(remoteUrl).toLowerCase();
-                        res.setHeader('Content-Type', ext === '.png' ? 'image/png' : 'image/jpeg');
-                        const fileBuffer = await fs.readFile(remoteUrl);
-                        return res.send(fileBuffer);
+
+                    // 4. Extract embedded artwork from first audio file
+                    const embeddedArt = await extractEmbeddedArt(localFolder);
+                    if (embeddedArt) {
+                        res.setHeader('Content-Type', embeddedArt.mime);
+                        res.setHeader('Cache-Control', 'public, max-age=86400');
+                        return res.send(embeddedArt.data);
                     }
                 }
 
@@ -113,13 +179,19 @@ router.get('/', async (req, res) => {
                     .eq('id', id)
                     .maybeSingle();
 
-                if (album?.cover_url) {
-                    if (album.cover_url.startsWith('http')) return res.redirect(album.cover_url);
-                    if (existsSync(album.cover_url)) {
-                        const ext = path.extname(album.cover_url).toLowerCase();
-                        res.setHeader('Content-Type', ext === '.png' ? 'image/png' : 'image/jpeg');
-                        const fileBuffer = await fs.readFile(album.cover_url);
-                        return res.send(fileBuffer);
+                if (album) {
+                    if (album.cover_url?.startsWith('http')) return res.redirect(album.cover_url);
+                    if (album.cover_url && existsSync(album.cover_url)) return serveLocal(album.cover_url);
+                    // Try folder search for album directly
+                    if (album.folder_path) {
+                        const found = findCoverInFolder(album.folder_path);
+                        if (found) return serveLocal(found);
+                        const embedded = await extractEmbeddedArt(album.folder_path);
+                        if (embedded) {
+                            res.setHeader('Content-Type', embedded.mime);
+                            res.setHeader('Cache-Control', 'public, max-age=86400');
+                            return res.send(embedded.data);
+                        }
                     }
                 }
             } catch (dbError) {

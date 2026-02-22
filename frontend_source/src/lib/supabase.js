@@ -79,46 +79,46 @@ const isProduction = !isElectron && (
     (!window.location.hostname.startsWith('192.168.') &&
         !window.location.hostname.startsWith('10.') &&
         !window.location.hostname.startsWith('100.') &&
+        !window.location.hostname.startsWith('172.') &&
         window.location.hostname !== 'localhost' &&
         window.location.hostname !== '127.0.0.1' &&
         window.location.hostname !== '')
 );
 
-// Only consider local if explicitly on localhost/127.0.0.1/192.168.x/10.x/100.x AND not production
-const isLikelyLocal = isElectron || (!isProduction && (
+// Lock to Local if explicitly on localhost/127.0.0.1/192.168.x/10.x/100.x AND not production
+const isStrictlyLocal = isElectron || (!isProduction && (
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
     window.location.hostname.startsWith('192.168.') ||
     window.location.hostname.startsWith('10.') ||
     window.location.hostname.startsWith('100.') ||
+    window.location.hostname.startsWith('172.') ||
     window.location.search.includes('local=true')
 ));
 
 // --- ROBUST INITIALIZATION ---
-const isValidUrl = (url) => {
-    try {
-        if (!url || typeof url !== 'string') return false;
-        new URL(url);
-        return url.startsWith('http');
-    } catch (e) {
-        return false;
-    }
-};
+// We DO NOT FALLBACK to Cloud if we are strictly local. This prevents the "Frankfurt Loop"
+const finalUrl = isStrictlyLocal ? localUrl : cloudUrl;
+const finalKey = isStrictlyLocal ? localKey : cloudKey;
 
-const finalUrl = isLikelyLocal ? localUrl : cloudUrl;
-const finalKey = isLikelyLocal ? localKey : cloudKey;
+console.log(`🚀 Supabase Init [Electron: ${isElectron}]: ${isProduction ? '☁️ PRODUCTION' : (isStrictlyLocal ? '🏠 STRICT LOCAL' : '☁️ CLOUD')}`);
+console.log(`🔗 Target URL: ${finalUrl}`);
 
-console.log(`🚀 Supabase Init [Electron: ${isElectron}]: ${isProduction ? '☁️ PRODUCTION' : (isLikelyLocal ? '🏠 LOCAL' : '☁️ CLOUD')}`);
-console.log(`🔗 Target URL: ${finalUrl || 'UNDEFINED'}`);
-
-if (!isValidUrl(finalUrl)) {
-    console.warn('⚠️ Selected Supabase URL is invalid. Falling back to emergency local default.');
-    activeClient = getClient('http://127.0.0.1:54321', 'no-key');
-} else {
-    activeClient = getClient(finalUrl, finalKey || 'no-key');
+try {
+    activeClient = createClient(finalUrl || 'http://127.0.0.1:54321', finalKey || 'no-key', {
+        auth: {
+            persistSession: true,
+            storageKey: 'supabase.auth.token',
+            storage: window.localStorage,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+        }
+    });
+} catch (e) {
+    console.error('🚨 Failed to initialize strict client:', e);
 }
 
-isLocal = isLikelyLocal;
+isLocal = isStrictlyLocal;
 
 export const supabase = new Proxy({}, {
     get: (target, prop) => {
@@ -127,75 +127,10 @@ export const supabase = new Proxy({}, {
     }
 });
 
+// Remove health check that was accidentally falling back to Cloud.
+// If Docker is down, the app should fail on LAN, not failover to Frankfurt and cause zombie UI.
 export const initSupabase = async () => {
-    const safeCloudUrl = isValidUrl(cloudUrl) ? cloudUrl : null;
-
-    if (isProduction && safeCloudUrl) {
-        isLocal = false;
-        activeClient = getClient(safeCloudUrl, cloudKey);
-        console.log('☁️ PRODUCTION: Using Cloud Supabase');
-        return { isLocal: false, url: safeCloudUrl };
-    }
-
-    if (isLikelyLocal) {
-        // 🛡️ LAN FIX: Check if this is a LAN IP (iPad/tablet on local network).
-        // For LAN access, NEVER fall back to cloud — the local Supabase IS the source of truth.
-        // Falling back to cloud causes ~5 minute delays because orders exist in local DB, not cloud.
-        const isLanAccess = typeof window !== 'undefined' && (
-            window.location.hostname.startsWith('192.168.') ||
-            window.location.hostname.startsWith('10.') ||
-            window.location.hostname.startsWith('100.') ||
-            window.location.hostname.startsWith('172.')
-        );
-
-        try {
-            const controller = new AbortController();
-            // 🛡️ LAN FIX: Increase timeout for LAN (was 1500ms — too short, causes cloud fallback)
-            const timeoutId = setTimeout(() => controller.abort(), isLanAccess ? 5000 : 1500);
-
-            const response = await fetch(`${localUrl}/rest/v1/`, {
-                method: 'GET',
-                headers: { 'apikey': localKey },
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            if (response && response.ok) {
-                isLocal = true;
-                activeClient = getClient(localUrl, localKey);
-                console.log('🏘️ LOCAL: Connected to local DB');
-            } else if (safeCloudUrl && !isLanAccess) {
-                // Only fall back to cloud for localhost (dev), NOT for LAN tablets
-                console.warn('⚠️ Local unreachable, switching to Cloud (localhost only)');
-                isLocal = false;
-                activeClient = getClient(safeCloudUrl, cloudKey);
-            } else {
-                // LAN access: stay on local even if health check returned non-ok
-                console.warn(`⚠️ Local health check returned non-ok (${response?.status}), but staying LOCAL for LAN access`);
-                isLocal = true;
-                activeClient = getClient(localUrl, localKey);
-            }
-        } catch (e) {
-            console.warn('⚠️ Local DB check failed:', e.message);
-            if (safeCloudUrl && !isLanAccess) {
-                // Only fall back to cloud for localhost (dev), NOT for LAN tablets
-                isLocal = false;
-                activeClient = getClient(safeCloudUrl, cloudKey);
-            } else {
-                // LAN access: stay on local, work in offline mode if needed
-                console.warn('🏠 LAN access — staying LOCAL despite health check failure');
-                isLocal = true;
-                activeClient = getClient(localUrl, localKey);
-            }
-        }
-    } else if (safeCloudUrl) {
-        isLocal = false;
-        activeClient = getClient(safeCloudUrl, cloudKey);
-        console.log('☁️ FALLBACK: Defaulting to Cloud Supabase');
-        console.log(`🔗 Active Connection: ${safeCloudUrl}`);
-    }
-
-    return { isLocal, url: isLocal ? localUrl : (safeCloudUrl || localUrl) };
+    return { isLocal: isStrictlyLocal, url: finalUrl };
 };
 
 initSupabase().catch(err => console.error('Failed to init supabase:', err));

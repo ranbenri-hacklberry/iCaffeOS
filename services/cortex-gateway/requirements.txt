@@ -1,0 +1,36 @@
+# ── FastAPI stack ───────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-dotenv==1.0.1
+pydantic==2.7.1
+python-multipart==0.0.9     # UploadFile / multipart form-data support
+
+# ── Integrations ────────────────────────────────────────────────────────
+supabase==2.4.6
+google-generativeai==0.5.4
+
+# ── Document Parsing (Zero-Trust: local extraction — raw bytes NEVER reach Gemini) ──
+#
+#   Hybrid extraction engine:
+#     Fast-path  → PyMuPDF native text layer  (no OCR, very low CPU)
+#     Slow-path  → pdf2image + pytesseract OCR (scanned / image-only pages)
+#     Image-path → Pillow + pytesseract OCR    (JPEG / PNG / TIFF / WebP)
+#
+#   OS-level dependencies (install separately):
+#
+#   macOS (Homebrew):
+#     brew install tesseract poppler
+#
+#   Debian / Ubuntu / Docker:
+#     apt-get install -y tesseract-ocr poppler-utils
+#
+PyMuPDF==1.24.11         # Fast native PDF text extraction via libmupdf (C lib)
+pdf2image==1.17.0       # PDF → PIL images for OCR fallback (wraps poppler pdfinfo/pdftoppm)
+pytesseract==0.3.13     # Python wrapper for Tesseract OCR engine
+Pillow==11.0.0          # Image I/O — required by pdf2image and direct image OCR
+aiofiles==23.2.1        # Async file I/O (non-blocking UploadFile reads)
+
+# ── Testing ─────────────────────────────────────────────────────────────
+httpx==0.27.0
+pytest==8.2.0
+pytest-anyio==0.0.0

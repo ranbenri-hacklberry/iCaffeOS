@@ -917,14 +917,14 @@ const PrepPage = () => {
             <UnifiedHeader
                 title="משימות והכנות"
                 subtitle="ניהול משימות יומיות, הכנות והפשרות"
-            >
-                {/* Tabs - Centered/Left of Title */}
-                <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1">
-                    <HeaderTab id="opening" label="פתיחה" icon={Sunrise} color="bg-emerald-500" count={getCountsForShift('opening')} />
-                    <HeaderTab id="pre_closing" label="הכנות" icon={Utensils} color="bg-orange-500" count={getCountsForShift('pre_closing')} />
-                    <HeaderTab id="closing" label="סגירה" icon={Sunset} color="bg-purple-500" count={getCountsForShift('closing')} />
-                </div>
-            </UnifiedHeader>
+                rightContent={
+                    <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1 mr-2 border border-slate-200 shadow-inner">
+                        <HeaderTab id="opening" label="פתיחה" icon={Sunrise} color="bg-emerald-500" count={getCountsForShift('opening')} />
+                        <HeaderTab id="pre_closing" label="הכנות" icon={Utensils} color="bg-orange-500" count={getCountsForShift('pre_closing')} />
+                        <HeaderTab id="closing" label="סגירה" icon={Sunset} color="bg-purple-500" count={getCountsForShift('closing')} />
+                    </div>
+                }
+            />
 
             {/* Main Content Area */}
             <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 text-right" dir="rtl">

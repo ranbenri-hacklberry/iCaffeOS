@@ -16,8 +16,10 @@ import { useMemo, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/context/AuthContext';
 import db from '@/db/database';
-import { groupOrderItems } from '@/utils/kdsUtils';
+import { groupOrderItems, isHotDrink as isHotDrinkUtil, isKitchenPrep } from '@/utils/kdsUtils';
 import { useKDSSms } from '@/pages/kds/hooks/useKDSSms';
+
+import { supabase } from '@/lib/supabase';
 
 export const useKDSDataLocal = () => {
     const { currentUser } = useAuth();
@@ -27,9 +29,11 @@ export const useKDSDataLocal = () => {
     // 📱 SMS HOOK integration
     const { smsToast, setSmsToast, isSendingSms, handleSendSms } = useKDSSms();
 
-    // Auto-sync on mount (once)
+    // Auto-sync on mount and Realtime subscriptions
     useEffect(() => {
-        if (businessId && !hasAutoSynced.current) {
+        if (!businessId) return;
+
+        if (!hasAutoSynced.current) {
             hasAutoSynced.current = true;
             console.log('🔄 [KDS] Auto-syncing data on mount...');
 
@@ -44,9 +48,48 @@ export const useKDSDataLocal = () => {
                     console.error('❌ [KDS] Auto-sync failed:', err);
                 }
             };
-
             autoSync();
         }
+
+        let debounceTimer = null;
+
+        const triggerSync = () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                try {
+                    console.log('🔄 [KDS Background Sync] Realtime event triggered sync...');
+                    const { syncOrders } = await import('@/services/syncService');
+                    await syncOrders(businessId);
+                } catch (e) { console.error(e) }
+            }, 500);
+        };
+
+        const channel = supabase
+            .channel(`kds-local-sync-${businessId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'orders',
+                filter: `business_id=eq.${businessId}`
+            }, (payload) => {
+                console.log(`🔔 KDS Realtime (orders): ${payload.eventType}`);
+                triggerSync();
+            })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'order_items'
+            }, (payload) => {
+                console.log(`🔔 KDS Realtime (items): ${payload.eventType}`);
+                triggerSync();
+            });
+
+        channel.subscribe();
+
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            supabase.removeChannel(channel);
+        };
     }, [businessId]);
 
     // ============================================
@@ -139,10 +182,10 @@ export const useKDSDataLocal = () => {
             return { current: [], completed: [] };
         }
 
-        console.log(`🔄 [KDS] Processing ${activeOrders.length} orders with ${orderItems.length} items`);
-
         const current = [];
         const completed = [];
+
+        console.log(`🔄 [KDS] Processing ${activeOrders.length} orders with ${orderItems.length} items`);
 
         activeOrders.forEach(order => {
             // Get items for this order
@@ -173,6 +216,9 @@ export const useKDSDataLocal = () => {
                     const menuItem = menuItems.get(item.menu_item_id);
                     const itemName = menuItem?.name || item.name || 'Unknown Item';
 
+                    // NEW: Unified Prep Check from shared utility
+                    const isPrep = isKitchenPrep(item);
+
                     // prep logic
                     const kdsLogic = menuItem?.kds_routing_logic || 'MADE_TO_ORDER';
 
@@ -183,12 +229,13 @@ export const useKDSDataLocal = () => {
                     else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVERRIDE__'))) hasOverride = true;
 
                     let isPrepRequired = true;
-                    if (kdsLogic === 'GRAB_AND_GO') isPrepRequired = false;
+                    if (isPrep) isPrepRequired = true;
+                    else if (kdsLogic === 'GRAB_AND_GO') isPrepRequired = false;
                     else if (kdsLogic === 'CONDITIONAL') isPrepRequired = hasOverride;
 
                     // ⚡ AUTO-READY: If item doesn't need prep, it's effectively 'ready' instantly
                     let itemStatus = item.item_status;
-                    if (!isPrepRequired && (itemStatus === 'new' || itemStatus === 'pending')) {
+                    if (!isPrepRequired && (itemStatus === 'new' || itemStatus === 'pending' || itemStatus === 'in_progress')) {
                         itemStatus = 'ready';
                     }
 
@@ -241,16 +288,17 @@ export const useKDSDataLocal = () => {
                     return {
                         id: item.id,
                         menuItemId: item.menu_item_id,
-                        name: menuItem.name,
+                        name: itemName,
                         modifiers: structuredModifiers,
                         quantity: item.quantity,
                         status: item.item_status,
-                        price: menuItem.price,
-                        category: menuItem.category || '',
+                        price: menuItem?.price || item.price || 0,
+                        category: menuItem?.category || '',
                         modsKey,
                         course_stage: item.course_stage || 1,
                         item_fired_at: item.item_fired_at,
-                        is_early_delivered: item.is_early_delivered || false
+                        is_early_delivered: item.is_early_delivered || false,
+                        isPrepRequired: isPrepRequired // Pass this through for filtering
                     };
                 });
 
@@ -275,6 +323,7 @@ export const useKDSDataLocal = () => {
                 customerPhone: order.customer_phone || order.customerPhone,
                 customerId: order.customer_id,
                 isPaid: order.is_paid,
+                orderStatus: order.order_status, // 👈 CRITICAL FIX: Add orderStatus for OrderCard to read correctly
                 totalAmount: unpaidAmount > 0 ? unpaidAmount : totalAmount,
                 paidAmount,
                 fullTotalAmount: totalAmount,
@@ -287,7 +336,8 @@ export const useKDSDataLocal = () => {
                 updated_at: order.updated_at,
                 payment_method: order.payment_method,
                 is_offline: order.is_offline || String(order.id).startsWith('L'),
-                pending_sync: order.pending_sync
+                pending_sync: order.pending_sync,
+                created_at: order.created_at // 👈 CRITICAL FIX: Needed for agingMinutes calculation in OrderCard
             };
 
             // Group by course stage
@@ -303,6 +353,17 @@ export const useKDSDataLocal = () => {
                 const stage = Number(stageStr);
                 const cardId = stage === 1 ? order.id : `${order.id}-stage-${stage}`;
 
+                // 🎯 VISIBILITY FILTER: For active KDS orders, we hide stages that don't need prep.
+                // However, for READY/COMPLETED orders, we SHOW ALL stages so the full order can be checked.
+                const hasPrepItems = stageItems.some(i => i.isPrepRequired);
+
+                // Final card status/type logic
+                const isOrderReady = order.order_status === 'ready';
+                const isOrderCompleted = order.order_status === 'completed';
+
+                // If it's an active order (not ready/completed) and has no prep items, hide the stage.
+                if (!isOrderReady && !isOrderCompleted && !hasPrepItems) return;
+
                 const allReady = stageItems.every(i =>
                     ['ready', 'completed', 'cancelled'].includes(i.status)
                 );
@@ -311,9 +372,6 @@ export const useKDSDataLocal = () => {
                 );
 
                 let cardType, cardStatus;
-                const isOrderReady = order.order_status === 'ready';
-                const isOrderCompleted = order.order_status === 'completed';
-
                 if (isOrderReady || isOrderCompleted || allReady) {
                     cardType = 'ready'; // This pushes it to the bottom list (completedOrders)
                     cardStatus = isOrderCompleted ? 'completed' : 'ready';
@@ -325,7 +383,21 @@ export const useKDSDataLocal = () => {
                     cardStatus = 'pending';
                 }
 
-                const groupedItems = groupOrderItems(stageItems);
+                // 🎯 KDS FILTERING: If the card is 'active', only show items that REQUIRE preparation.
+                // Grab-and-go items will only appear when the card moves to 'ready'.
+                const displayItems = cardType === 'active'
+                    ? stageItems.filter(i => i.isPrepRequired)
+                    : stageItems;
+
+                // 🛡️ STABILITY: If an active card has NO items to display (all are non-prep), 
+                // but the order isn't 'ready' yet, we still show the card (maybe with a notice)
+                // OR we let the auto-status logic handle it.
+                if (cardType === 'active' && displayItems.length === 0 && stageItems.length > 0) {
+                    // This means we have an active order with only non-prep items.
+                    // It should probably have been 'ready' already.
+                }
+
+                const groupedItems = groupOrderItems(displayItems);
 
                 const processedOrder = {
                     ...baseOrder,
@@ -368,20 +440,93 @@ export const useKDSDataLocal = () => {
             .then(({ error }) => error ? console.error(`❌ Sync failed:`, error) : console.log(`📤 Synced item ${itemId}`));
     };
 
-    const updateOrderStatus = async (orderId, newStatus) => {
+    const updateOrderStatus = async (orderId, currentStatus, targetStatusOverride = null) => {
+        const order = await db.orders.get(orderId);
+        if (!order) return;
+
+        // 🧠 Determine next status
+        let nextStatus;
+        if (targetStatusOverride) {
+            nextStatus = targetStatusOverride;
+        } else {
+            const statusLower = (currentStatus || '').toLowerCase();
+
+            if (statusLower === 'undo_ready') {
+                nextStatus = 'in_progress';
+            } else if (statusLower === 'ready') {
+                nextStatus = 'completed';
+            } else if (statusLower === 'in_progress') {
+                nextStatus = 'ready';
+            } else if (statusLower === 'new') {
+                nextStatus = 'in_progress';
+            } else if (statusLower === 'pending') {
+                nextStatus = 'new';
+            } else {
+                nextStatus = 'in_progress';
+            }
+        }
+
+        console.log(`🔄 [KDS Local] Moving Order ${orderId} (${currentStatus} -> ${nextStatus})`);
+        const now = new Date().toISOString();
+
         const payload = {
-            order_status: newStatus,
-            updated_at: new Date().toISOString(),
-            ...(newStatus === 'ready' && { ready_at: new Date().toISOString() })
+            order_status: nextStatus,
+            updated_at: now,
+            ...(nextStatus === 'ready' && { ready_at: now }),
+            pending_sync: true
         };
 
-        // 1. Update Dexie immediately
-        await db.orders.update(orderId, payload);
+        const itemStatusForItems = nextStatus === 'completed' ? 'completed' :
+            nextStatus === 'ready' ? 'ready' :
+                nextStatus === 'new' ? 'new' :
+                    nextStatus === 'cancelled' ? 'cancelled' :
+                        'in_progress';
+        const shouldResetEarlyMarks = ['ready', 'completed', 'shipped'].includes(nextStatus);
 
-        // 2. Sync to Supabase in background
+        // 1. Update Dexie immediately
+        await db.transaction('rw', db.orders, db.order_items, async () => {
+            await db.orders.update(orderId, payload);
+            await db.order_items
+                .where('order_id')
+                .equals(orderId)
+                .modify(it => {
+                    // 🍫 SHOKO PROTECTION: NEVER overwrite a 'held' status during an order-level status change.
+                    if (it.item_status !== 'held') {
+                        it.item_status = itemStatusForItems;
+                    }
+                    if (shouldResetEarlyMarks) it.is_early_delivered = false;
+                    it.updated_at = now;
+                });
+        });
+
+        // 🔔 Trigger SMS if ready
+        if (nextStatus === 'ready' && order.customer_phone && navigator.onLine) {
+            const custName = order.customer_name || order.customerName || 'אורח';
+            handleSendSms(order.customer_phone, custName);
+        }
+
+        // 2. Queue for reliable backend sync (handles offline seamlessly)
+        const { queueAction } = await import('@/services/offlineQueue');
+        await queueAction('UPDATE_ORDER_STATUS', {
+            orderId: orderId,
+            newStatus: nextStatus,
+            isLocalOrder: String(orderId).startsWith('L') || order.is_offline
+        });
+
+        // 3. Opportunistic fast-sync
         const { supabase } = await import('@/lib/supabase');
-        supabase.from('orders').update(payload).eq('id', orderId)
-            .then(({ error }) => error ? console.error(`❌ Sync failed:`, error) : console.log(`📤 Synced order ${orderId}`));
+        supabase.rpc('update_order_status_v3', {
+            p_order_id: orderId,
+            p_new_status: nextStatus,
+            p_business_id: order.business_id,
+            p_item_status: itemStatusForItems
+        }).then(({ error }) => {
+            if (error) console.error(`❌ Opportunistic Sync failed:`, error);
+            else {
+                console.log(`📤 Opportunistic Sync succeeded for ${orderId}`);
+                db.orders.update(orderId, { pending_sync: false });
+            }
+        });
     };
 
     const fireItem = async (itemId) => {
@@ -423,7 +568,7 @@ export const useKDSDataLocal = () => {
                 if (order && order.order_status !== 'completed') {
                     // Update order status to ready if it's not already
                     if (order.order_status !== 'ready') {
-                        await updateOrderStatus(orderId, 'ready');
+                        await updateOrderStatus(orderId, null, 'ready');
                     }
 
                     // Send SMS if phone exists
@@ -438,8 +583,29 @@ export const useKDSDataLocal = () => {
         }
     };
 
+    const handleToggleEarlyDelivered = async (orderId, itemId, currentValue) => {
+        const newValue = !currentValue;
+        console.log(`🔄 [KDS Local] Toggling early delivery for item ${itemId}: ${currentValue} -> ${newValue}`);
+
+        // 1. Update Dexie immediately
+        await db.order_items.update(itemId, {
+            is_early_delivered: newValue,
+            updated_at: new Date().toISOString()
+        });
+
+        // 2. Sync to Supabase
+        const { supabase } = await import('@/lib/supabase');
+        await supabase.rpc('toggle_early_delivered', {
+            p_item_id: itemId,
+            p_value: newValue
+        }).then(({ error }) => {
+            if (error) console.error(`❌ Early Delivered Sync failed:`, error);
+            else console.log(`📤 Synced early delivery for ${itemId}`);
+        });
+    };
+
     const handleCancelOrder = async (orderId) => {
-        await updateOrderStatus(orderId, 'cancelled');
+        await updateOrderStatus(orderId, null, 'cancelled');
     };
 
     const handleConfirmPayment = async (orderId, paymentMethod) => {
@@ -622,7 +788,7 @@ export const useKDSDataLocal = () => {
     return {
         currentOrders: processedOrders.current || [],
         completedOrders: processedOrders.completed || [],
-        isLoading: (!activeOrders || !orderItems || !menuItems || !optionValues) && (!processedOrders.current.length && !processedOrders.completed.length),
+        isLoading: false,
         isOffline: !navigator.onLine,
         lastUpdated: new Date(),
         lastAction: null,
@@ -642,6 +808,7 @@ export const useKDSDataLocal = () => {
         fetchHistoryOrders,
         findNearestActiveDate,
         handleUndoLastAction,
+        handleToggleEarlyDelivered,
         handleItemStatusChange: updateItemStatus,
         handleOrderStatusChange: updateOrderStatus
     };

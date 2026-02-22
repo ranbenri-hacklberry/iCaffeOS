@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 import {
     Coffee, Monitor, ChefHat, Package, BarChart3, Palette,
     Lock, ShieldAlert, Settings, LogOut, AlertTriangle, UserCircle,
-    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database
+    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database, Brain
 } from 'lucide-react';
 import HeroCard from '../../components/HeroCard';
 import { PosWireframe, KdsWireframe } from '../../components/DashboardWireframes';
@@ -418,6 +418,16 @@ const HierarchicalDashboard = () => {
                             <Database size={20} className="text-cyan-400" />
                         </motion.button>
                     )}
+
+                    {/* Cortex AI */}
+                    <motion.button
+                        onClick={() => navigate('/cortex')}
+                        whileTap={{ scale: 0.95 }}
+                        className="w-12 h-12 bg-indigo-500/20 backdrop-blur-sm border border-indigo-400/30 rounded-xl flex items-center justify-center select-none touch-none"
+                        title="Cortex AI"
+                    >
+                        <Brain size={20} className="text-indigo-400" />
+                    </motion.button>
 
                     {/* Settings */}
                     <motion.button

@@ -13,6 +13,29 @@ A comprehensive, offline-first Point of Sale (POS) and self-service kiosk applic
 * **icaffeos:** A beautiful, customer-facing interface for browsing menus, customizing items, and paying independently.
 * **POS (Point of Sale):** A fast cashier interface for staff to take orders, handle cash/card payments, and manage tables.
 * **KDS (Kitchen Display System):** Real-time order routing to kitchen stations (Bar, Kitchen, Pass) with course timing management.
+
+#### 🔄 KDS Order Status Lifecycle (CRITICAL STATE MACHINE)
+
+To ensure system stability and uniform behavior, the KDS strict status workflow is defined as follows:
+
+1. **New Order (`in_progress` / `new`)**
+   * **Entry:** A new order arrives from the POS. It generally enters directly as `in_progress` (or `new`).
+   * **Action:** Clicking the primary button (`התחל הכנה` for `new` or `מוכן להגשה` for `in_progress`).
+   * **Transition:** Moves the order to the `ready` state.
+
+2. **Ready to Serve (`ready`)**
+   * **State:** Order is fully prepared and waiting to be picked up.
+   * **Automated Action:** Upon transitioning to `ready`, an automated SMS is sent to the customer (if a phone number exists).
+   * **KDS View:** Order moves to the bottom/secondary area labeled "מוכן למסירה" (Completed Orders list).
+   * **Action:** Clicking the primary button (`נמסר`).
+   * **Transition:** Moves the order to the `completed` state.
+
+3. **Completed (`completed`)**
+   * **State:** Order is delivered to the customer.
+   * **KDS View:** The order completely visual drops off the active KDS screen and moves exclusively to the History log.
+
+*(Any deviations from this workflow without explicit architectural approval will break the UI's localized reactive layout (`useKDSDataLocal`), which heavily relies on implicit status parsing.)*
+
 * **Admin Dashboard:** Comprehensive back-office for menu editing, employee timesheets, inventory management, and business analytics.
 
 ### ⚙️ Core Capabilities
