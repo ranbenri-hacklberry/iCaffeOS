@@ -19,7 +19,7 @@ import OrderEditModal from '@/pages/kds/components/OrderEditModal';
 import DateScroller from '@/pages/kds/components/DateScroller';
 import ConnectionStatusBar from '@/components/ConnectionStatusBar';
 import BusinessInfoBar from '@/components/BusinessInfoBar';
-import { useKDSData } from '@/pages/kds/hooks/useKDSData';
+import { useKDSDataLocal as useKDSData } from '@/pages/kds/hooks/useKDSDataLocal';
 import { getBackendApiUrl } from '@/utils/apiUtils';
 
 // Simple Error Boundary for KDS
@@ -83,20 +83,7 @@ const kdsStyles = `
   line-height: 1.2;
 }
 
-/* אנימציית הבהוב חזקה בכתום/צהוב */
-@keyframes strongOrangePulse {
-  0%, 100% {
-    box-shadow: 0 0 4px rgba(245, 158, 11, 0.6);
-  border-color: #f59e0b;
-  transform: scale(1);
-}
-50% {
-  box-shadow: 0 0 16px rgba(245, 158, 11, 0.9);
-border-color: #fbbf24;
-transform: scale(1.02);
-    }
-  }
-  .animate-strong-pulse { animation: strongOrangePulse 1.2s ease-in-out infinite; }
+  .animate-strong-pulse { border-color: #000; }
 
   /* New Scroll Controls - Compact & Prominent */
   .scroll-btn {
@@ -179,23 +166,19 @@ transform: scale(1.02);
     100% { transform: translateX(350%); }
   }
 
-  /* 🕒 Aging Order States */
+  /* 🕒 Aging Order States - Minimalist Black Design */
   .aging-warn {
-    background-color: #fffbeb !important; /* amber-50 */
-    border: 2px solid #fbbf24 !important; /* amber-400 */
-    box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+    border: 3px solid #000 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   }
-
   .aging-critical {
-    background-color: #fef2f2 !important; /* red-50 */
-    border: 3px solid #ef4444 !important; /* red-500 */
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
-    animation: aging-pulse 2s infinite ease-in-out;
+    border: 4px solid #000 !important;
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25);
+    animation: aging-pulse-black 1.5s infinite ease-in-out;
   }
-
-  @keyframes aging-pulse {
-    0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); border-color: #ef4444; background-color: #fef2f2 !important; }
-    50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); border-color: #dc2626; transform: scale(1.01); background-color: #fee2e2 !important; }
+  @keyframes aging-pulse-black {
+    0%, 100% { transform: scale(1); border-width: 4px; }
+    50% { transform: scale(1.02); border-width: 6px; }
   }
   .scroll-btn-pulse {
     animation: btn-pulse 1.2s ease-in-out infinite;
@@ -409,6 +392,7 @@ const KDSScrollContainer = ({
 // --- רכיבים ---
 
 import UnifiedHeader from '@/components/UnifiedHeader';
+import MiniMusicPlayer from '@/components/music/MiniMusicPlayer';
 
 const Header = ({
   onRefresh, isLoading, lastUpdated, onUndoLastAction, canUndo,
@@ -422,68 +406,44 @@ const Header = ({
     navigate('/?from=kds&new=true');
   };
 
-  const isMac = /Macintosh/i.test(navigator.userAgent);
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const machineLabel = (isMac && isLocalhost) ? 'המחשב שלי' : 'N150';
-
   return (
     <UnifiedHeader
-      title="מטבח"
-      subtitle="מסך ניהול הזמנות"
+      hideTitle={true}
+      showMusicPlayer={true}
       onHome={() => navigate('/mode-selection')}
+      rightContent={
+        <div className="flex items-center gap-2">
+          {/* Refresh button next to Home */}
+          <button
+            onClick={onRefresh}
+            disabled={isLoading}
+            className={`w-[44px] h-[44px] rounded-2xl flex items-center justify-center transition-all bg-white border border-slate-200 active:scale-95 shadow-sm bg-white ${isLoading ? 'text-blue-400 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-slate-50'}`}
+            title="רענן הזמנות"
+          >
+            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+
+          <div className="flex bg-slate-100/80 p-1 rounded-2xl gap-1 border border-slate-200 shadow-inner mr-2">
+            <button
+              onClick={() => setViewMode('active')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all w-28 justify-center ${viewMode === 'active' ? 'bg-white shadow-sm text-blue-600 ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+            >
+              <LayoutGrid size={16} /> <span className="mt-[2px]">פעיל</span>
+            </button>
+            <button
+              onClick={() => setViewMode('history')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all w-28 justify-center ${viewMode === 'history' ? 'bg-white shadow-sm text-purple-600 ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+            >
+              <History size={16} /> <span className="mt-[2px]">היסטוריה</span>
+            </button>
+          </div>
+        </div>
+      }
     >
       <div className="flex items-center gap-3">
-        <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1">
-          <button
-            onClick={() => setViewMode('active')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'active' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <LayoutGrid size={16} /> פעיל
-          </button>
-          <button
-            onClick={() => setViewMode('history')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === 'history' ? 'bg-white shadow-sm text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <History size={16} /> היסטוריה
-          </button>
-        </div>
-
-        <button
-          onClick={() => setShowPending(!showPending)}
-          className={`px-3 py-1.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all border ${showPending ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-400 border-slate-200 hover:text-slate-600'}`}
-          title={showPending ? 'הסתר הזמנות ממתינות' : 'הצג הזמנות ממתינות (משלוחים)'}
-        >
-          <Package size={16} />
-          {showPending ? 'ממתינות ✓' : 'ממתינות'}
-        </button>
-
-        <button
-          onClick={onRefresh}
-          disabled={isLoading}
-          className={`p-2 rounded-xl transition ${isLoading ? 'text-blue-400 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
-          title="רענן הזמנות"
-        >
-          <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
-        </button>
-
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent('open-sync-modal'))}
-          className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition"
-          title={`סנכרון נתונים (Tablet -> ${machineLabel})`}
-        >
-          <Database size={18} />
-        </button>
-
-        <button
-          onClick={canUndo ? onUndoLastAction : undefined}
-          disabled={!canUndo}
-          className={`p-2 rounded-xl transition ${canUndo ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-300'}`}
-        >
-          <RotateCcw size={18} />
-        </button>
-
-        <button onClick={handleNewOrder} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition shadow-sm text-sm font-bold">
-          <Plus size={16} /> הזמנה
+        {/* Leftmost button: New Order */}
+        <button onClick={handleNewOrder} className="flex items-center gap-2 h-11 px-5 bg-[#0F172A] text-white rounded-2xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg active:scale-95 text-sm font-bold shrink-0">
+          <Plus size={16} /> <span className="mt-[2px]">הזמנה חדשה</span>
         </button>
       </div>
     </UnifiedHeader>
@@ -508,8 +468,7 @@ const KdsScreen = () => {
     errorModal,
     setErrorModal,
     isSendingSms,
-    fetchOrders,
-    forceRefresh,
+    fetchOrders, // Uses syncService to pull from DB to Dexie
     fetchHistoryOrders,
     findNearestActiveDate,
     updateOrderStatus: updateOrderStatusBase,
@@ -640,6 +599,8 @@ const KdsScreen = () => {
   const refreshTimeoutRef = React.useRef(null);
   const refreshControllerRef = React.useRef(null);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const handleRefresh = useCallback(async () => {
     if (refreshTimeoutRef.current) return; // Already debouncing
 
@@ -651,6 +612,7 @@ const KdsScreen = () => {
     }
     refreshControllerRef.current = new AbortController();
 
+    setIsRefreshing(true);
     try {
       await Promise.all([
         fetchOrders(refreshControllerRef.current.signal),
@@ -659,6 +621,7 @@ const KdsScreen = () => {
     } catch (err) {
       if (err.name !== 'AbortError') console.error('Refresh failed:', err);
     } finally {
+      setIsRefreshing(false);
       // Debounce: prevent another refresh for 1 second
       refreshTimeoutRef.current = setTimeout(() => {
         refreshTimeoutRef.current = null;
@@ -766,14 +729,14 @@ const KdsScreen = () => {
 
       {/* מסגרת מלאה */}
       <div className="bg-slate-50 w-full h-full rounded-[24px] overflow-hidden shadow-2xl flex flex-col relative ring-4 ring-gray-800 pt-6">
-        {isLoading && (
+        {(isLoading || isRefreshing) && (
           <div className="kds-loader-bar">
             <div className="kds-loader-progress" />
           </div>
         )}
         <Header
           onRefresh={handleRefresh}
-          isLoading={isLoading || isHistoryLoading}
+          isLoading={isLoading || isHistoryLoading || isRefreshing}
           lastUpdated={lastUpdated}
           onUndoLastAction={handleUndoLastAction}
           canUndo={!!lastAction}
@@ -829,7 +792,7 @@ const KdsScreen = () => {
                             onReadyItems={handleReadyItems}
                             onEditOrder={handleEditOrder}
                             onCancelOrder={handleCancelOrder}
-                            onRefresh={forceRefresh}
+                            onRefresh={fetchOrders}
                           />
                         </CardWrapper>
                       );
@@ -869,7 +832,7 @@ const KdsScreen = () => {
                             onToggleEarlyDelivered={handleToggleEarlyDelivered}
                             onEditOrder={handleEditOrder}
                             onCancelOrder={handleCancelOrder}
-                            onRefresh={forceRefresh}
+                            onRefresh={fetchOrders}
                           />
                         </CardWrapper>
                       );
@@ -1054,7 +1017,8 @@ const KdsScreen = () => {
           isOpen={isEditModalOpen}
           order={editingOrder}
           onClose={handleCloseEditModal}
-          onRefresh={forceRefresh}
+          onRefresh={fetchOrders}
+          onToggleEarlyDelivered={handleToggleEarlyDelivered}
         />
       </div >
     </div >

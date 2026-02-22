@@ -122,9 +122,9 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
 
     // Common Content
     const Content = () => (
-        <div className={`flex flex-col items-end pointer-events-auto ${className}`}>
+        <div className={`flex flex-col items-start pointer-events-auto ${className}`}>
             {/* 1. Business Name */}
-            <div className="text-sm font-black text-gray-800 leading-none mb-0.5 whitespace-nowrap drop-shadow-sm/50">
+            <div className="text-[17px] font-black tracking-tight text-gray-900 leading-none mb-0.5 whitespace-nowrap drop-shadow-sm/50">
                 {displayName}
             </div>
 
@@ -134,23 +134,17 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
 
                 <div
                     onClick={() => window.dispatchEvent(new CustomEvent('open-sync-modal'))}
-                    className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-white/40 backdrop-blur-sm border border-black/5 shadow-sm cursor-pointer hover:bg-white/60 transition-colors"
+                    className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                 >
                     <div className="relative flex h-1.5 w-1.5">
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isN150Down ? 'bg-red-400' : (pendingCount > 0 ? 'bg-amber-400' : 'bg-emerald-400')}`}></span>
                         <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isN150Down ? 'bg-red-500' : (pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500')}`}></span>
                     </div>
-                    <span className={`text-[9px] font-bold leading-none ${isN150Down ? 'text-red-800' : (pendingCount > 0 ? 'text-amber-800' : 'text-emerald-800')}`}>
-                        {isN150Down ? 'Offline' : (pendingCount > 0 ? `מסנכרן ${pendingCount}` : `מחובר  ${machineName}`)}
+                    <span className={`text-[10px] font-bold leading-none ${isN150Down ? 'text-red-800' : (pendingCount > 0 ? 'text-amber-800' : 'text-emerald-700')}`}>
+                        {isN150Down ? 'Offline' : (pendingCount > 0 ? `מסנכרן ${pendingCount}` : machineName)}
                     </span>
                 </div>
 
-                {/* 3. Last Sync Label (Left in RTL) - Extra Small */}
-                {lastSyncLabel && (
-                    <div className="text-[8px] text-gray-500 font-medium leading-none tracking-tight whitespace-nowrap pt-0.5">
-                        {lastSyncLabel}
-                    </div>
-                )}
             </div>
         </div>
     );

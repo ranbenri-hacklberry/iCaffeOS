@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
-import { db } from '@/db/database';
+import { supabase } from '@/lib/supabase.js';
+import { db } from '@/db/database.js';
 
 export const useStore = create((set, get) => ({
     // --- User State ---

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
+import { isKitchenPrep } from '@/utils/kdsUtils';
 import MenuCategoryFilter from './components/MenuCategoryFilter';
 import MenuGrid from './components/MenuGrid';
 import SmartCart from './components/SmartCart';
@@ -73,12 +74,10 @@ const MenuOrderingInterface = () => {
       const cartQty = cartItems
         .filter(cartItem => (cartItem.menu_item_id || cartItem.id) === item.id)
         .reduce((sum, cartItem) => {
-          const isKitchenPrep = cartItem.kds_override || cartItem.mods?.kds_override;
-          const hasPrepOption = Array.isArray(cartItem.selectedOptions) &&
-            cartItem.selectedOptions.some(opt => opt.valueId === 'prep');
+          const isPrep = isKitchenPrep(cartItem);
 
           // Only subtract from stock if it's NOT sent to kitchen (i.e. it's "Ready" from shelf)
-          return (isKitchenPrep || hasPrepOption) ? sum : sum + (cartItem.quantity || 1);
+          return isPrep ? sum : sum + (cartItem.quantity || 1);
         }, 0);
 
       return {
@@ -1851,11 +1850,8 @@ const MenuOrderingInterface = () => {
             const discountForItem = Math.floor(itemPrice * discountPercent * 100) / 100;
             const finalPricePerItem = itemPrice - discountForItem;
 
-            // NEW: Unified Prep Check
-            const isKitchenPrep = item.kds_override || item.mods?.kds_override ||
-              item.kds_routing_logic === 'MADE_TO_ORDER' ||
-              item.inventory_settings?.preparationMode === 'requires_prep' ||
-              (Array.isArray(item.selectedOptions) && item.selectedOptions.some(o => o.valueId === 'prep'));
+            // NEW: Unified Prep Check from shared utility
+            const isPrep = isKitchenPrep(item);
 
             return {
               item_id: itemId,
@@ -1867,11 +1863,11 @@ const MenuOrderingInterface = () => {
               is_hot_drink: !!item.is_hot_drink, // Ensure loyalty counts this
               mods: [
                 ...options,
-                ...(isKitchenPrep ? ['__KDS_OVERRIDE__'] : []),
+                ...(isPrep ? ['__KDS_OVERRIDE__'] : []),
                 ...((item.custom_note || item.mods?.custom_note) ? [`__NOTE__:${item.custom_note || item.mods.custom_note}`] : [])
               ],
               notes: item.notes || null,
-              item_status: item.isDelayed ? 'held' : (isKitchenPrep ? 'in_progress' : 'completed'), // Ready items start as completed
+              item_status: item.isDelayed ? 'held' : (isPrep ? 'in_progress' : 'ready'),
               course_stage: item.isDelayed ? 2 : 1
             };
           });
@@ -2458,43 +2454,44 @@ const MenuOrderingInterface = () => {
       {/* Top Navigation Bar - UnifiedHeader */}
       <UnifiedHeader
         onHome={handleBack}
-      >
-        <div className="flex items-center gap-2">
-          {/* Sync Button */}
-          <button
-            onClick={async (e) => {
-              const btn = e.currentTarget;
-              btn.classList.add('animate-spin');
-              btn.disabled = true;
-              try {
-                console.log('📥 Starting sync...');
-                const { initialLoad } = await import('@/services/syncService');
-                const result = await initialLoad(currentUser?.business_id);
-                alert('✅ סנכרון הושלם! רענן את הדף.');
-              } catch (err) {
-                console.error('❌ Sync error:', err);
-                alert('❌ שגיאה בסנכרון: ' + err.message);
-              } finally {
-                btn.classList.remove('animate-spin');
-                btn.disabled = false;
-              }
-            }}
-            className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all disabled:opacity-50 ${isDarkMode ? 'text-blue-400 hover:text-blue-300 hover:bg-slate-700' : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'}`}
-            title="סנכרון נתונים"
-          >
-            <Icon name="RefreshCw" size={18} />
-          </button>
+        rightContent={
+          <div className="flex items-center gap-2">
+            {/* Sync Button */}
+            <button
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                btn.classList.add('animate-spin');
+                btn.disabled = true;
+                try {
+                  console.log('📥 Starting sync...');
+                  const { initialLoad } = await import('@/services/syncService');
+                  const result = await initialLoad(currentUser?.business_id);
+                  alert('✅ סנכרון הושלם! רענן את הדף.');
+                } catch (err) {
+                  console.error('❌ Sync error:', err);
+                  alert('❌ שגיאה בסנכרון: ' + err.message);
+                } finally {
+                  btn.classList.remove('animate-spin');
+                  btn.disabled = false;
+                }
+              }}
+              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all disabled:opacity-50 ${isDarkMode ? 'text-blue-400 hover:text-blue-300 hover:bg-slate-700' : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'}`}
+              title="סנכרון נתונים"
+            >
+              <Icon name="RefreshCw" size={18} />
+            </button>
 
-          {/* Theme Toggle Button */}
-          <button
-            onClick={toggleTheme}
-            className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all ${isDarkMode ? 'text-yellow-400 hover:bg-slate-700' : 'text-slate-600 hover:bg-gray-100'}`}
-            title={isDarkMode ? "מעבר למצב יום" : "מעבר למצב לילה"}
-          >
-            <Icon name={isDarkMode ? "Sun" : "Moon"} size={18} />
-          </button>
-        </div>
-      </UnifiedHeader>
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all ${isDarkMode ? 'text-yellow-400 hover:bg-slate-700' : 'text-slate-600 hover:bg-gray-100'}`}
+              title={isDarkMode ? "מעבר למצב יום" : "מעבר למצב לילה"}
+            >
+              <Icon name={isDarkMode ? "Sun" : "Moon"} size={18} />
+            </button>
+          </div>
+        }
+      />
 
       {/* Customer Info Modal */}
       <CustomerInfoModal

@@ -120,13 +120,15 @@ const OrderCard = memo(({
 
   const agingClass = useMemo(() => {
     if (isHistory || isReady) return '';
-    if (isLiteMode) { // No animation for Lite Mode
-      if (agingMinutes >= 30) return 'aging-critical border-red-500 bg-red-50';
-      if (agingMinutes >= 15) return 'aging-warn border-amber-400 bg-amber-50';
-      return '';
+    // Original production classes that trigger kdsStyles.css overrides
+    if (agingMinutes >= 30) {
+      // In LiteMode we might want less intense animations, but user specifically asked for them.
+      // The kdsStyles.css handles the colors and gentle pulse.
+      return `aging-critical ${isLiteMode ? '' : ''}`; // Keep consistent
     }
-    if (agingMinutes >= 30) return 'aging-critical';
-    if (agingMinutes >= 15) return 'aging-warn';
+    if (agingMinutes >= 15) {
+      return 'aging-warn';
+    }
     return '';
   }, [agingMinutes, isHistory, isReady, isLiteMode]);
 
@@ -137,36 +139,8 @@ const OrderCard = memo(({
     const isDelayedCard = order.type === 'delayed';
     const isUnpaidDelivered = order.type === 'unpaid_delivered';
 
-    if (isLiteMode) {
-      // Optimized for weak tablets
-      if (isUnpaid && !isHistory) {
-        return `border-t-[6px] border-gray-400 border-x border-b border-gray-300`;
-      }
-      if (isHistory && isUnpaid) return 'border-t-[6px] border-amber-500 border-x border-b border-gray-300';
-      if (isDelayedCard) return 'border-t-[6px] border-slate-400 bg-slate-100 opacity-90';
-      if (isUnpaidDelivered) return 'border-t-[6px] border-blue-500 bg-blue-50/30';
-      if (statusLower === 'pending') return 'border-t-[6px] border-amber-500 bg-amber-50/30';
-      if (statusLower === 'new') return 'border-t-[6px] border-green-500';
-      if (statusLower === 'prep_started') return 'border-t-[6px] border-blue-400 bg-blue-50/10';
-      if (statusLower === 'in_progress' || statusLower === 'in_prep') return 'border-t-[6px] border-yellow-500';
-      return 'border-gray-300';
-    }
-
-    if (isUnpaid && !isHistory) {
-      if (statusLower === 'ready') return 'border-t-[6px] border-slate-700 shadow-md ring-2 ring-slate-100 animate-pulse';
-      return 'border-t-[6px] border-slate-400 shadow-sm';
-    }
-    if (isHistory && isUnpaid) return 'border-t-[6px] border-amber-500 shadow-sm';
-
-    if (isDelayedCard) return 'border-t-[6px] border-slate-400 shadow-inner bg-slate-100 opacity-90 grayscale-[0.3]';
-    if (isUnpaidDelivered) return 'border-t-[6px] border-blue-500 shadow-md animate-strong-pulse bg-blue-50/30';
-
-    if (statusLower === 'pending') return 'border-t-[6px] border-amber-500 shadow-md animate-pulse bg-amber-50/30';
-    if (statusLower === 'new') return 'border-t-[6px] border-green-500 shadow-md';
-    if (statusLower === 'prep_started') return 'border-t-[6px] border-blue-400 shadow-md bg-blue-50/20';
-    if (statusLower === 'in_progress' || statusLower === 'in_prep') return 'border-t-[6px] border-yellow-500 shadow-lg ring-1 ring-yellow-100';
-
-    return 'border-gray-200 shadow-sm';
+    // Simplified high-contrast black border design as requested by user
+    return 'border-2 border-black shadow-sm';
   }, [order.type, order.orderStatus, isHistory, order.isPaid, isLiteMode]);
 
   const { isLargeOrder, rightColItems, leftColItems, unifiedItems } = useMemo(() => {
@@ -247,9 +221,10 @@ const OrderCard = memo(({
     // KDS: Early Delivery (Visual Strikethrough/Dimming)
     const isEarlyDelivered = !isReady && !isHistory && (item.is_early_delivered === true);
 
-    // Kanban: Packed Status (Green Badge/Checkmark)
-    // Only applied if isKanban is TRUE.
-    const isPackedItem = isKanban && (item.item_status === 'ready' || item.item_status === 'shipped');
+    // Readiness Status (Green Badge/Checkmark)
+    // Applied when item is 'ready' or 'shipped'
+    const isReadyItem = (item.item_status === 'ready' || item.item_status === 'shipped');
+    const isPackedItem = isReadyItem; // Maintain compatibility with existing variable usage
 
     const nameSizeClass = isHistory ? 'text-sm' : 'text-base';
     const badgeSizeClass = isHistory ? 'w-5 h-5 text-xs' : 'w-6 h-6 text-base';
@@ -257,8 +232,11 @@ const OrderCard = memo(({
 
     const isPrepStarted = item.item_status === 'prep_started';
 
+    // Dim items that don't need prep in the bottom list (ready/history)
+    const isDimmed = (isReady || isHistory) && item.isPrepRequired === false;
+
     return (
-      <div key={`${item.menuItemId}-${item.modsKey || item.id || idx}`} className={`flex flex-col ${!isLiteMode ? 'transition-colors duration-300' : ''} ${isLarge ? 'border-b border-gray-50 pb-1.5' : 'border-b border-dashed border-gray-100 pb-1.5 last:border-0'} ${isEarlyDelivered ? '-mx-1 px-1 rounded-md mb-1 bg-gray-50/50' : ''} ${isEarlyDelivered && !isKanban ? 'opacity-60' : ''} ${isPrepStarted ? 'bg-green-100/40 rounded-md -mx-1 px-1' : ''}`}>
+      <div key={`${item.menuItemId}-${item.modsKey || item.id || idx}`} className={`flex flex-col ${!isLiteMode ? 'transition-colors duration-300' : ''} ${isLarge ? 'border-b border-gray-50 pb-1.5' : 'border-b border-dashed border-gray-100 pb-1.5 last:border-0'} ${isEarlyDelivered ? '-mx-1 px-1 rounded-md mb-1 bg-gray-50/50' : ''} ${isEarlyDelivered && !isKanban ? 'opacity-60' : ''} ${(isPrepStarted || isPackedItem) ? 'bg-green-100/40 rounded-md -mx-1 px-1' : ''} ${isDimmed ? 'opacity-40 grayscale-[0.5]' : ''}`}>
         <div className="flex items-start gap-[5px] relative">
 
           {/* KDS: Early Delivery Indicator Line - DISABLED in Lite Mode */}
@@ -341,7 +319,7 @@ const OrderCard = memo(({
   }, [order.items?.length]);
 
   return (
-    <div className={`kds-card ${cardWidthClass} flex-shrink-0 rounded-2xl px-[5px] pt-1.5 pb-2.5 ${isHistory ? 'mx-[2px]' : 'mx-2'} flex flex-col h-full font-heebo ${(order.type === 'delayed' || orderStatusLower === 'new') ? 'bg-gray-100' : 'bg-white'} ${statusStyles} ${agingClass} border-x border-b border-gray-100 ${glowClass} ${shouldFlash && !isLiteMode ? 'animate-pulse ring-4 ring-orange-400 z-20' : ''} relative overflow-hidden`}>
+    <div className={`kds-card ${cardWidthClass} flex-shrink-0 rounded-2xl px-[5px] pt-1.5 pb-2.5 ${isHistory ? 'mx-[2px]' : 'mx-2'} flex flex-col h-full font-heebo ${(order.type === 'delayed' || orderStatusLower === 'new') ? 'bg-gray-100' : 'bg-white'} ${statusStyles} ${agingClass} ${glowClass} ${shouldFlash && !isLiteMode ? 'animate-pulse ring-4 ring-black z-20' : ''} relative overflow-hidden`}>
 
       {/* Header */}
       <div className="z-0 flex justify-between items-start mb-0.5 border-b border-gray-50 pb-0.5">

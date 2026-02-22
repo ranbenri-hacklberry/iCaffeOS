@@ -16,25 +16,16 @@ export const useOrderPush = () => {
 
             try {
                 // Find orders waiting to sync
-                // Fallback to .filter() in case the pending_sync index hasn't migrated yet
-                let pendingOrders;
+                let pendingOrders = [];
+                // Safe lookup: boolean indexes often throw "parameter is not a valid key" 
+                // on older/embedded WebKit versions (like iPad Electron). We use the collection fallback directly.
                 try {
-                    pendingOrders = await db.orders
-                        .where('pending_sync')
-                        .equals(1) // IndexedDB stores booleans as 0/1
-                        .toArray();
-                    // Also catch true (some Dexie versions store as boolean)
-                    const pendingTrue = await db.orders
-                        .where('pending_sync')
-                        .equals(true)
-                        .toArray();
-                    const ids = new Set(pendingOrders.map(o => o.id));
-                    pendingTrue.forEach(o => { if (!ids.has(o.id)) pendingOrders.push(o); });
-                } catch (indexErr) {
-                    console.warn('⚠️ [OrderPush] pending_sync index missing, using filter fallback:', indexErr.message);
-                    pendingOrders = await db.orders
-                        .filter(o => o.pending_sync === true || o.pending_sync === 1)
-                        .toArray();
+                    console.log('🔄 [OrderPush] Scanning for pending orders...');
+                    pendingOrders = await db.orders.toCollection().filter(o =>
+                        o.pending_sync === true || o.pending_sync === 1 || o.is_offline === true
+                    ).toArray();
+                } catch (err) {
+                    console.error('❌ [OrderPush] Error scanning for pending orders:', err);
                 }
 
                 if (pendingOrders.length === 0) {

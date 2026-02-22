@@ -20,15 +20,11 @@ const SyncOverlay = ({ isOpen, onClose, onSyncComplete }) => {
     const checkSyncStatus = async () => {
         setStatus('checking');
         try {
-            const res = await fetch(`${MUSIC_API_URL}/api/music/sync/status`);
-            const data = await res.json();
-            if (data.success) {
-                setPendingCount(data.count);
-                setPendingSongs(data.pending || []);
-                setStatus(data.count > 0 ? 'pending' : 'idle');
-            } else {
-                throw new Error(data.message);
-            }
+            // Obsolete route, no longer tracks local staging vs drive
+            // Just simulate success (0 pending)
+            setPendingCount(0);
+            setPendingSongs([]);
+            setStatus('idle');
         } catch (err) {
             setError(err.message);
             setStatus('error');

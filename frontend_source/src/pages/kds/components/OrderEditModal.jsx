@@ -15,6 +15,7 @@ const OrderEditModal = ({
     order,
     onClose,
     onRefresh,
+    onToggleEarlyDelivered,
     isHistoryMode = false
 }) => {
     const navigate = useNavigate();
@@ -92,33 +93,34 @@ const OrderEditModal = ({
 
     if (!isOpen || !order) return null;
 
-    const handleToggleEarlyDelivered = async (item) => {
+    const handleToggleEarlyDeliveredLocal = async (item) => {
         if (processingItemId || isHistoryMode) return;
         setProcessingItemId(item.id);
         const newValue = !item.is_early_delivered;
 
         try {
-            // Optimistic update
+            // 1. Optimistic update for Modal UI
             setItems(prevItems =>
                 prevItems.map(i => i.id === item.id ? { ...i, is_early_delivered: newValue } : i)
             );
 
-            const { error } = await supabase.rpc('toggle_early_delivered', {
-                p_item_id: item.id,
-                p_value: newValue
-            });
-
-            if (error) {
-                // Revert locally on error
-                setItems(prevItems =>
-                    prevItems.map(i => i.id === item.id ? { ...i, is_early_delivered: !newValue } : i)
-                );
-                throw error;
+            // 2. Call centralized toggle function (updates Dexie + Supabase)
+            if (onToggleEarlyDelivered) {
+                await onToggleEarlyDelivered(orderData.id, item.id, item.is_early_delivered);
+            } else {
+                // Fallback if prop missing
+                const { error } = await supabase.rpc('toggle_early_delivered', {
+                    p_item_id: item.id,
+                    p_value: newValue
+                });
+                if (error) throw error;
             }
-            // Note: We avoid onRefresh() here to prevent the card from "jumping" due to server re-ordering
-            // during fetchOrders. The optimistic update is enough for the modal.
         } catch (err) {
             console.error('Error in toggle:', err);
+            // Revert locally on error
+            setItems(prevItems =>
+                prevItems.map(i => i.id === item.id ? { ...i, is_early_delivered: !newValue } : i)
+            );
         } finally {
             setProcessingItemId(null);
         }
@@ -158,7 +160,7 @@ const OrderEditModal = ({
                             .filter(mod => mod.shortName !== null);
 
                         return (
-                            <div key={item.id} onClick={() => handleToggleEarlyDelivered(item)} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-all active:scale-[0.99]">
+                            <div key={item.id} onClick={() => handleToggleEarlyDeliveredLocal(item)} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-all active:scale-[0.99]">
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 me-3 ${item.is_early_delivered ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
                                     <Check size={20} strokeWidth={3} />
                                 </div>

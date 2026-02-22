@@ -582,87 +582,71 @@ export const useKDSData = () => {
 
             // Re-declare to ensure scope availability if needed, though 'let localPendingOrders' is above.
 
-            if (!isOnline) {
-                try {
-                    // ... (existing offline logic remains, but we can rely on localPendingOrders + others)
-                    // For full offline support we still need the main load:
-                    const localOrders = await db.orders
-                        .filter(o => {
-                            // ... (existing filter logic)
-                            const isToday = new Date(o.created_at) >= today;
-                            const isActiveState = ['in_progress', 'ready', 'new', 'pending'].includes(o.order_status);
-                            const isUnpaidCompleted = o.order_status === 'completed' && o.is_paid === false;
-                            const isPending = o.pending_sync === true || o.is_offline === true;
-                            // Check if this pending order was already loaded above to avoid duplicates?
-                            // easier to just load everything here if offline.
-                            const businessMatch = !businessId || String(o.business_id) === String(businessId);
-                            return businessMatch && (((isActiveState || isUnpaidCompleted) && isToday) || isPending);
-                        })
-                        .toArray();
+            // 🚀 FIRE AND FORGET: IMMEDIATELY LOAD FROM DEXIE TO UNBLOCK UI
+            try {
+                const localOrders = await db.orders
+                    .filter(o => {
+                        const isToday = new Date(o.created_at) >= today;
+                        const isActiveState = ['in_progress', 'ready', 'new', 'pending'].includes(o.order_status);
+                        const isUnpaidCompleted = o.order_status === 'completed' && o.is_paid === false;
+                        const isPending = o.pending_sync === true || o.is_offline === true;
+                        const businessMatch = !businessId || String(o.business_id) === String(businessId);
+                        return businessMatch && (((isActiveState || isUnpaidCompleted) && isToday) || isPending);
+                    })
+                    .toArray();
 
-                    ordersData = localOrders || [];
+                ordersData = localOrders || [];
 
-                    // ... (rest of offline logic)
+                if (localOrders && localOrders.length > 0) {
+                    const localOrderIds = localOrders.map(o => o.id);
+                    const orderItems = await db.order_items.where('order_id').anyOf(localOrderIds).toArray();
+                    const menuItems = await db.menu_items.toArray();
+                    const menuMap = new Map(menuItems.map(m => [m.id, m]));
 
-                    if (localOrders && localOrders.length > 0) {
-                        const localOrderIds = localOrders.map(o => o.id);
-                        const orderItems = await db.order_items.where('order_id').anyOf(localOrderIds).toArray();
-                        const menuItems = await db.menu_items.toArray();
-                        const menuMap = new Map(menuItems.map(m => [m.id, m]));
+                    ordersData = localOrders.map(order => ({
+                        id: order.id,
+                        order_number: order.order_number,
+                        customer_name: order.customer_name || 'אורח',
+                        customer_phone: order.customer_phone,
+                        is_paid: order.is_paid,
+                        total_amount: order.total_amount,
+                        created_at: order.created_at,
+                        updated_at: order.updated_at,
+                        order_status: order.order_status,
+                        pending_sync: order.pending_sync || false,
+                        order_items: orderItems
+                            .filter(i => String(i.order_id) === String(order.id))
+                            .map(item => {
+                                const menuItem = menuMap.get(item.menu_item_id);
+                                const name = menuItem?.name || item.name || 'פריט מהתפריט';
+                                return {
+                                    ...item,
+                                    name,
+                                    menu_items: {
+                                        name: name,
+                                        price: item.price || menuItem?.price || 0,
+                                        kds_routing_logic: menuItem?.kds_routing_logic || 'MADE_TO_ORDER',
+                                        is_prep_required: menuItem?.is_prep_required !== false
+                                    }
+                                };
+                            })
+                    }));
 
-                        ordersData = localOrders.map(order => ({
-                            id: order.id,
-                            order_number: order.order_number,
-                            customer_name: order.customer_name || 'אורח',
-                            customer_phone: order.customer_phone,
-                            is_paid: order.is_paid,
-                            total_amount: order.total_amount,
-                            created_at: order.created_at,
-                            updated_at: order.updated_at,
-                            order_status: order.order_status,
-                            pending_sync: order.pending_sync || false,
-                            order_items: orderItems
-                                .filter(i => String(i.order_id) === String(order.id))
-                                .map(item => {
-                                    const menuItem = menuMap.get(item.menu_item_id);
-                                    const name = menuItem?.name || item.name || 'פריט מהתפריט';
-                                    return {
-                                        ...item,
-                                        name,
-                                        menu_items: {
-                                            name: name,
-                                            price: item.price || menuItem?.price || 0,
-                                            kds_routing_logic: menuItem?.kds_routing_logic || 'MADE_TO_ORDER'
-                                        }
-                                    };
-                                })
-                        }));
-
-                        log(`🚀 [Offline] Loaded ${ordersData.length} cached orders from Dexie`);
-                    } else {
-                        log('ℹ️ [Offline] No cached orders found for today in Dexie');
-                    }
-                } catch (err) {
-                    warn('Offline initial Dexie load failed:', err);
+                    log(`🚀 [Hydration] Extracted ${ordersData.length} active orders instantly`);
+                    // IMMMEDIATELY RENDER the Local Data so the KDS isn't empty!
+                    processAndSetUI(ordersData, menuMap);
+                } else {
+                    log('ℹ️ [Hydration] No cached active orders found instantly');
                 }
-            } else if (isLocal) {
-                log('🏘️ [Local Mode] Prioritizing Supabase (N150) over Dexie cache.');
-                // We skip the Dexie load phase and wait for the local RPC which is fast.
+            } catch (err) {
+                warn('Initial Dexie Load failed:', err);
+            }
+
+            // If it's local, we still go to supabase (LAN/cloud).
+            if (isLocal) {
+                log('🏘️ [Local Mode] Background syncing from Supabase (N150)...');
             } else {
-                log('🌐 [Cloud Mode] Direct Fetch from Supabase (SWR Disabled to prevent flicker)');
-                // 🛑 DISABLE SWR: Do not show stale checks from Dexie.
-                // It is better to show nothing/loading than wrong/incomplete data.
-                /*
-                try {
-                    const localOrders = await db.orders
-                        .filter(o => ['in_progress', 'ready', 'new', 'pending'].includes(o.order_status))
-                        .toArray();
-                    
-                    if (localOrders.length > 0) {
-                        // ... SWR logic removed ... 
-                    }
-                } catch (e) { console.warn('SWR Load failed:', e); }
-                */
+                log('🌐 [Cloud Mode] Background syncing from Supabase...');
             }
 
             // 🚀 STEP 2: SUPABASE FETCH (Background Refresh)
@@ -697,10 +681,31 @@ export const useKDSData = () => {
                     let ordersData_raw = null;
 
                     log(`📡 [KDS] Calling RPC get_kds_orders: date=${today.toISOString()}, businessId=${businessId}`);
-                    const { data: rpcData, error } = await supabase.rpc('get_kds_orders', {
-                        p_date: today.toISOString(),
-                        p_business_id: businessId || null
-                    }).abortSignal(signal);
+
+                    const fetchController = new AbortController();
+                    const fetchTimeoutId = setTimeout(() => fetchController.abort(new Error('KDS Fetch Timeout (5000ms)')), 5000);
+
+                    // Link the component unmount signal with the timeout signal
+                    const handleUnmount = () => fetchController.abort();
+                    signal.addEventListener('abort', handleUnmount);
+
+                    let rpcData = null;
+                    let error = null;
+
+                    try {
+                        const res = await supabase.rpc('get_kds_orders', {
+                            p_date: today.toISOString(),
+                            p_business_id: businessId || null
+                        }).abortSignal(fetchController.signal);
+
+                        rpcData = res.data;
+                        error = res.error;
+                    } catch (fetchErr) {
+                        error = fetchErr;
+                    } finally {
+                        clearTimeout(fetchTimeoutId);
+                        signal.removeEventListener('abort', handleUnmount);
+                    }
 
                     if (error) {
                         console.error('❌ [KDS-ERROR] RPC get_kds_orders failed:', error.message, error.details);
@@ -891,7 +896,8 @@ export const useKDSData = () => {
                         // 2.5 Cache Menu Items (Throttled: Every 5 minutes)
                         if (Date.now() - lastMenuUpdateRef.current > 5 * 60 * 1000) {
                             try {
-                                const { data: menuItemsData } = await supabase.from('menu_items').select('*');
+                                const { data: menuItemsData } = await supabase.from('menu_items')
+                                    .select('id, name, price, kds_routing_logic, is_prep_required, category');
                                 if (menuItemsData) {
                                     await db.menu_items.clear(); // Refresh cache
                                     await db.menu_items.bulkPut(menuItemsData);

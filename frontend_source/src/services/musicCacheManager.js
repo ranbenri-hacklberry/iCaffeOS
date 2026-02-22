@@ -61,8 +61,9 @@ export const MusicCacheManager = {
      * Copies tracks from external mount to internal buffer within the 10GB limit.
      */
     async prefetch(queue, currentIndex = 0) {
-        // Identify next 50 tracks
-        const upcoming = queue.slice(currentIndex + 1, currentIndex + 1 + PREFETCH_COUNT);
+        // Include current song AND next tracks so the current song is cached immediately
+        // (critical for external drive disconnect survival)
+        const upcoming = queue.slice(currentIndex, currentIndex + PREFETCH_COUNT);
         if (upcoming.length === 0) return;
 
         console.log(`📡 CacheManager: Checking prefetch for ${upcoming.length} tracks...`);

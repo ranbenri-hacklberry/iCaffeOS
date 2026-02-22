@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { supabase, cloudSupabase } from '../lib/supabase'; // 🆕 FIX: Import supabase client
+import { supabase, cloudSupabase } from '../lib/supabase.js'; // 🆕 FIX: Import supabase client
 import AuthContext from './AuthContextCore';
 
 // API URL for sync endpoint - Favor relative paths when running locally to use Vite proxy

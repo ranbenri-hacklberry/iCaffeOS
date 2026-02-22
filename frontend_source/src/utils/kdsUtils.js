@@ -8,6 +8,26 @@ export const isHotDrink = (item) => {
     return isDrink(item) && (cat.includes('חמה') || cat.includes('hot'));
 };
 
+/**
+ * Unified Preparation Requirement Check
+ * STRICTLY based on DB / settings (inclusive of coffee data)
+ */
+export const isKitchenPrep = (item) => {
+    if (!item) return false;
+    return (
+        item.kds_override ||
+        item.mods?.kds_override ||
+        item.kds_routing_logic === 'MADE_TO_ORDER' ||
+        (typeof item.kds_routing_logic === 'string' && item.kds_routing_logic.includes('routeTo')) ||
+        item.is_hot_drink === true ||
+        item.category === 'שתיה חמה' ||
+        item.db_category === 'שתיה חמה' ||
+        item.category === 'hot-drinks' ||
+        item.inventory_settings?.preparationMode === 'requires_prep' ||
+        (Array.isArray(item.selectedOptions) && item.selectedOptions.some(o => o.valueId === 'prep'))
+    );
+};
+
 export const sortItems = (items) => {
     return [...items].sort((a, b) => {
         // ⚠️ CRITICAL: NO status-based sorting!

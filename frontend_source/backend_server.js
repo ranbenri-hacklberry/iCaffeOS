@@ -24,15 +24,22 @@ const __dirname = path.dirname(__filename);
  * 🖼️ Helper to find the best cover art file in a set of directories
  */
 function findBestCoverArt(searchDirs) {
-    const coverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'album.jpg', 'front.jpg', 'artwork.jpg', 'folder.png', 'thumb.jpg'];
+    const priorityNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'album.jpg', 'front.jpg', 'artwork.jpg', 'folder.png', 'thumb.jpg'];
+    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp']);
     for (const dir of searchDirs) {
         if (!dir || !fs.existsSync(dir)) continue;
         try {
             const files = fs.readdirSync(dir);
-            for (const name of coverNames) {
+            // 1. Priority: well-known cover filenames
+            for (const name of priorityNames) {
                 const match = files.find(f => f.toLowerCase() === name);
                 if (match) return path.join(dir, match);
             }
+            // 2. Fallback: any image file that isn't hidden
+            const anyImage = files.find(
+                f => !f.startsWith('.') && imageExts.has(path.extname(f).toLowerCase())
+            );
+            if (anyImage) return path.join(dir, anyImage);
         } catch (e) {
             // Skip inaccessible dirs
         }
@@ -3575,10 +3582,27 @@ app.post("/customers/identify-and-greet", ensureSupabase, async (req, res) => {
 // === 12. MUSIC API ROUTES ===
 // ------------------------------------------------------------------
 
+// Local Cache Directory - defined HERE so it's available to all music routes below
+const MUSIC_CACHE_DIR = path.join(__dirname, 'public', 'music');
+if (!fs.existsSync(MUSIC_CACHE_DIR)) {
+    fs.mkdirSync(MUSIC_CACHE_DIR, { recursive: true });
+}
+
+// Helper: get the cache filename for a song (uses ID-prefixed name to avoid filename collisions)
+const getMusicCachePath = (songId, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    const baseName = path.basename(filePath);
+    if (songId) {
+        return { idPath: path.join(MUSIC_CACHE_DIR, `${songId}${ext}`), namePath: path.join(MUSIC_CACHE_DIR, baseName) };
+    }
+    return { idPath: null, namePath: path.join(MUSIC_CACHE_DIR, baseName) };
+};
+
 // Stream audio file from disk
 app.get("/music/stream", (req, res) => {
     try {
         const filePath = decodeURIComponent(req.query.path || '');
+        const songId = req.query.id || null;
 
         if (!filePath) {
             return res.status(400).json({ error: 'Missing path parameter' });
@@ -3589,15 +3613,17 @@ app.get("/music/stream", (req, res) => {
             return res.status(403).json({ error: 'Invalid path' });
         }
 
-        // 1. Try serving from project public/music directory (internal cache) FIRST
+        // 1. Try serving from internal cache FIRST
+        //    Check by song ID (new format: {id}.ext) then by filename (legacy format)
         let actualPath = null;
-        const fileName = path.basename(filePath);
-        const projectMusicPath = path.join(MUSIC_CACHE_DIR, fileName);
+        const { idPath, namePath } = getMusicCachePath(songId, filePath);
 
-        if (fs.existsSync(projectMusicPath)) {
-            actualPath = projectMusicPath;
+        if (idPath && fs.existsSync(idPath)) {
+            actualPath = idPath;
+        } else if (fs.existsSync(namePath)) {
+            actualPath = namePath;
         } else if (fs.existsSync(filePath)) {
-            // 2. Fallback to external path
+            // 2. Fallback to external path (drive connected)
             actualPath = filePath;
         }
 
@@ -3650,12 +3676,6 @@ app.get("/music/stream", (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-// Local Cache Directory
-const MUSIC_CACHE_DIR = path.join(__dirname, 'public', 'music');
-if (!fs.existsSync(MUSIC_CACHE_DIR)) {
-    fs.mkdirSync(MUSIC_CACHE_DIR, { recursive: true });
-}
-
 // Cache a song locally (Copy from external to internal)
 app.post("/music/cache", async (req, res) => {
     const { songId, filePath, coverPath } = req.body;
@@ -3664,21 +3684,23 @@ app.post("/music/cache", async (req, res) => {
     }
 
     try {
-        const fileName = path.basename(filePath);
-        const destPath = path.join(MUSIC_CACHE_DIR, fileName);
+        const { idPath, namePath } = getMusicCachePath(songId, filePath);
+        const destPath = idPath || namePath; // Prefer ID-based path to avoid filename collisions
 
-        if (!fs.existsSync(filePath) && !fs.existsSync(destPath)) {
-            return res.status(404).json({ error: 'Source file not found' });
-        }
+        // Check if already cached (by ID path or legacy name path)
+        const alreadyCached = fs.existsSync(destPath) || (idPath && fs.existsSync(namePath));
 
-        if (!fs.existsSync(destPath)) {
-            console.log(`📦 [Cache] Copying to internal storage: ${fileName}...`);
+        if (!alreadyCached) {
+            if (!fs.existsSync(filePath)) {
+                return res.status(404).json({ error: 'Source file not found' });
+            }
+            console.log(`📦 [Cache] Copying to internal storage: ${path.basename(destPath)}...`);
             fs.copyFileSync(filePath, destPath);
         }
 
         const stats = fs.statSync(destPath);
 
-        // Also cache cover if provided
+        // Also cache cover art if provided (local path only)
         if (coverPath && !coverPath.startsWith('http') && fs.existsSync(coverPath)) {
             const coverName = path.basename(coverPath);
             const destCover = path.join(MUSIC_CACHE_DIR, coverName);
@@ -3713,11 +3735,13 @@ app.delete("/music/cache/:id", async (req, res) => {
 
         const { data: song } = await supabase.from('music_songs').select('file_path').eq('id', id).single();
         if (song?.file_path) {
-            const fileName = path.basename(song.file_path);
-            const cachePath = path.join(MUSIC_CACHE_DIR, fileName);
-            if (fs.existsSync(cachePath)) {
-                fs.unlinkSync(cachePath);
-                console.log(`🗑️ [Cache] Evicted: ${fileName}`);
+            const { idPath, namePath } = getMusicCachePath(id, song.file_path);
+            // Try deleting ID-based file first, then legacy name-based file
+            for (const cachePath of [idPath, namePath].filter(Boolean)) {
+                if (fs.existsSync(cachePath)) {
+                    fs.unlinkSync(cachePath);
+                    console.log(`🗑️ [Cache] Evicted: ${path.basename(cachePath)}`);
+                }
             }
         }
 
@@ -3790,6 +3814,9 @@ app.post("/music/scan", async (req, res) => {
         const audioFiles = findAudioFiles(expandedPath);
         console.log(`🔍 Found ${audioFiles.length} audio files. Extracting metadata...`);
 
+        // Map: albumKey -> { data: Buffer, mime: string } for embedded artwork (ID3)
+        const embeddedArtMap = new Map();
+
         // Process files in parallel with limit
         const BATCH_SIZE = 20;
         for (let i = 0; i < audioFiles.length; i += BATCH_SIZE) {
@@ -3815,19 +3842,25 @@ app.post("/music/scan", async (req, res) => {
                     const folderPath = path.dirname(filePath);
                     const folderName = path.basename(folderPath);
                     const parentFolderName = path.basename(path.dirname(folderPath));
+                    const grandparentFolderName = path.basename(path.dirname(path.dirname(folderPath)));
 
                     if (!albumName) {
-                        // Try to parse album name from folder: "(1969) Fela Fela Fela" => album "Fela Fela Fela"
-                        const yearMatch = folderName.match(/^\((\d{4})\)\s+(.+)$/);
+                        // Pattern 1: "(1969) Fela Fela Fela"  →  album "Fela Fela Fela"
+                        const yearMatch = folderName.match(/^\(?(\d{4})\)?\s*[-–]?\s*(.+)$/);
                         if (yearMatch) {
                             albumName = yearMatch[2].trim();
                         } else {
+                            // Pattern 2: folder IS the album name (common structure: Artist/Album/songs)
+                            // Avoid labelling the scan root as the album
                             albumName = folderName || 'Unknown Album';
                         }
                     }
                     if (!trackArtist) {
-                        // Try parent folder as artist name: "Fela Kuti/(1969) Fela Fela Fela" => "Fela Kuti"
-                        trackArtist = parentFolderName && parentFolderName !== 'Music' ? parentFolderName : 'Unknown Artist';
+                        // Try parent, then grandparent folder as artist
+                        // Common structures: "Artist/Album/songs" or "Genre/Artist/Album/songs"
+                        const nonGenericFolders = [expandedPath, 'Music', 'music', 'Downloads', 'Media'];
+                        const candidates = [parentFolderName, grandparentFolderName];
+                        trackArtist = candidates.find(n => n && !nonGenericFolders.includes(n)) || 'Unknown Artist';
                     }
                     if (!albumArtist) {
                         albumArtist = trackArtist;
@@ -3855,9 +3888,6 @@ app.post("/music/scan", async (req, res) => {
                     if (!albumMap.has(albumKey)) {
                         // Try to find cover art - search current folder AND parent folders
                         // (multi-disc albums like CD1/CD2 have covers in parent)
-                        let coverPath = null;
-                        const coverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'album.jpg', 'front.jpg', 'artwork.jpg', 'folder.png', 'thumb.jpg'];
-
                         const searchDirs = [folderPath];
                         // Add parent and grandparent for multi-disc detection
                         const parent = path.dirname(folderPath);
@@ -3865,7 +3895,7 @@ app.post("/music/scan", async (req, res) => {
                         const grandparent = path.dirname(parent);
                         if (grandparent !== parent) searchDirs.push(grandparent);
 
-                        coverPath = findBestCoverArt(searchDirs);
+                        const coverPath = findBestCoverArt(searchDirs);
 
                         albumMap.set(albumKey, {
                             name: albumName,
@@ -3875,6 +3905,14 @@ app.post("/music/scan", async (req, res) => {
                             release_year: year,
                             trackArtists: new Set([trackArtist])
                         });
+
+                        // Capture embedded ID3 artwork as fallback (only once per album, only if no file cover found)
+                        if (!coverPath && !embeddedArtMap.has(albumKey) && common.picture?.length) {
+                            const pic = common.picture[0];
+                            if (pic?.data?.length > 0) {
+                                embeddedArtMap.set(albumKey, { data: pic.data, mime: pic.format || 'image/jpeg' });
+                            }
+                        }
                     } else {
                         // Album already exists - track another artist
                         albumMap.get(albumKey).trackArtists.add(trackArtist);
@@ -3908,6 +3946,70 @@ app.post("/music/scan", async (req, res) => {
 
             if (i % 100 === 0 && i > 0) {
                 console.log(`⏳ Progress: ${i}/${audioFiles.length} files processed...`);
+            }
+        }
+
+        // ── Write embedded ID3 artwork to disk cache for albums with no cover file ──
+        if (embeddedArtMap.size > 0) {
+            const cacheDir = path.join(os.homedir(), '.rantunes-cache', 'covers');
+            try { fs.mkdirSync(cacheDir, { recursive: true }); } catch (_) { /* ignore */ }
+            for (const [albumKey, artInfo] of embeddedArtMap) {
+                const album = albumMap.get(albumKey);
+                if (!album || album.cover_path) continue; // already has a cover
+                try {
+                    const ext = artInfo.mime === 'image/png' ? '.png' : '.jpg';
+                    const safeKey = Buffer.from(albumKey).toString('base64').replace(/[/+=]/g, '_').slice(0, 48);
+                    const outPath = path.join(cacheDir, safeKey + ext);
+                    fs.writeFileSync(outPath, artInfo.data);
+                    album.cover_path = outPath;
+                } catch (_) { /* skip if disk write fails */ }
+            }
+            console.log(`🖼️ Wrote ${embeddedArtMap.size} embedded artwork files to cache`);
+        }
+
+        // ── MERGE: Detect per-artist subfolders that belong to the same compilation album ──
+        // Example: "Legacy (Deluxe)/Drake/" + "Legacy (Deluxe)/Future/" → one "Various Artists" album
+        {
+            const mergeGroups = new Map(); // "parentPath||albumNameLower" -> [albumKey, ...]
+            for (const [albumKey, album] of albumMap) {
+                const parent = path.dirname(albumKey);
+                if (parent === albumKey || parent === expandedPath) continue; // skip root
+                const groupKey = `${parent}||${album.name.toLowerCase().trim()}`;
+                if (!mergeGroups.has(groupKey)) mergeGroups.set(groupKey, []);
+                mergeGroups.get(groupKey).push(albumKey);
+            }
+            for (const [groupKey, albumKeys] of mergeGroups) {
+                if (albumKeys.length < 2) continue; // only merge 2+ sibling folders
+                const parentFolder = groupKey.split('||')[0];
+                const firstAlbum = albumMap.get(albumKeys[0]);
+                const mergedArtists = new Set();
+                let mergedCover = null;
+                let mergedYear = null;
+                for (const key of albumKeys) {
+                    const a = albumMap.get(key);
+                    a.trackArtists.forEach(ar => mergedArtists.add(ar));
+                    if (!mergedCover && a.cover_path) mergedCover = a.cover_path;
+                    if (!mergedYear && a.release_year) mergedYear = a.release_year;
+                    albumMap.delete(key);
+                }
+                // Try parent folder for cover art if subfolders had none
+                if (!mergedCover) mergedCover = findBestCoverArt([parentFolder]);
+                // Merge into parent folder as album key
+                albumMap.set(parentFolder, {
+                    name: firstAlbum.name,
+                    album_artist: firstAlbum.album_artist,
+                    folder_path: parentFolder,
+                    cover_path: mergedCover,
+                    release_year: mergedYear,
+                    trackArtists: mergedArtists
+                });
+                // Re-point songs from all subfolders to the merged parent path
+                for (const song of songList) {
+                    if (albumKeys.includes(song.folder_path)) {
+                        song.folder_path = parentFolder;
+                    }
+                }
+                console.log(`🔀 Merged ${albumKeys.length} artist-subfolders → album: "${firstAlbum.name}"`);
             }
         }
 
@@ -4017,16 +4119,47 @@ app.post("/music/scan", async (req, res) => {
             (allArtists || []).forEach(a => { artistMap[a.name] = a.id; });
 
             // 2) Albums
+            // NOTE: album objects use 'album_artist' (not 'artist_name').
+            // Compilation/Various-Artists albums may not have a real artist in the map —
+            // add a placeholder so they still get saved.
+            if (!artistMap['Various Artists']) {
+                // Ensure 'Various Artists' exists in the DB so compilations can be saved
+                try {
+                    const { data: vaRow } = await supabase
+                        .from('music_artists')
+                        .upsert({ name: 'Various Artists', business_id: targetBusinessId }, { onConflict: 'name' })
+                        .select('id, name')
+                        .maybeSingle();
+                    if (vaRow) artistMap['Various Artists'] = vaRow.id;
+                } catch (_) {}
+                // If upsert didn't return row, fetch it
+                if (!artistMap['Various Artists']) {
+                    const { data: vaFetch } = await supabase
+                        .from('music_artists')
+                        .select('id')
+                        .eq('name', 'Various Artists')
+                        .maybeSingle();
+                    if (vaFetch?.id) artistMap['Various Artists'] = vaFetch.id;
+                }
+            }
+
             const albumRows = albums
-                .filter(a => artistMap[a.artist_name])
-                .map(a => ({
-                    name: a.name,
-                    artist_id: artistMap[a.artist_name],
-                    folder_path: a.folder_path || null,
-                    cover_url: a.cover_path || null,
-                    release_year: a.release_year || null,
-                    business_id: targetBusinessId
-                }));
+                .map(a => {
+                    // artist_name was set by post-processing (either the single track artist, or 'Various Artists' for compilations)
+                    // Fall back to album_artist if artist_name isn't in map (e.g. ID3 discrepancy)
+                    const artistKey = artistMap[a.artist_name]
+                        ? a.artist_name
+                        : (artistMap[a.album_artist] ? a.album_artist : 'Various Artists');
+                    return {
+                        name: a.name,
+                        artist_id: artistMap[artistKey] || null,
+                        folder_path: a.folder_path || null,
+                        cover_url: a.cover_path || null,
+                        release_year: a.release_year || null,
+                        business_id: targetBusinessId
+                    };
+                })
+                .filter(a => a.artist_id); // skip rows where we still couldn't resolve an artist
 
             console.log(`💾 Inserting ${albumRows.length} albums...`);
             if (albumRows.length > 0) {
@@ -4042,17 +4175,29 @@ app.post("/music/scan", async (req, res) => {
                 }
 
                 if (albumUpsertError) {
-                    console.log('Trying individual album inserts...');
+                    console.log('Trying individual album inserts (with UPDATE fallback)...');
                     for (const album of albumRows) {
                         try {
                             const { error } = await supabase
                                 .from('music_albums')
                                 .insert(album);
-                            if (error && !error.message?.includes('duplicate key')) {
-                                console.error('❌ Album insert error:', error);
+                            if (error) {
+                                if (error.message?.includes('duplicate key') || error.code === '23505') {
+                                    // Row exists — update cover_url, release_year, artist_id
+                                    await supabase
+                                        .from('music_albums')
+                                        .update({
+                                            cover_url: album.cover_url,
+                                            release_year: album.release_year,
+                                            artist_id: album.artist_id
+                                        })
+                                        .eq('folder_path', album.folder_path);
+                                } else {
+                                    console.error('❌ Album insert error:', error);
+                                }
                             }
                         } catch (e) {
-                            // Ignore duplicate key errors
+                            // Ignore unexpected errors
                         }
                     }
                     console.log('✅ Albums processed');
@@ -4111,19 +4256,31 @@ app.post("/music/scan", async (req, res) => {
                 }
 
                 if (songUpsertError) {
-                    console.log('Trying individual song inserts...');
+                    console.log('Trying individual song inserts (with UPDATE fallback for existing rows)...');
                     for (const song of rows) {
                         try {
                             const { error } = await supabase
                                 .from('music_songs')
                                 .insert(song);
-                            if (error && !error.message?.includes('duplicate key')) {
-                                console.error('❌ Song insert error:', error);
-                            } else {
-                                savedSongs++;
+                            if (error) {
+                                if (error.message?.includes('duplicate key') || error.code === '23505') {
+                                    // Row exists — update album_id and artist_id so orphaned songs get fixed
+                                    await supabase
+                                        .from('music_songs')
+                                        .update({
+                                            album_id: song.album_id,
+                                            artist_id: song.artist_id,
+                                            track_number: song.track_number,
+                                            duration_seconds: song.duration_seconds
+                                        })
+                                        .eq('file_path', song.file_path);
+                                } else {
+                                    console.error('❌ Song insert error:', error);
+                                }
                             }
+                            savedSongs++;
                         } catch (e) {
-                            // Ignore duplicate key errors
+                            // Ignore unexpected errors
                             savedSongs++;
                         }
                     }
@@ -4297,6 +4454,100 @@ app.get("/music/library/albums", ensureSupabase, async (req, res) => {
 app.get("/music/library/albums/:albumId/songs", ensureSupabase, async (req, res) => {
     try {
         const { albumId } = req.params;
+
+        // Helper: run a songs query — tries FK joins, falls back to plain select on error
+        const querySongs = async (queryBuilder) => {
+            const withJoins = queryBuilder.select(`*, album:music_albums(id, name, cover_url), artist:music_artists(id, name)`);
+            const { data: jData, error: jErr } = await withJoins;
+            if (!jErr) return jData || [];
+            console.warn('⚠️ album songs FK join failed, using plain select:', jErr.message);
+            const plain = queryBuilder.select('*');
+            const { data: pData, error: pErr } = await plain;
+            if (pErr) throw pErr;
+            return pData || [];
+        };
+
+        // Primary: query by album_id (UUID FK — the fast path)
+        const byId = await querySongs(
+            supabase.from('music_songs').eq('album_id', albumId).order('track_number', { ascending: true })
+        );
+
+        if (byId.length > 0) {
+            return res.json({ success: true, songs: byId });
+        }
+
+        // Fallback: album_id was null (scan race / upsert conflict) —
+        // look up this album's folder_path and match songs by file_path prefix.
+        const { data: albumRow, error: albumErr } = await supabase
+            .from('music_albums')
+            .select('id, name, cover_url, folder_path')
+            .eq('id', albumId)
+            .single();
+        if (albumErr || !albumRow?.folder_path) {
+            return res.json({ success: true, songs: [] });
+        }
+
+        const folderPath = albumRow.folder_path.replace(/\/+$/, ''); // strip trailing slashes
+        const byPath = await querySongs(
+            supabase.from('music_songs').like('file_path', `${folderPath}/%`).order('track_number', { ascending: true })
+        );
+
+        const songs = byPath;
+
+        // Background self-repair: stamp correct album_id so next load hits the fast path
+        if (songs.length > 0) {
+            const ids = songs.map(s => s.id).filter(Boolean);
+            supabase
+                .from('music_songs')
+                .update({ album_id: albumId })
+                .in('id', ids)
+                .then(({ error: repErr }) => {
+                    if (repErr) console.warn('⚠️ Background album_id repair failed:', repErr.message);
+                    else console.log(`🔧 Repaired album_id for ${ids.length} songs in album ${albumId}`);
+                });
+        }
+
+        return res.json({ success: true, songs });
+    } catch (err) {
+        console.error('Error fetching album songs (library):', err);
+        res.status(500).json({ success: false, message: err.message, songs: [] });
+    }
+});
+
+// All songs — used for song counts, "All Songs" view, and searching
+app.get("/music/library/songs", ensureSupabase, async (req, res) => {
+    try {
+        // Try with FK joins first; if Supabase can't resolve them (no FK constraint defined),
+        // fall back to a plain SELECT so songs are returned regardless.
+        let songs = null;
+        const { data: withJoins, error: joinErr } = await supabase
+            .from('music_songs')
+            .select(`*, album:music_albums(id, name, cover_url), artist:music_artists(id, name)`)
+            .order('title', { ascending: true });
+
+        if (!joinErr) {
+            songs = withJoins || [];
+        } else {
+            console.warn('⚠️ songs FK join failed, falling back to plain select:', joinErr.message);
+            const { data: plain, error: plainErr } = await supabase
+                .from('music_songs')
+                .select('*')
+                .order('title', { ascending: true });
+            if (plainErr) throw plainErr;
+            songs = plain || [];
+        }
+
+        res.json({ success: true, songs });
+    } catch (err) {
+        console.error('Error fetching all songs (library):', err);
+        res.status(500).json({ success: false, message: err.message, songs: [] });
+    }
+});
+
+// Songs by artist
+app.get("/music/library/artists/:artistId/songs", ensureSupabase, async (req, res) => {
+    try {
+        const { artistId } = req.params;
         const { data, error } = await supabase
             .from('music_songs')
             .select(`
@@ -4304,13 +4555,103 @@ app.get("/music/library/albums/:albumId/songs", ensureSupabase, async (req, res)
                 album:music_albums(id, name, cover_url),
                 artist:music_artists(id, name)
             `)
-            .eq('album_id', albumId)
+            .eq('artist_id', artistId)
             .order('track_number', { ascending: true });
         if (error) throw error;
         res.json({ success: true, songs: data || [] });
     } catch (err) {
-        console.error('Error fetching album songs (library):', err);
+        console.error('Error fetching artist songs (library):', err);
         res.status(500).json({ success: false, message: err.message, songs: [] });
+    }
+});
+
+// Diagnostic stats — helps debug why songs aren't showing in albums
+app.get("/music/debug/stats", ensureSupabase, async (req, res) => {
+    try {
+        const [
+            { count: totalSongs },
+            { count: nullAlbumSongs },
+            { count: totalAlbums },
+            { count: totalArtists },
+            { data: sampleOrphans }
+        ] = await Promise.all([
+            supabase.from('music_songs').select('*', { count: 'exact', head: true }),
+            supabase.from('music_songs').select('*', { count: 'exact', head: true }).is('album_id', null),
+            supabase.from('music_albums').select('*', { count: 'exact', head: true }),
+            supabase.from('music_artists').select('*', { count: 'exact', head: true }),
+            supabase.from('music_songs').select('id, title, file_path, album_id').is('album_id', null).limit(5)
+        ]);
+        res.json({
+            success: true,
+            stats: {
+                total_songs: totalSongs,
+                songs_with_null_album_id: nullAlbumSongs,
+                total_albums: totalAlbums,
+                total_artists: totalArtists,
+                sample_orphan_songs: sampleOrphans || []
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Bulk repair: re-link songs that have album_id = null by matching file_path to album folder_path
+app.post("/music/repair-album-links", ensureSupabase, async (req, res) => {
+    try {
+        // Fetch all albums with folder_path
+        const { data: albums, error: albErr } = await supabase
+            .from('music_albums')
+            .select('id, folder_path')
+            .not('folder_path', 'is', null);
+        if (albErr) throw albErr;
+
+        // Fetch all songs with null album_id
+        const { data: orphans, error: songErr } = await supabase
+            .from('music_songs')
+            .select('id, file_path')
+            .is('album_id', null);
+        if (songErr) throw songErr;
+
+        if (!orphans || orphans.length === 0) {
+            return res.json({ success: true, repaired: 0, message: 'No orphaned songs found' });
+        }
+
+        // Sort albums longest-first so nested paths match before their parents
+        const sortedAlbums = [...albums].sort(
+            (a, b) => (b.folder_path?.length || 0) - (a.folder_path?.length || 0)
+        );
+
+        // Group orphans by their matching album
+        const updates = new Map(); // albumId → [songId, ...]
+        for (const song of orphans) {
+            if (!song.file_path) continue;
+            const match = sortedAlbums.find(a => {
+                const folder = a.folder_path.replace(/\/+$/, '');
+                return song.file_path.startsWith(folder + '/') || song.file_path.startsWith(folder + '\\');
+            });
+            if (match) {
+                if (!updates.has(match.id)) updates.set(match.id, []);
+                updates.get(match.id).push(song.id);
+            }
+        }
+
+        // Apply updates in batches
+        let repaired = 0;
+        for (const [albumId, ids] of updates) {
+            const { error: updErr } = await supabase
+                .from('music_songs')
+                .update({ album_id: albumId })
+                .in('id', ids);
+            if (updErr) console.warn(`⚠️ Repair batch for ${albumId} failed:`, updErr.message);
+            else repaired += ids.length;
+        }
+
+        console.log(`🔧 repair-album-links: fixed ${repaired}/${orphans.length} orphaned songs`);
+        res.json({ success: true, repaired, total_orphans: orphans.length });
+    } catch (err) {
+        console.error('Error repairing album links:', err);
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
