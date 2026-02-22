@@ -9,20 +9,10 @@ import path from 'path';
 import os from 'os';
 import { parseFile } from 'music-metadata';
 
-const getInitialMusicPath = () => {
-    if (process.env.RANTUNES_MUSIC_PATH) return process.env.RANTUNES_MUSIC_PATH;
-    const externalPath = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
-    const localPath = path.join(os.homedir(), 'Music', 'iCaffe');
-
-    if (fs.existsSync(externalPath)) return externalPath;
-    return localPath;
-};
-
-const DEFAULT_MUSIC_PATH = getInitialMusicPath();
 const SUPPORTED_EXTS = new Set(['.mp3', '.flac', '.m4a', '.wav', '.ogg', '.aac']);
 
 export class LocalAssetScanner {
-    constructor(rootPath = DEFAULT_MUSIC_PATH) {
+    constructor(rootPath) {
         this.rootPath = rootPath;
     }
 
@@ -31,12 +21,17 @@ export class LocalAssetScanner {
      * @returns {Promise<Array>} Array of asset objects
      */
     async scan() {
+        if (!this.rootPath) {
+            console.error("❌ No root path provided to scanner.");
+            return [];
+        }
+
         console.log(`📂 Scanning music directory: ${this.rootPath}`);
 
         try {
             await fsPromises.access(this.rootPath);
         } catch (error) {
-            console.error(`❌ Path not accessible: ${this.rootPath}`);
+            console.error(`❌ Path not accessible: ${this.rootPath} - ${error.message}`);
             return [];
         }
 
@@ -88,28 +83,38 @@ export class LocalAssetScanner {
             const { common, format } = metadata;
             const stats = await fsPromises.stat(filePath);
 
+            // Logic: 
+            // 1. Tags
+            // 2. Folder depth (Album = parent, Artist = grandparent)
+            // 3. Defaults
+
+            const albumFallback = this._getFolderFallback(filePath, 1);
+            const artistFallback = this._getFolderFallback(filePath, 2);
+
             return {
-                id: this._generateId(filePath), // generate stable ID
+                id: this._generateId(filePath),
                 file_path: filePath,
                 file_size: stats.size,
                 title: common.title || path.basename(filePath, path.extname(filePath)),
-                artist: common.artist || this._getFolderFallback(filePath, 2) || 'Unknown Artist',
-                album: common.album || this._getFolderFallback(filePath, 1) || 'Unknown Album',
+                artist: common.artist || artistFallback || 'Unknown Artist',
+                album: common.album || albumFallback || 'Unknown Album',
                 genre: common.genre ? common.genre[0] : null,
                 year: common.year || null,
                 duration: format.duration || 0,
                 scanned_at: new Date().toISOString()
             };
         } catch (error) {
-            // Fallback for minimal info if metadata extraction fails but file is valid
             const stats = await fsPromises.stat(filePath).catch(() => ({ size: 0 }));
+            const albumFallback = this._getFolderFallback(filePath, 1);
+            const artistFallback = this._getFolderFallback(filePath, 2);
+
             return {
                 id: this._generateId(filePath),
                 file_path: filePath,
                 file_size: stats.size,
                 title: path.basename(filePath),
-                artist: 'Unknown',
-                album: 'Unknown',
+                artist: artistFallback || 'Unknown',
+                album: albumFallback || 'Unknown',
                 duration: 0,
                 scanned_at: new Date().toISOString()
             };
@@ -121,24 +126,24 @@ export class LocalAssetScanner {
         for (let i = 0; i < depth; i++) {
             current = path.dirname(current);
         }
-        const name = path.basename(current);
-        const parent = path.dirname(current);
 
-        // Don't use root path name or generic volume names
-        if (current === this.rootPath || parent === '/' || name === 'Volumes' || name === 'mnt' || name === 'Users') {
+        const name = path.basename(current);
+
+        // Safety: If we've reached the root or generic system folders, stop.
+        if (!name || name === '.' || name === '..' || name === 'Volumes' || name === 'mnt' || name === 'Users' || current === this.rootPath) {
             return null;
         }
+
         return name;
     }
 
     _generateId(str) {
-        // Simple hash for ID consistency
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
-            hash |= 0; // Convert to 32bit integer
+            hash |= 0;
         }
-        return `local_${Math.abs(hash)}`; // e.g. local_123456789
+        return `local_${Math.abs(hash)}`;
     }
 }
