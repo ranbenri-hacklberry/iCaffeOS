@@ -90,7 +90,7 @@ export default defineConfig(async ({ mode }) => {
   return {
     base: './', // 🚀 CRITICAL: Fixes relative paths for Electron file:// protocol
     build: {
-      outDir: "build",
+      outDir: "dist",
       chunkSizeWarningLimit: isLite ? 500 : 2000,
       minify: "terser",
       terserOptions: {
