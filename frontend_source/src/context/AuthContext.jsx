@@ -1,7 +1,7 @@
 
-import { AuthProvider as FullAuthProvider, useAuth as useFullAuth, APP_VERSION as FULL_APP_VERSION } from './FullAuthContext';
-import AuthContext from './AuthContextCore';
-import { useStore } from '../core/store';
+import { AuthProvider as FullAuthProvider, useAuth as useFullAuth, APP_VERSION as FULL_APP_VERSION } from './FullAuthContext.jsx';
+import AuthContext from './AuthContextCore.jsx';
+import { useStore } from '../core/store.js';
 
 const isLite = import.meta.env.VITE_APP_MODE === 'lite';
 

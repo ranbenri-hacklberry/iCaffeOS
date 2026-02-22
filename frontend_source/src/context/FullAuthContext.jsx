@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { supabase, cloudSupabase } from '../lib/supabase.js'; // 🆕 FIX: Import supabase client
-import AuthContext from './AuthContextCore';
+import AuthContext from './AuthContextCore.jsx';
 
 // API URL for sync endpoint - Favor relative paths when running locally to use Vite proxy
-import { getBackendApiUrl } from '../utils/apiUtils';
+import { getBackendApiUrl } from '../utils/apiUtils.js';
 
 const API_URL = getBackendApiUrl();
 
-import { APP_VERSION } from '../version';
+import { APP_VERSION } from '../version.js';
 
 export { APP_VERSION };
 export const AuthProvider = ({ children }) => {

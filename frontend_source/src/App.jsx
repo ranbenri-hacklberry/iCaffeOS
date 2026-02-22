@@ -1,13 +1,13 @@
 import React, { useEffect, useState, lazy, Suspense } from "react";
-import { ConnectionProvider } from "./context/ConnectionContext";
-import { ThemeProvider } from "./context/ThemeContext";
-import SplashScreen from "./components/SplashScreen";
+import { ConnectionProvider } from "./context/ConnectionContext.jsx";
+import { ThemeProvider } from "./context/ThemeContext.jsx";
+import SplashScreen from "./components/SplashScreen.jsx";
 
-import LoadingFallback from "./components/LoadingFallback";
+import LoadingFallback from "./components/LoadingFallback.jsx";
 
 // Lazy Load Routes to ensure tree-shaking works for LITE mode
-const FullRoutes = lazy(() => import("./Routes"));
-const LiteRoutes = lazy(() => import("./LiteRoutes"));
+const FullRoutes = lazy(() => import("./Routes.jsx"));
+const LiteRoutes = lazy(() => import("./LiteRoutes.jsx"));
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -15,7 +15,7 @@ function App() {
 
   useEffect(() => {
     // 🌍 Pre-warm the Active URL Resolver cache
-    import("./utils/apiUtils").then(({ resolveUrl }) => {
+    import("./utils/apiUtils.js").then(({ resolveUrl }) => {
       resolveUrl().catch(err => console.warn("Failed to pre-warm URL cache:", err));
     });
   }, []);
