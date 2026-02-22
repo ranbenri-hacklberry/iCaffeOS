@@ -48,6 +48,10 @@ export const resolveUrl = async () => {
 export const getBackendApiUrl = () => {
     if (isElectron()) return 'http://localhost:8081';
 
+    // 1. Environment Override (Vercel/Cloud)
+    const envUrl = import.meta.env.VITE_CORTEX_API_URL || import.meta.env.VITE_MANAGER_API_URL || import.meta.env.VITE_DATA_MANAGER_API_URL;
+    if (envUrl) return envUrl.replace(/\/$/, '');
+
     const { hostname, protocol } = window.location;
     const isLocalOrLan =
         hostname === 'localhost' ||
