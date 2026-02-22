@@ -11,10 +11,10 @@
  * @module services/syncService
  */
 
-import { db, sync_meta, clearAllData } from '@/db/database';
-import { supabase } from '@/lib/supabase';
-import { syncQueue, getPendingActions } from '@/services/offlineQueue';
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { db, sync_meta, clearAllData } from '../db/database.js';
+import { supabase } from '../lib/supabase.js';
+import { syncQueue, getPendingActions } from './offlineQueue.js';
+import { getBackendApiUrl } from '../utils/apiUtils.js';
 
 // Sync configuration
 const SYNC_CONFIG = {
