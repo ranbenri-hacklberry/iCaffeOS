@@ -144,12 +144,16 @@ export const useAlbums = () => {
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch albums');
             const list = json.albums || [];
 
-            // Merge with scan library to avoid "empty" UI during background save
+            // Merge logic: If DB album has 0 songs but Scan album has > 0, prefer Scan album metadata
             const merged = [...list];
             if (scanLibrary?.albums) {
                 scanLibrary.albums.forEach(sa => {
-                    if (!merged.some(m => m.name === sa.name && m.artist?.name === sa.artist?.name)) {
+                    const dbIndex = merged.findIndex(m => m.name === sa.name && (m.artist?.name === sa.artist?.name || m.artist_name === sa.artist_name));
+                    if (dbIndex === -1) {
                         merged.push(sa);
+                    } else if ((merged[dbIndex].song_count || 0) === 0 && (sa.song_count || 0) > 0) {
+                        // Replace DB empty album with Scan populated album info (until DB catch up)
+                        merged[dbIndex] = { ...merged[dbIndex], ...sa };
                     }
                 });
             }
@@ -347,26 +351,30 @@ export const useAlbums = () => {
     const fetchAlbumSongs = useCallback(async (albumId) => {
         try {
             setIsLoading(true);
-            // If this is a scanned album (we use folder_path as id), resolve from scan cache
-            const looksLikeFolderPath = typeof albumId === 'string' && albumId.startsWith('/');
-            if (looksLikeFolderPath && scanLibrary?.songs?.length) {
-                const albumMeta = scanLibrary?.albums?.find(a => a.id === albumId);
-                const coverUrl = albumMeta?.cover_url || null;
-                const albumName = albumMeta?.name || null;
-                const artistName = albumMeta?.artist?.name || null;
+            const normalizePath = (p) => p?.replace(/\\/g, '/').toLowerCase() || '';
+            const normId = normalizePath(albumId);
 
+            // 1. Try local scan cache first (for immediate play after scan)
+            if (scanLibrary?.songs?.length) {
+                const albumMeta = scanLibrary?.albums?.find(a => normalizePath(a.id) === normId);
                 const matching = scanLibrary.songs
-                    .filter(s => s.file_path?.startsWith(albumId))
-                    .sort((a, b) => (a.track_number || 0) - (b.track_number || 0))
-                    .map(s => ({
+                    .filter(s => normalizePath(s.file_path).startsWith(normId))
+                    .sort((a, b) => (a.track_number || 0) - (b.track_number || 0));
+
+                if (matching.length > 0) {
+                    const coverUrl = albumMeta?.cover_url || null;
+                    const albumName = albumMeta?.name || null;
+                    const artistName = albumMeta?.artist?.name || null;
+
+                    return matching.map(s => ({
                         ...s,
                         album: { name: albumName, cover_url: coverUrl },
                         artist: { name: artistName || s.artist?.name || null }
                     }));
-
-                return matching;
+                }
             }
 
+            // 2. Fallback to Database
             const res = await fetch(`${MUSIC_API_URL}/music/library/albums/${albumId}/songs`);
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch album songs');
@@ -430,10 +438,13 @@ export const useAlbums = () => {
                 folder_path: a.folder_path || null
             }));
 
+            const normalizePath = (p) => p?.replace(/\\/g, '/').toLowerCase() || '';
+
             const mappedAlbums = rawAlbums.map(a => {
+                const normFolder = normalizePath(a.folder_path);
                 // Calculate song count for this album from the scan results
                 const albumSongs = rawSongs.filter(s =>
-                    s.file_path && a.folder_path && s.file_path.startsWith(a.folder_path)
+                    s.file_path && normFolder && normalizePath(s.file_path).startsWith(normFolder)
                 );
 
                 return {
@@ -448,14 +459,7 @@ export const useAlbums = () => {
 
             const albumByFolder = new Map(mappedAlbums.map(a => [a.id, a]));
             const mappedSongs = rawSongs.map(s => {
-                // best-effort: match album by folder path prefix
-                let albumMatch = null;
-                for (const [folderPath, album] of albumByFolder.entries()) {
-                    if (folderPath && s.file_path?.startsWith(folderPath)) {
-                        albumMatch = album;
-                        break;
-                    }
-                }
+                const albumMatch = albumByFolder.get(s.album_id);
 
                 return {
                     id: s.file_path, // stable for playback

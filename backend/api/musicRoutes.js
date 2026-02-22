@@ -88,27 +88,26 @@ const ensureSupabase = (req, res, next) => {
 // List available volumes/drives
 router.get("/volumes", (req, res) => {
     try {
-        const volumesPath = '/Volumes';
+        // Use PathManager for robust drive discovery
         const volumes = [];
-
-        if (fs.existsSync(volumesPath)) {
-            const entries = fs.readdirSync(volumesPath, { withFileTypes: true });
+        if (fs.existsSync('/Volumes')) {
+            const entries = fs.readdirSync('/Volumes', { withFileTypes: true });
             for (const entry of entries) {
                 if (entry.isDirectory() || entry.isSymbolicLink()) {
-                    const fullPath = path.join(volumesPath, entry.name);
-                    volumes.push({ name: entry.name, path: fullPath });
+                    volumes.push({ name: entry.name, path: path.join('/Volumes', entry.name) });
                 }
             }
         }
 
-        // Add common paths
-        const homePath = process.env.HOME || '/Users';
-        const musicPath = path.join(homePath, 'Music');
-        const ssdPath = '/mnt/music_ssd';
-        const rantunesPath = '/Volumes/RANTUNES';
-        if (fs.existsSync(rantunesPath)) volumes.push({ name: 'דיסק RANTUNES', path: rantunesPath });
-        if (fs.existsSync(musicPath)) volumes.push({ name: 'מוזיקה מקומית', path: musicPath });
-        if (fs.existsSync(ssdPath)) volumes.push({ name: 'SSD חיצוני', path: ssdPath });
+        // Add STAGING and any other known paths from PathManager
+        if (fs.existsSync(PathManager.STAGING_ROOT)) {
+            volumes.push({ name: 'Local Staging', path: PathManager.STAGING_ROOT });
+        }
+
+        // Ensure the active external drive is explicitly listed
+        if (PathManager.isExternalMounted()) {
+            volumes.push({ name: 'External RANTUNES', path: PathManager.getExternalRoot() });
+        }
 
         res.json({ volumes });
     } catch (err) {
@@ -183,7 +182,7 @@ async function registerInternal(asset) {
 // POST /music/scan
 router.post('/scan', ensureSupabase, async (req, res) => {
     try {
-        const rootPath = req.body?.path || undefined;
+        const rootPath = req.body?.path || PathManager.getPrimaryPath();
         const saveToDb = req.body?.saveToDb || false;
         const forceClean = req.body?.forceClean || false;
 
@@ -204,40 +203,60 @@ router.post('/scan', ensureSupabase, async (req, res) => {
         assets.forEach(asset => {
             const artistName = asset.artist || 'Unknown Artist';
             const albumName = asset.album || 'Unknown Album';
+            const songDir = path.dirname(asset.file_path);
+
+            // Album identifier: combination of artist, album name, and folder
+            // (Distinct folders for 'Unknown Album' should be treated as distinct albums)
+            const albumId = (albumName === 'Unknown Album' || albumName === 'Single' || albumName === 'Singles')
+                ? songDir
+                : `${artistName}:${albumName}`;
 
             if (!artistsMap.has(artistName)) {
-                artistsMap.set(artistName, { name: artistName, folder_path: path.dirname(path.dirname(asset.file_path)) });
+                const parentDir = path.dirname(songDir);
+                const artistDir = (parentDir !== rootPath && parentDir !== path.dirname(rootPath)) ? parentDir : songDir;
+                artistsMap.set(artistName, {
+                    name: artistName,
+                    folder_path: artistDir
+                });
             }
 
-            const albumKey = `${artistName}:${albumName}`;
-            if (!albumsMap.has(albumKey)) {
-                albumsMap.set(albumKey, {
+            if (!albumsMap.has(albumId)) {
+                albumsMap.set(albumId, {
+                    id: albumId,
                     name: albumName,
                     artist_name: artistName,
-                    folder_path: path.dirname(asset.file_path),
+                    folder_path: songDir,
                     cover_path: asset.thumbnail_url || null
                 });
             }
+
+            // Enrich asset with album link
+            asset.album_id = albumId;
         });
 
         const data = {
             artists: Array.from(artistsMap.values()),
             albums: Array.from(albumsMap.values()),
             songs: assets.map(a => ({
+                id: a.file_path,
                 title: a.title,
                 artist_name: a.artist,
+                album_id: a.album_id,
                 album_name: a.album,
                 file_path: a.file_path,
                 file_name: path.basename(a.file_path),
-                thumbnail_url: a.thumbnail_url
+                thumbnail_url: a.thumbnail_url,
+                track_number: a.track_number || 0
             }))
         };
 
         if (saveToDb && assets.length > 0) {
-            console.log(`💾 Background: Saving ${assets.length} assets to DB...`);
-            // Run in background to avoid client timeout
-            (async () => {
-                // Clear local caches for this run
+            console.log(`💾 Saving ${assets.length} assets to DB...`);
+
+            // For smaller scans (<100), wait for it to complete to ensure UI consistency
+            const shouldWait = assets.length < 100;
+
+            const runSave = async () => {
                 artistCache.clear();
                 albumCache.clear();
 
@@ -251,8 +270,14 @@ router.post('/scan', ensureSupabase, async (req, res) => {
                         console.error(`⚠️ Failed to register ${asset.file_path}:`, err.message);
                     }
                 }
-                console.log(`✅ Background Save Complete for ${assets.length} items`);
-            })();
+                console.log(`✅ Save Complete for ${assets.length} items`);
+            };
+
+            if (shouldWait) {
+                await runSave();
+            } else {
+                runSave(); // Background
+            }
         }
 
         res.json({
@@ -278,9 +303,21 @@ router.post('/scan', ensureSupabase, async (req, res) => {
 
 router.get("/library/artists", ensureSupabase, async (req, res) => {
     try {
-        const { data, error } = await getSupabase().from('music_artists').select('*').order('name');
+        // Fetch artists with their song counts
+        const { data, error } = await getSupabase()
+            .from('music_artists')
+            .select('*, music_songs(count)')
+            .order('name');
+
         if (error) throw error;
-        res.json({ success: true, artists: data || [] });
+
+        const artists = (data || []).map(a => ({
+            ...a,
+            song_count: a.music_songs?.[0]?.count || 0,
+            music_songs: undefined // Clean up
+        }));
+
+        res.json({ success: true, artists });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -290,10 +327,18 @@ router.get("/library/albums", ensureSupabase, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('music_albums')
-            .select('*, artist:music_artists(id, name, image_url)')
+            .select('*, artist:music_artists(id, name, image_url), music_songs(count)')
             .order('name');
+
         if (error) throw error;
-        res.json({ success: true, albums: data || [] });
+
+        const albums = (data || []).map(a => ({
+            ...a,
+            song_count: a.music_songs?.[0]?.count || 0,
+            music_songs: undefined
+        }));
+
+        res.json({ success: true, albums });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
