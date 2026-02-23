@@ -15,9 +15,8 @@ export default defineConfig(async ({ mode }) => {
   const rootDir = process.cwd();
 
   // Docker networking: use service name 'backend' when running in container
-  // Falls back to localhost:8081 for local development
   const backendTarget = process.env.DOCKER_ENV === 'true'
-    ? 'http://localhost:8081'
+    ? 'http://backend:8080'
     : 'http://localhost:8081';
 
   // Check if running in a container, Linux environment without display (headless), or Vercel
@@ -88,7 +87,7 @@ export default defineConfig(async ({ mode }) => {
   }
 
   return {
-    base: './', // 🚀 CRITICAL: Fixes relative paths for Electron file:// protocol
+    base: '/', // Use '/' for web/docker. Use './' if building for Electron file:// protocol.
     build: {
       outDir: "dist",
       chunkSizeWarningLimit: isLite ? 500 : 2000,
@@ -112,7 +111,7 @@ export default defineConfig(async ({ mode }) => {
       dedupe: ['react', 'react-dom'],
     },
     server: {
-      port: 4028,
+      port: 4029,
       host: "0.0.0.0",
       strictPort: true,
       allowedHosts: 'all',
@@ -128,7 +127,7 @@ export default defineConfig(async ({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
-        // Maya AI routes
+        // Maya AI routes (including Whisper transcription proxy)
         "/api/maya": {
           target: backendTarget,
           changeOrigin: true,
@@ -155,7 +154,7 @@ export default defineConfig(async ({ mode }) => {
         "/music/sync": { target: backendTarget, changeOrigin: true },
         "/music/youtube": { target: backendTarget, changeOrigin: true },
         "/ollama": {
-          target: "http://localhost:11434/api",
+          target: process.env.DOCKER_ENV === 'true' ? "http://host.docker.internal:11434/api" : "http://localhost:11434/api",
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/ollama/, ""),

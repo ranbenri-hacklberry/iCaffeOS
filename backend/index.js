@@ -14,6 +14,7 @@ import klingRoutes from './api/klingRoutes.js';
 import adminRoutes from './api/adminRoutes.js';
 import systemRoutes from './api/systemRoutes.js';
 import smsRoutes from './api/smsRoutes.js';
+import labRoutes from './api/labRoutes.js';
 import { CacheService } from './services/cacheService.js';
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/kling', klingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/sms', smsRoutes);
+app.use('/api/lab', labRoutes);   // 🖥️ Superadmin Remote Execution (Lab)
 
 // Health check
 app.get('/health', (req, res) => {

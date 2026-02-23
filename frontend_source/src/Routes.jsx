@@ -35,6 +35,7 @@ import ManagerKDS from './components/manager/ManagerKDS';
 import InventoryPage from './pages/inventory';
 import PrepPage from './pages/prep';
 import MusicPage from './pages/music';
+import YouTubePage from './pages/youtube';
 import DexieAdminPanel from './pages/dexie-admin';
 import MayaAssistant from './pages/maya';
 import CortexPage from './pages/cortex/CortexPage';
@@ -274,6 +275,12 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
 
+      <Route path="/youtube" element={
+        <ProtectedRoute>
+          <YouTubePage />
+        </ProtectedRoute>
+      } />
+
       <Route path="/video-creator" element={
         <ProtectedRoute>
           <VideoCreator />
@@ -449,7 +456,7 @@ const Routes = () => {
               {/* <SyncStatusModal /> - USER REQUESTED TO HIDE THIS MODAL */}
               <MusicProvider>
                 <ScrollToTop />
-                {/* <MayaOverlay /> */}
+                <MayaOverlay />
                 <OrderPusher /> {/* 🔄 Added Background Sync inside AuthProvider */}
                 <AppRoutes />
 

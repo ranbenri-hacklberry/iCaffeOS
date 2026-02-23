@@ -7,51 +7,34 @@ interface InventoryHeaderProps {
     setActiveTab: (tab: 'counts' | 'shipping') => void;
     onExit: () => void;
     onShowReport: () => void;
+    shortagesCount: number;
 }
 
-const InventoryHeader: React.FC<InventoryHeaderProps> = ({ activeTab, setActiveTab, onExit, onShowReport }) => {
+const InventoryHeader: React.FC<InventoryHeaderProps> = ({ activeTab, setActiveTab, onExit, onShowReport, shortagesCount }) => {
     return (
         <UnifiedHeader
             title="ניהול מלאי"
             subtitle="ספירה וקבלת סחורה"
             onHome={onExit}
+            headerTabs={[
+                { id: 'counts', label: 'ספירה', icon: <ClipboardList size={16} />, isActive: activeTab === 'counts', onClick: () => setActiveTab('counts'), colorClass: 'text-indigo-600' },
+                { id: 'shipping', label: 'קבלת סחורה', icon: <Truck size={16} />, isActive: activeTab === 'shipping', onClick: () => setActiveTab('shipping'), colorClass: 'text-indigo-600' }
+            ]}
         >
-            <div className="flex items-center gap-3">
-                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1">
-                    <button
-                        onClick={() => setActiveTab('counts')}
-                        className={`px-5 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'counts'
-                            ? 'bg-indigo-600 text-white shadow-md'
-                            : 'text-slate-600 hover:text-slate-800 hover:bg-white'
-                            }`}
-                    >
-                        <ClipboardList size={16} />
-                        <span>ספירה</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('shipping')}
-                        className={`px-5 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'shipping'
-                            ? 'bg-indigo-600 text-white shadow-md'
-                            : 'text-slate-600 hover:text-slate-800 hover:bg-white'
-                            }`}
-                    >
-                        <Truck size={16} />
-                        <span>קבלת סחורה</span>
-                    </button>
-                </div>
-
-                <div className="w-px h-8 bg-slate-200 mx-2" />
-
-                {activeTab === 'counts' && (
-                    <button
-                        onClick={onShowReport}
-                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm transition-all shadow-sm active:scale-95"
-                    >
-                        <FileText size={16} />
-                        <span>דווח חוסרים</span>
-                    </button>
-                )}
-            </div>
+            {activeTab === 'counts' && (
+                <button
+                    onClick={onShowReport}
+                    className="flex items-center justify-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 py-2 h-10 rounded-xl font-bold text-sm transition-all shadow-sm border border-rose-100/50 active:scale-95 ml-2 relative"
+                >
+                    <FileText size={16} />
+                    <span>דווח חוסרים</span>
+                    {shortagesCount > 0 && (
+                        <span className="bg-rose-500 text-white text-[10px] min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full font-black shadow-sm absolute -top-1.5 -left-1.5 border-2 border-white tabular-nums leading-none">
+                            {shortagesCount}
+                        </span>
+                    )}
+                </button>
+            )}
         </UnifiedHeader>
     );
 };

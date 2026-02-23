@@ -4,6 +4,6 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 ENV DOCKER_ENV=true
-EXPOSE 4028
-CMD ["npm", "start", "--", "--host", "--port", "4028"]
+EXPOSE 4029
+CMD ["npm", "start", "--", "--host", "--port", "4029"]
 

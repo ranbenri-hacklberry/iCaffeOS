@@ -11,7 +11,7 @@ export const PathManager = {
     // All known external mount candidates (macOS: /Volumes/*, Linux: /mnt/*)
     EXTERNAL_CANDIDATES: process.platform === 'darwin'
         ? ['/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
-        : ['/mnt/music_ssd', '/mnt/rantunes'],
+        : ['/mnt/music_ssd', '/mnt/rantunes', '/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes'],
     STAGING_ROOT: path.join(os.homedir(), 'Music', 'iCaffe'),
 
     // Returns the first mounted external candidate (or the first candidate as default)

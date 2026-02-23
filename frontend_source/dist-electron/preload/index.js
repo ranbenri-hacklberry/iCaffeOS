@@ -1,40 +1,39 @@
-import { contextBridge, ipcRenderer } from "electron";
-const api = {
+import { contextBridge as s, ipcRenderer as e } from "electron";
+const i = {
   auth: {
-    getMachineId: () => ipcRenderer.invoke("auth:get-machine-id")
+    getMachineId: () => e.invoke("auth:get-machine-id")
   },
   storage: {
-    createBackup: () => ipcRenderer.invoke("storage:create-backup"),
-    getDiskStatus: () => ipcRenderer.invoke("storage:get-disk-status")
+    createBackup: () => e.invoke("storage:create-backup"),
+    getDiskStatus: () => e.invoke("storage:get-disk-status")
   },
   display: {
-    getHealth: () => ipcRenderer.invoke("display:get-health"),
-    forceWake: () => ipcRenderer.invoke("display:force-wake")
+    getHealth: () => e.invoke("display:get-health"),
+    forceWake: () => e.invoke("display:force-wake")
   },
   system: {
-    getTemperature: () => ipcRenderer.invoke("system:get-temperature"),
-    restartApp: () => ipcRenderer.invoke("system:restart-app"),
-    getHealthStatus: () => ipcRenderer.invoke("system:get-health-status"),
-    onBootStatus: (callback) => {
-      const subscription = (_, status) => callback(status);
-      ipcRenderer.on("boot-update", subscription);
-      return () => ipcRenderer.removeListener("boot-update", subscription);
+    getTemperature: () => e.invoke("system:get-temperature"),
+    restartApp: () => e.invoke("system:restart-app"),
+    getHealthStatus: () => e.invoke("system:get-health-status"),
+    onBootStatus: (t) => {
+      const o = (u, a) => t(a);
+      return e.on("boot-update", o), () => e.removeListener("boot-update", o);
     }
   },
   music: {
-    getYoutubeMetadata: (url) => ipcRenderer.invoke("music:get-youtube-metadata", url),
-    downloadYoutube: (data) => ipcRenderer.invoke("music:download-youtube", data),
-    scanDisk: (path) => ipcRenderer.invoke("disk:scan-request", path),
-    confirmImport: (tracks) => ipcRenderer.invoke("disk:import-confirm", tracks)
+    getYoutubeMetadata: (t) => e.invoke("music:get-youtube-metadata", t),
+    downloadYoutube: (t) => e.invoke("music:download-youtube", t),
+    scanDisk: (t) => e.invoke("disk:scan-request", t),
+    confirmImport: (t) => e.invoke("disk:import-confirm", t)
   },
   youtube: {
-    search: (query) => ipcRenderer.invoke("youtube:search", query),
-    getQuotaStatus: () => ipcRenderer.invoke("youtube:quota-status"),
-    testApiKey: (key) => ipcRenderer.invoke("youtube:test-api-key", key),
-    getPlaylist: (playlistId, pageToken) => ipcRenderer.invoke("youtube:get-playlist", { playlistId, pageToken })
+    search: (t) => e.invoke("youtube:search", t),
+    getQuotaStatus: () => e.invoke("youtube:quota-status"),
+    testApiKey: (t) => e.invoke("youtube:test-api-key", t),
+    getPlaylist: (t, o) => e.invoke("youtube:get-playlist", { playlistId: t, pageToken: o })
   }
 };
-contextBridge.exposeInMainWorld("electron", api);
+s.exposeInMainWorld("electron", i);
 setInterval(() => {
-  ipcRenderer.send("renderer:ping");
+  e.send("renderer:ping");
 }, 15e3);

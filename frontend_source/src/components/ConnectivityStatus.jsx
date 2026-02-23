@@ -55,7 +55,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                     const controller = new AbortController();
                     const id = setTimeout(() => controller.abort(), 5000);
 
-                    const healthResp = await fetch(`${baseUrl}/health`, { signal: controller.signal });
+                    const healthResp = await fetch('/api/maya/health', { signal: controller.signal });
                     clearTimeout(id);
 
                     if (healthResp.ok) {

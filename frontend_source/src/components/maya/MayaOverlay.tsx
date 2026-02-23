@@ -11,7 +11,7 @@ import {
     Instagram, MessageSquare, AlertTriangle,
     Plus, Image as ImageIcon, Square, RectangleVertical,
     RefreshCw, Settings, LogOut, MousePointer2,
-    Cpu, ChevronDown
+    Cpu, ChevronDown, Mic, MicOff
 } from 'lucide-react';
 import ClockInModalInline from './ClockInModalInline';
 import UserSettingsModal from './UserSettingsModal';
@@ -90,7 +90,7 @@ interface AutomationLog {
 // Routes where Maya should be visible
 const ALLOWED_ROUTES = {
     // Manager screens (for all users)
-    manager: ['/manager', '/orders', '/kitchen', '/shift', '/staff'],
+    manager: ['/', '/kds', '/manager', '/orders', '/kitchen', '/shift', '/staff', '/menu-ordering-interface'],
     // Owner/Admin screens
     owner: ['/data', '/super-admin', '/owner-settings', '/analytics', '/marketing']
 };
@@ -168,6 +168,11 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     const [localAvailable, setLocalAvailable] = useState(true);
     const [lastUsage, setLastUsage] = useState<any>(null); // For token tracking
 
+    // 🎙️ Voice Transcription State
+    const [isListening, setIsListening] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+
     // 🤖 AI Models Configuration (Updated Feb 2026)
     const AI_MODELS = {
         'google': [
@@ -210,7 +215,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
             console.log('🧠 DicTAlm 1.7B (Ollama): Capturing Hebrew Intent...');
 
             // 1. Local Intent Capture via DicTAlm
-            const intentResponse = await fetch('http://localhost:8081/api/maya/chat', {
+            const intentResponse = await fetch('/api/maya/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -246,7 +251,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                 current_behavior: 'Standard behavior before spell casting.',
             };
 
-            const prepResponse = await fetch('http://localhost:8081/api/abrakadabra/prep', {
+            const prepResponse = await fetch('/api/abrakadabra/prep', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -298,10 +303,95 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
         }
     };
 
+    // 🎙️ Whisper Voice Logic
+    const toggleListening = async () => {
+        if (isListening) {
+            if (mediaRecorderRef.current?.state === 'recording') {
+                mediaRecorderRef.current.stop();
+            }
+            setIsListening(false);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    sampleRate: 16000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : 'audio/webm';
+
+            const recorder = new MediaRecorder(stream, { mimeType });
+            audioChunksRef.current = [];
+
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            recorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+                if (audioBlob.size < 1000) return; // ignore silence
+
+                setIsListening(false);
+                setInput('🎙️ מעבד...');
+
+                try {
+                    const formData = new FormData();
+                    formData.append('audio_file', audioBlob, 'recording.webm');
+
+                    const response = await fetch(`/api/maya/transcribe?language=he`, {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (response.status === 503) {
+                        setInput('');
+                        setMessages(prev => [...prev, {
+                            id: 'asr-err-' + Date.now(),
+                            role: 'assistant',
+                            content: '⚠️ שירות Whisper לא פעיל (503). ייתכן שהשרת בעומס או נכבה.',
+                            timestamp: new Date()
+                        }]);
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        const errBody = await response.text().catch(() => 'No body');
+                        throw new Error(`HTTP ${response.status}: ${errBody}`);
+                    }
+                    const { text } = await response.json();
+                    setInput(text?.trim() || '');
+                } catch (err) {
+                    console.error('🎙️ Whisper transcription error:', err);
+                    setInput('');
+                    setMessages(prev => [...prev, {
+                        id: 'asr-err-' + Date.now(),
+                        role: 'assistant',
+                        content: '❌ שגיאה בזיהוי קולי.',
+                        timestamp: new Date()
+                    }]);
+                }
+            };
+
+            mediaRecorderRef.current = recorder;
+            recorder.start();
+            setIsListening(true);
+        } catch (err) {
+            console.error('🎙️ Mic access error:', err);
+            setIsListening(false);
+        }
+    };
+
     // 🆕 Clock-In State
     const [showClockIn, setShowClockIn] = useState(needsClockIn && !isClockedIn);
 
-    // 🆕 Sync showClockIn with props OR Fetch status
     // 🆕 Sync showClockIn with props OR Fetch status
     useEffect(() => {
         if (needsClockIn !== undefined) {
@@ -348,7 +438,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
         const checkProviders = async () => {
             // Check local (Ollama)
             try {
-                const res = await fetch('http://localhost:8081/api/maya/health');
+                const res = await fetch('/api/maya/health');
                 const data = await res.json();
                 setLocalAvailable(data.healthy === true);
             } catch {
@@ -478,7 +568,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
         setLoading(true);
 
         try {
-            const res = await fetch('http://localhost:8081/api/maya/chat', {
+            const res = await fetch('/api/maya/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -547,7 +637,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
         try {
             if (action.type === 'story') {
                 // Generate Caption
-                const captionRes = await fetch('http://localhost:8081/api/marketing/generate-caption', {
+                const captionRes = await fetch('/api/marketing/generate-caption', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -559,7 +649,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                 const { caption } = await captionRes.json();
 
                 // Publish
-                await fetch('http://localhost:8081/api/marketing/story', {
+                await fetch('/api/marketing/story', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -573,7 +663,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
 
             if (action.type === 'sms') {
                 // Placeholder for SMS
-                await fetch('http://localhost:8081/api/marketing/sms', {
+                await fetch('/api/marketing/sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -752,110 +842,6 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                             </div>
 
                             <div className="flex items-center gap-1">
-                                {/* Settings Button */}
-
-
-                                {/* Settings Button */}
-                                {!isMinimized && activeEmployee && (
-                                    <>
-                                        {/* 🕒 Clock Out Button (Only if NOT showing clock-in modal) */}
-                                        {!showClockIn && (
-                                            <button
-                                                onClick={async () => {
-                                                    if (window.confirm('לסיים משמרת ולצאת?')) {
-                                                        try {
-                                                            const { error } = await supabase.rpc('handle_clock_event', {
-                                                                p_employee_id: activeEmployee.id,
-                                                                p_event_type: 'clock_out'
-                                                            });
-
-                                                            if (!error) {
-                                                                // alert('יצאת מהמשמרת בהצלחה');
-                                                                // Force re-check -> show clock-in modal
-                                                                setShowClockIn(true);
-                                                                handleRefresh();
-                                                            } else {
-                                                                alert('שגיאה ביציאה מהמשמרת');
-                                                            }
-                                                        } catch (e) {
-                                                            console.error('Clock out error', e);
-                                                        }
-                                                    }
-                                                }}
-                                                className="p-1.5 hover:bg-red-500/20 hover:text-red-400 rounded-lg transition ml-1"
-                                                title="סיים משמרת (Clock Out)"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
-                                            </button>
-                                        )}
-
-                                        <button
-                                            onClick={() => {
-                                                if (window.confirm('האם אתה בטוח שברצונך להחליף משתמש?')) {
-                                                    auth?.logout?.(); // Call AuthContext logout if available
-                                                    onLogout?.();     // Call prop onLogout if available
-                                                    setIsOpen(false);
-                                                }
-                                            }}
-                                            className="p-1.5 hover:bg-white/10 rounded-lg transition"
-                                            title="החלף משתמש (Sign Out)"
-                                        >
-                                            <LogOut className="w-4 h-4 text-amber-400 hover:text-amber-300" />
-                                        </button>
-
-                                        {/* 👑 Super Admin Shortcut */}
-                                        {(activeEmployee?.isSuperAdmin || activeEmployee?.is_super_admin || userRole === 'super-admin') && (
-                                            <button
-                                                onClick={() => {
-                                                    setIsOpen(false);
-                                                    window.location.href = '/super-admin';
-                                                }}
-                                                className="p-1.5 hover:bg-purple-500/20 text-purple-400 rounded-lg transition"
-                                                title="לוח בקרה סופר-אדמין (Super Admin)"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                                            </button>
-                                        )}
-
-                                        <button
-                                            onClick={() => setShowSettings(true)}
-                                            className="p-1.5 hover:bg-white/10 rounded-lg transition"
-                                            title="הגדרות פרופיל"
-                                        >
-                                            <User className="w-4 h-4 text-white/60 hover:text-white" />
-                                        </button>
-                                    </>
-                                )}
-
-                                {/* 🆕 Refresh Button */}
-                                {!isMinimized && !showClockIn && (
-                                    <button
-                                        onClick={handleRefresh}
-                                        className="p-1.5 hover:bg-white/10 rounded-lg transition"
-                                        title="רענן שיחה"
-                                    >
-                                        <RefreshCw className="w-4 h-4 text-white/60 hover:text-white" />
-                                    </button>
-                                )}
-
-                                {/* 🖱️ ABRA INSPECTOR TOGGLE (Level 8+) */}
-                                {hasMagicalAccess && !isMinimized && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleInspector();
-                                            // Minimize Maya so the user can see the screen to inspect
-                                            if (!inspectorActive) setIsMinimized(true);
-                                        }}
-                                        className={`p-1.5 rounded-lg transition-colors ${inspectorActive ? 'bg-yellow-400 text-purple-900 shadow-lg shadow-yellow-400/50' : 'hover:bg-white/10 text-white/80 hover:text-white'}`}
-                                        title="מצב עריכה (Inspector Mode)"
-                                    >
-                                        <MousePointer2 className="w-4 h-4" />
-                                    </button>
-                                )}
-
-                                <div className="w-px h-4 bg-white/20 mx-1" />
-
                                 {/* Model Selector Dropdown */}
                                 {!isMinimized && (
                                     <div className="flex items-center gap-2 bg-white/10 rounded-lg p-1 ml-2">
@@ -951,17 +937,8 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                     <p className="text-sm font-medium">היי! אני מאיה 🌸</p>
                                                     <p className="text-xs mb-4">מה אפשר לעשות בשבילך היום?</p>
 
-                                                    {/* Quick Actions */}
+                                                    {/* Quick Actions – top row (active only) */}
                                                     <div className="flex flex-wrap gap-2 justify-center">
-                                                        <motion.button
-                                                            whileTap={{ scale: 0.95 }}
-                                                            onClick={() => setShowPostCreator(true)}
-                                                            className="px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white text-xs font-medium flex items-center gap-2"
-                                                        >
-                                                            <Plus className="w-3.5 h-3.5" />
-                                                            צור פוסט
-                                                        </motion.button>
-
                                                         {/* Team Message - Only for Managers+ */}
                                                         {['owner', 'admin', 'manager'].includes(userRole) && (
                                                             <motion.button
@@ -973,22 +950,103 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                                 הודעה לצוות
                                                             </motion.button>
                                                         )}
+                                                    </div>
+
+                                                    {/* ─── Employee / Admin Actions ─── */}
+                                                    <div className="flex flex-wrap gap-2 justify-center mt-3 pt-3 border-t border-white/10">
+                                                        {/* 🕒 שעון נוכחות – always visible, opens clock modal */}
                                                         <motion.button
                                                             whileTap={{ scale: 0.95 }}
-                                                            onClick={() => setInput('תכתבי לי טקסט שיווקי ל')}
-                                                            className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2"
+                                                            onClick={() => {
+                                                                setShowClockIn(true);
+                                                                // ensure chat body is visible
+                                                                setIsMinimized(false);
+                                                            }}
+                                                            className="px-3 py-2 bg-white/10 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-xl text-white text-xs font-medium flex items-center gap-2"
                                                         >
-                                                            <Sparkles className="w-3.5 h-3.5" />
-                                                            טקסט שיווקי
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                                            שעון נוכחות
                                                         </motion.button>
+
+                                                        {/* 👤 עריכת פרטים אישיים */}
                                                         <motion.button
                                                             whileTap={{ scale: 0.95 }}
-                                                            onClick={() => setInput('מה המבצע של היום?')}
+                                                            onClick={() => setShowSettings(true)}
                                                             className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2"
                                                         >
-                                                            <Zap className="w-3.5 h-3.5" />
-                                                            מבצע היום
+                                                            <User className="w-3.5 h-3.5" />
+                                                            עריכת פרטים אישיים
                                                         </motion.button>
+
+                                                        {/* 👑 מעבר לסופראדמין – super admin only */}
+                                                        {(activeEmployee?.isSuperAdmin || activeEmployee?.is_super_admin || userRole === 'super-admin') && (
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.95 }}
+                                                                onClick={() => {
+                                                                    setIsOpen(false);
+                                                                    window.location.href = '/super-admin';
+                                                                }}
+                                                                className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl text-purple-300 text-xs font-medium flex items-center gap-2"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                                                                מעבר לסופראדמין
+                                                            </motion.button>
+                                                        )}
+
+                                                        {/* 🖱️ מצב עריכת דף – super admin only */}
+                                                        {(activeEmployee?.isSuperAdmin || activeEmployee?.is_super_admin || userRole === 'super-admin') && (
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.95 }}
+                                                                onClick={() => {
+                                                                    toggleInspector();
+                                                                    setIsMinimized(true);
+                                                                }}
+                                                                className={`px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-colors ${inspectorActive ? 'bg-yellow-400 text-purple-900' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+                                                            >
+                                                                <MousePointer2 className="w-3.5 h-3.5" />
+                                                                מצב עריכת דף
+                                                            </motion.button>
+                                                        )}
+
+                                                        {/* 🚪 התנתקות */}
+                                                        <motion.button
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={() => {
+                                                                if (window.confirm('האם אתה בטוח שברצונך להתנתק?')) {
+                                                                    auth?.signOut?.();
+                                                                    onLogout?.();
+                                                                    setIsOpen(false);
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 bg-white/10 hover:bg-amber-500/20 hover:text-amber-300 rounded-xl text-white text-xs font-medium flex items-center gap-2"
+                                                        >
+                                                            <LogOut className="w-3.5 h-3.5" />
+                                                            התנתקות
+                                                        </motion.button>
+
+                                                        {/* 🚫 Coming Soon: צור פוסט */}
+                                                        <div className="relative">
+                                                            <motion.button
+                                                                disabled
+                                                                className="px-3 py-2 bg-gradient-to-r from-purple-500/30 to-pink-500/30 rounded-xl text-white/40 text-xs font-medium flex items-center gap-2 cursor-not-allowed"
+                                                            >
+                                                                <Plus className="w-3.5 h-3.5" />
+                                                                צור פוסט
+                                                            </motion.button>
+                                                            <span className="absolute -top-2 -right-1 text-[9px] bg-amber-500 text-black font-bold px-1.5 py-0.5 rounded-full leading-none">בקרוב</span>
+                                                        </div>
+
+                                                        {/* 🚫 Coming Soon: טקסט שיווקי */}
+                                                        <div className="relative">
+                                                            <motion.button
+                                                                disabled
+                                                                className="px-3 py-2 bg-white/5 rounded-xl text-white/40 text-xs font-medium flex items-center gap-2 cursor-not-allowed"
+                                                            >
+                                                                <Sparkles className="w-3.5 h-3.5" />
+                                                                טקסט שיווקי
+                                                            </motion.button>
+                                                            <span className="absolute -top-2 -right-1 text-[9px] bg-amber-500 text-black font-bold px-1.5 py-0.5 rounded-full leading-none">בקרוב</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
@@ -1095,10 +1153,22 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                     value={input}
                                                     onChange={(e) => setInput(e.target.value)}
                                                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                                                    placeholder="דבר איתי..."
+                                                    placeholder={isListening ? "מקשיבה..." : "דבר איתי..."}
                                                     disabled={loading}
-                                                    className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                                                    className={`flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:outline-none focus:border-purple-500 disabled:opacity-50 ${isListening ? 'animate-pulse border-purple-500' : ''}`}
                                                 />
+
+                                                {/* 🎙️ Voice Button */}
+                                                <motion.button
+                                                    whileTap={{ scale: 0.9 }}
+                                                    onClick={toggleListening}
+                                                    disabled={loading}
+                                                    className={`px-3 py-2 rounded-xl text-white transition-colors ${isListening ? 'bg-red-500 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}
+                                                    title={isListening ? "עצור הקלטה" : "דבר אל מאיה (Whisper)"}
+                                                >
+                                                    {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                                                </motion.button>
+
                                                 <motion.button
                                                     whileTap={{ scale: 0.9 }}
                                                     onClick={sendMessage}
@@ -1108,31 +1178,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                     <Send className="w-4 h-4" />
                                                 </motion.button>
 
-                                                {/* ✨ ABRAKADABRA: CAST SPELL / EDIT MODE BUTTON (Level 8+) */}
-                                                {hasMagicalAccess && (
-                                                    <motion.button
-                                                        whileHover={{ scale: 1.05 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                        onClick={() => {
-                                                            if (input.trim()) {
-                                                                castSpell();
-                                                            } else {
-                                                                toggleInspector();
-                                                                setIsOpen(false);
-                                                            }
-                                                        }}
-                                                        disabled={loading}
-                                                        className={`px-3 py-2 rounded-xl text-white shadow-lg flex items-center gap-2 border border-white/20
-                                                            ${input.trim()
-                                                                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-indigo-500/20' // Spell Mode
-                                                                : 'bg-slate-700 hover:bg-slate-600' // Edit Mode
-                                                            }`}
-                                                        title={input.trim() ? "הפעל כישוף (Abrakadabra)" : "מצב עריכה (Inspector)"}
-                                                    >
-                                                        {input.trim() ? <Sparkles className="w-4 h-4" /> : <MousePointer2 className="w-4 h-4" />}
-                                                        {!loading && <span className="text-xs font-bold">{input.trim() ? 'כישוף' : 'עריכה'}</span>}
-                                                    </motion.button>
-                                                )}
+
 
                                             </div>
                                         </div>

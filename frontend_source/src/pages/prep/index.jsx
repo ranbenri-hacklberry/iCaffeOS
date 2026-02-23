@@ -705,29 +705,6 @@ const PrepPage = () => {
 
     const totalTasksCount = openingTasks.length + prepBatches.length + closingTasks.length + supplierTasks.length;
 
-    // --- Sub-Components ---
-    const HeaderTab = ({ id, label, icon: Icon, color, count }) => {
-        const isActive = tasksSubTab === id;
-        return (
-            <button
-                onClick={() => setTasksSubTab(id)}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 relative group
-                    ${isActive
-                        ? 'bg-white shadow-sm text-slate-800 ring-1 ring-slate-100'
-                        : 'hover:bg-slate-200/50 text-slate-500 hover:text-slate-700'}`}
-            >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform
-                    ${isActive ? `${color} text-white` : 'bg-slate-200 text-slate-400'}`}>
-                    <Icon size={18} strokeWidth={2.5} />
-                </div>
-                <div className="flex flex-col items-start leading-none">
-                    <span className="text-xs font-black tracking-tight">{label}</span>
-                    <span className="text-[9px] font-bold opacity-60">{count} משימות</span>
-                </div>
-            </button>
-        );
-    };
-
     const PrepItemCard = ({ item }) => {
         const initialSuggestion = item.current_stock > 0 ? item.current_stock : (item.target_qty || 0);
         const hasChange = stockUpdates[item.id] !== undefined;
@@ -913,17 +890,14 @@ const PrepPage = () => {
     return (
         <div className="flex flex-col h-[100dvh] bg-[#F8FAFC] overflow-hidden font-heebo" dir="rtl">
 
-            {/* Unified Header Implementation */}
             <UnifiedHeader
                 title="משימות והכנות"
                 subtitle="ניהול משימות יומיות, הכנות והפשרות"
-                rightContent={
-                    <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1 mr-2 border border-slate-200 shadow-inner">
-                        <HeaderTab id="opening" label="פתיחה" icon={Sunrise} color="bg-emerald-500" count={getCountsForShift('opening')} />
-                        <HeaderTab id="pre_closing" label="הכנות" icon={Utensils} color="bg-orange-500" count={getCountsForShift('pre_closing')} />
-                        <HeaderTab id="closing" label="סגירה" icon={Sunset} color="bg-purple-500" count={getCountsForShift('closing')} />
-                    </div>
-                }
+                headerTabs={[
+                    { id: 'opening', label: 'פתיחה', icon: <Sunrise size={16} strokeWidth={2.5} />, isActive: tasksSubTab === 'opening', onClick: () => setTasksSubTab('opening'), count: getCountsForShift('opening'), colorClass: 'text-emerald-600' },
+                    { id: 'pre_closing', label: 'הכנות', icon: <Utensils size={16} strokeWidth={2.5} />, isActive: tasksSubTab === 'pre_closing', onClick: () => setTasksSubTab('pre_closing'), count: getCountsForShift('pre_closing'), colorClass: 'text-orange-600' },
+                    { id: 'closing', label: 'סגירה', icon: <Sunset size={16} strokeWidth={2.5} />, isActive: tasksSubTab === 'closing', onClick: () => setTasksSubTab('closing'), count: getCountsForShift('closing'), colorClass: 'text-purple-600' }
+                ]}
             />
 
             {/* Main Content Area */}

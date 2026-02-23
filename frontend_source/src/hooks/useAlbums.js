@@ -356,20 +356,30 @@ export const useAlbums = () => {
 
             // 1. Try local scan cache first (for immediate play after scan)
             if (scanLibrary?.songs?.length) {
-                const albumMeta = scanLibrary?.albums?.find(a => normalizePath(a.id) === normId);
+                // If albumId is a UUID, try to find the folder_path from our albums state
+                const dbAlbum = albums.find(a => a.id === albumId);
+                const searchPath = dbAlbum?.folder_path ? normalizePath(dbAlbum.folder_path) : normId;
+
+                const albumMeta = scanLibrary?.albums?.find(a => normalizePath(a.id) === searchPath || normalizePath(a.folder_path) === searchPath);
+
+                // Match by folder path OR explicit album_id if set in scanLibrary
                 const matching = scanLibrary.songs
-                    .filter(s => normalizePath(s.file_path).startsWith(normId))
+                    .filter(s => {
+                        const sPath = normalizePath(s.file_path);
+                        const sAlbumId = normalizePath(s.album_id);
+                        return sPath.startsWith(searchPath) || sAlbumId === searchPath;
+                    })
                     .sort((a, b) => (a.track_number || 0) - (b.track_number || 0));
 
                 if (matching.length > 0) {
-                    const coverUrl = albumMeta?.cover_url || null;
+                    const coverUrl = albumMeta?.cover_url || albumMeta?.cover_path || null;
                     const albumName = albumMeta?.name || null;
-                    const artistName = albumMeta?.artist?.name || null;
+                    const artistName = albumMeta?.artist?.name || albumMeta?.artist_name || null;
 
                     return matching.map(s => ({
                         ...s,
                         album: { name: albumName, cover_url: coverUrl },
-                        artist: { name: artistName || s.artist?.name || null }
+                        artist: { name: artistName || s.artist?.name || s.artist_name || null }
                     }));
                 }
             }

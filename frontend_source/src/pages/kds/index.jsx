@@ -417,28 +417,31 @@ const Header = ({
           <button
             onClick={onRefresh}
             disabled={isLoading}
-            className={`w-[44px] h-[44px] rounded-2xl flex items-center justify-center transition-all bg-white border border-slate-200 active:scale-95 shadow-sm bg-white ${isLoading ? 'text-blue-400 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-slate-50'}`}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all bg-white border border-slate-200 active:scale-95 shadow-sm bg-white ${isLoading ? 'text-blue-400 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-slate-50'}`}
             title="רענן הזמנות"
           >
             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
           </button>
-
-          <div className="flex bg-slate-100/80 p-1 rounded-2xl gap-1 border border-slate-200 shadow-inner mr-2">
-            <button
-              onClick={() => setViewMode('active')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all w-28 justify-center ${viewMode === 'active' ? 'bg-white shadow-sm text-blue-600 ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
-            >
-              <LayoutGrid size={16} /> <span className="mt-[2px]">פעיל</span>
-            </button>
-            <button
-              onClick={() => setViewMode('history')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all w-28 justify-center ${viewMode === 'history' ? 'bg-white shadow-sm text-purple-600 ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
-            >
-              <History size={16} /> <span className="mt-[2px]">היסטוריה</span>
-            </button>
-          </div>
         </div>
       }
+      headerTabs={[
+        {
+          id: 'active',
+          label: 'פעיל',
+          icon: <LayoutGrid size={16} />,
+          isActive: viewMode === 'active',
+          onClick: () => setViewMode('active'),
+          colorClass: 'text-blue-600'
+        },
+        {
+          id: 'history',
+          label: 'היסטוריה',
+          icon: <History size={16} />,
+          isActive: viewMode === 'history',
+          onClick: () => setViewMode('history'),
+          colorClass: 'text-purple-600'
+        }
+      ]}
     >
       <div className="flex items-center gap-3">
         {/* Leftmost button: New Order */}
@@ -719,7 +722,7 @@ const KdsScreen = () => {
   };
 
   return (
-    <div className="h-screen w-screen bg-gray-900 flex items-center justify-center p-4 font-heebo overflow-hidden" dir="rtl">
+    <div className="h-[100dvh] w-screen bg-slate-50 flex flex-col font-heebo overflow-hidden" dir="rtl">
       <style>{kdsStyles}</style>
 
       {/* 🔴 NETWORK DEBUG BAR */}
@@ -728,7 +731,7 @@ const KdsScreen = () => {
       </div>
 
       {/* מסגרת מלאה */}
-      <div className="bg-slate-50 w-full h-full rounded-[24px] overflow-hidden shadow-2xl flex flex-col relative ring-4 ring-gray-800 pt-6">
+      <div className="w-full h-full flex flex-col relative">
         {(isLoading || isRefreshing) && (
           <div className="kds-loader-bar">
             <div className="kds-loader-progress" />

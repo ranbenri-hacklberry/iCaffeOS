@@ -14,6 +14,23 @@ import { DiscoveryService } from '../services/discoveryService.js';
 
 const router = express.Router();
 
+const safeClean = (str, isAlbum = false) => {
+    if (!str) return isAlbum ? null : 'Unknown';
+    return str.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
+};
+
+const normalizeAlbumName = (name) => {
+    if (!name) return name;
+    return name
+        .replace(/\s*[\(\[]\s*(CD|Disc|Disk|Part)\s*\d+\s*[\)\]]/gi, '')  // Remove (CD 1), [Disc 2]
+        .replace(/\s*[\(\[]\s*\d+\s*[\)\]]\s*$/g, '')                     // Remove trailing (1), (2)
+        .replace(/\s+-\s+(CD|Disc|Disk|Part)\s*\d+$/gi, '')               // Remove "- CD 1" suffix  
+        .replace(/\s+(CD|Disc|Disk|Part)\s*\d+$/gi, '')                   // Remove "CD 1" suffix
+        .replace(/\s+\d{1}$/g, '')                                        // Remove trailing single digit (after safeClean strips parens)
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 // 🔒 Token Verification Middleware
 const verifyAlbumToken = async (req, res, next) => {
     const { song_id } = req.query;
@@ -37,7 +54,7 @@ const verifyAlbumToken = async (req, res, next) => {
  * Quality-Aware Source Picker (Lossless > HD > SD)
  */
 async function getBestAvailableSource(songId) {
-    const { data: songs } = await supabase
+    const { data: songs } = await getSupabase()
         .from('music_songs')
         .select('*')
         .eq('id', songId);
@@ -131,14 +148,18 @@ const artistCache = new Map();
 const albumCache = new Map();
 
 async function registerInternal(asset) {
-    const { artist, album, title, thumbnail, file_path, duration } = asset;
-    const safeArtist = (artist || 'Unknown Artist').replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
-    const isSingle = !album || album === 'Single' || album === 'Singles' || album === 'Unknown Album';
-    const safeAlbum = isSingle ? null : album.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
-    const safeTitle = title.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
-    const fileName = path.basename(file_path);
+    const { artist, album, album_artist, title, thumbnail, file_path, duration, track_number } = asset;
 
-    // Try to find or create artist
+    const safeArtist = safeClean(artist);
+    const safeAlbumArtist = safeClean(album_artist, true);
+    const isSingle = !album || album === 'Single' || album === 'Singles' || album === 'Unknown Album';
+    const safeAlbum = isSingle ? null : normalizeAlbumName(safeClean(album, true));
+    const safeTitle = safeClean(title);
+
+    const fileName = path.basename(file_path);
+    const albumFolderPath = path.dirname(file_path);
+
+    // 1. Resolve/Create Artist
     let artistId = artistCache.get(safeArtist);
     if (!artistId) {
         let { data: artistData } = await getSupabase().from('music_artists').select('id').eq('name', safeArtist).maybeSingle();
@@ -151,52 +172,94 @@ async function registerInternal(asset) {
         artistCache.set(safeArtist, artistId);
     }
 
-    let albumId = null;
-    const albumFolderPath = path.dirname(file_path); // folder containing the song = album folder
+    // 2. Resolve/Create Album Artist (for Compilations/Soundtracks)
+    let albumArtistId = artistId;
+    if (safeAlbumArtist && safeAlbumArtist !== safeArtist) {
+        albumArtistId = artistCache.get(safeAlbumArtist);
+        if (!albumArtistId) {
+            let { data: aaData } = await getSupabase().from('music_artists').select('id').eq('name', safeAlbumArtist).maybeSingle();
+            if (!aaData) {
+                const { data: nAA } = await getSupabase().from('music_artists').insert({ name: safeAlbumArtist }).select('id').single();
+                albumArtistId = nAA.id;
+            } else {
+                albumArtistId = aaData.id;
+            }
+            artistCache.set(safeAlbumArtist, albumArtistId);
+        }
+    }
 
+    // 3. Resolve/Create Album (Key: Name + Artist for deduplication of multi-disc albums)
+    let albumId = null;
     if (safeAlbum) {
-        const albumCacheKey = `${artistId}:${safeAlbum}`;
+        const albumCacheKey = `${safeAlbum}:${albumArtistId}`;
         albumId = albumCache.get(albumCacheKey);
+
         if (!albumId) {
-            // Try to find or create album
-            let { data: albumData } = await getSupabase().from('music_albums').select('id, cover_url, folder_path').eq('name', safeAlbum).eq('artist_id', artistId).maybeSingle();
+            // First try matching by name and artist (best for multi-disc albums)
+            let { data: albumData } = await getSupabase()
+                .from('music_albums')
+                .select('id, cover_url, folder_path')
+                .eq('name', safeAlbum)
+                .eq('artist_id', albumArtistId)
+                .maybeSingle();
+
+            // Fallback: try matching by name and folder path
             if (!albumData) {
-                // Look for a cover file in the album folder
-                const coverCandidates = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'front.jpg'];
+                const { data: fbData } = await getSupabase()
+                    .from('music_albums')
+                    .select('id, cover_url, folder_path')
+                    .eq('name', safeAlbum)
+                    .eq('folder_path', albumFolderPath)
+                    .maybeSingle();
+                albumData = fbData;
+            }
+
+            if (!albumData) {
+                // Determine cover - check current folder and parent folder (for multi-disc)
+                const coverCandidates = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'front.jpg', 'Front.jpg'];
                 let localCoverPath = null;
-                for (const name of coverCandidates) {
-                    const testPath = path.join(albumFolderPath, name);
-                    if (fs.existsSync(testPath)) { localCoverPath = testPath; break; }
+                const foldersToCheck = [albumFolderPath, path.dirname(albumFolderPath)];
+                for (const folder of foldersToCheck) {
+                    for (const name of coverCandidates) {
+                        const testPath = path.join(folder, name);
+                        if (fs.existsSync(testPath)) { localCoverPath = testPath; break; }
+                    }
+                    if (localCoverPath) break;
                 }
+
                 const { data: newAlbum } = await getSupabase().from('music_albums').insert({
                     name: safeAlbum,
-                    artist_id: artistId,
+                    artist_id: albumArtistId,
                     cover_url: thumbnail || localCoverPath,
                     folder_path: albumFolderPath
                 }).select('id').single();
                 albumId = newAlbum.id;
             } else {
                 albumId = albumData.id;
-                // Backfill folder_path + cover_url if missing
-                if (!albumData.folder_path || !albumData.cover_url) {
-                    const coverCandidates = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'front.jpg'];
-                    let localCoverPath = albumData.cover_url || null;
-                    for (const name of coverCandidates) {
-                        const testPath = path.join(albumFolderPath, name);
-                        if (fs.existsSync(testPath)) { localCoverPath = testPath; break; }
+                // Update missing cover
+                if (!albumData.cover_url) {
+                    const coverCandidates = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'front.jpg', 'Front.jpg'];
+                    let lcp = null;
+                    const foldersToCheck = [albumFolderPath, path.dirname(albumFolderPath)];
+                    for (const folder of foldersToCheck) {
+                        for (const name of coverCandidates) {
+                            const testPath = path.join(folder, name);
+                            if (fs.existsSync(testPath)) { lcp = testPath; break; }
+                        }
+                        if (lcp) break;
                     }
-                    await getSupabase().from('music_albums').update({
-                        folder_path: albumData.folder_path || albumFolderPath,
-                        cover_url: albumData.cover_url || localCoverPath
-                    }).eq('id', albumData.id);
+                    if (lcp) {
+                        await getSupabase().from('music_albums').update({
+                            cover_url: lcp
+                        }).eq('id', albumData.id);
+                    }
                 }
             }
             albumCache.set(albumCacheKey, albumId);
         }
     }
 
-    // Insert/Update Song - use select-first to avoid onConflict constraint mismatch
-    // (local Supabase has composite UNIQUE(file_path, business_id), not single-col)
+    // 4. Register Song
     const { data: existingSong } = await getSupabase()
         .from('music_songs')
         .select('id')
@@ -210,9 +273,7 @@ async function registerInternal(asset) {
         file_path: file_path,
         file_name: fileName,
         duration_seconds: Math.floor(duration || 0),
-        is_synced: file_path.includes('/Volumes/RANTUNES') || file_path.includes('/mnt/music_ssd'),
-        thumbnail_url: thumbnail,
-        updated_at: new Date().toISOString()
+        track_number: track_number || null
     };
 
     let songData, songError;
@@ -256,9 +317,13 @@ router.post('/scan', ensureSupabase, async (req, res) => {
         const artistsMap = new Map();
         const albumsMap = new Map();
 
+        // Normalize multi-disc album names into a single album
+        // (normalizeAlbumName is defined at module level)
+
         assets.forEach(asset => {
-            const artistName = asset.artist || 'Unknown Artist';
-            const albumName = asset.album || 'Unknown Album';
+            const artistName = safeClean(asset.artist);
+            const rawAlbumName = safeClean(asset.album, true);
+            const albumName = normalizeAlbumName(rawAlbumName);
 
             if (!artistsMap.has(artistName)) {
                 artistsMap.set(artistName, { name: artistName, folder_path: path.dirname(path.dirname(asset.file_path)) });
@@ -279,12 +344,11 @@ router.post('/scan', ensureSupabase, async (req, res) => {
             artists: Array.from(artistsMap.values()),
             albums: Array.from(albumsMap.values()),
             songs: assets.map(a => ({
-                title: a.title,
+                ...a,
                 artist_name: a.artist,
                 album_name: a.album,
-                file_path: a.file_path,
-                file_name: path.basename(a.file_path),
-                thumbnail_url: a.thumbnail_url
+                album_id: path.dirname(a.file_path),
+                thumbnail_url: a.thumbnail_url || null
             }))
         };
 
@@ -371,7 +435,7 @@ router.get("/library/albums", ensureSupabase, async (req, res) => {
 router.get("/library/albums/:albumId/songs", ensureSupabase, async (req, res) => {
     try {
         const { albumId } = req.params;
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('music_songs')
             .select('*, album:music_albums(id, name, cover_url), artist:music_artists(id, name)')
             .eq('album_id', albumId)
@@ -499,7 +563,8 @@ router.post("/rate", ensureSupabase, async (req, res) => {
 
 // YouTube Integration
 router.get("/youtube/quota", (req, res) => {
-    res.json({ success: true, isExceeded: false, remaining: 1000 });
+    const hasApiKey = !!process.env.YOUTUBE_API_KEY;
+    res.json({ success: true, isExceeded: false, remaining: 1000, used: 0, limit: hasApiKey ? 10000 : 0, mode: hasApiKey ? 'api' : 'yt-dlp' });
 });
 
 router.get("/youtube/metadata", async (req, res) => {
@@ -573,25 +638,25 @@ router.post("/youtube/download", async (req, res) => {
                         const { data: newAlbum } = await getSupabase().from('music_albums').insert({
                             name: safeAlbum,
                             artist_id: artistData.id,
-                            cover_url: thumbnail
+                            cover_url: thumbnail,
+                            folder_path: dirPath
                         }).select('id').single();
                         albumData = newAlbum;
                     }
 
-                    // Insert Song
+                    // Insert Song (only columns that exist in music_songs table)
                     const { error: songError } = await getSupabase().from('music_songs').insert({
                         title: safeTitle,
                         artist_id: artistData.id,
                         album_id: albumData.id,
                         file_path: finalFilePath,
-                        file_name: fileName,
-                        is_synced: isMounted, // If external is mounted, it's synced immediately
-                        thumbnail_url: thumbnail
+                        file_name: fileName
                     });
 
                     if (songError) console.error('❌ Failed to register song in DB:', songError);
+                    else console.log(`✅ YouTube download registered: ${safeTitle}`);
 
-                    res.json({ success: true, message: 'Download complete', path: finalFilePath, is_synced: isMounted });
+                    res.json({ success: true, message: 'Download complete', path: finalFilePath });
                 } catch (dbErr) {
                     console.error('❌ DB Error after download:', dbErr);
                     res.json({ success: true, message: 'Download complete but DB registration failed' });
@@ -638,22 +703,51 @@ router.get("/youtube/search", async (req, res) => {
 
     try {
         const apiKey = process.env.YOUTUBE_API_KEY;
-        const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query + ' music')}&type=video,playlist&maxResults=20&key=${apiKey}`;
-        const response = await fetch(ytUrl);
-        const data = await response.json();
 
-        const ytResults = (data.items || []).map(item => ({
-            id: item.id.videoId || item.id.playlistId,
-            title: item.snippet.title,
-            artist: item.snippet.channelTitle,
-            thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
-            source: 'YOUTUBE',
-            type: item.id.playlistId ? 'playlist' : 'video'
-        }));
+        // If API key exists, use YouTube Data API
+        if (apiKey) {
+            const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query + ' music')}&type=video,playlist&maxResults=20&key=${apiKey}`;
+            const response = await fetch(ytUrl);
+            const data = await response.json();
+            const ytResults = (data.items || []).map(item => ({
+                id: item.id.videoId || item.id.playlistId,
+                title: item.snippet.title,
+                artist: item.snippet.channelTitle,
+                thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
+                source: 'YOUTUBE',
+                type: item.id.playlistId ? 'playlist' : 'video'
+            }));
+            return res.json({ results: ytResults });
+        }
+
+        // Fallback: Use yt-dlp search (no API key needed)
+        const { execSync } = await import('child_process');
+        const searchQuery = `ytsearch15:${query} music`;
+        const raw = execSync(
+            `yt-dlp --flat-playlist --dump-json "${searchQuery}"`,
+            { timeout: 15000, maxBuffer: 5 * 1024 * 1024, encoding: 'utf8' }
+        );
+
+        const lines = raw.trim().split('\n').filter(Boolean);
+        const ytResults = lines.map(line => {
+            try {
+                const item = JSON.parse(line);
+                return {
+                    id: item.id || item.url,
+                    title: item.title || 'Unknown',
+                    artist: item.uploader || item.channel || 'Unknown',
+                    thumbnail: item.thumbnails?.[item.thumbnails.length - 1]?.url || `https://img.youtube.com/vi/${item.id}/hqdefault.jpg`,
+                    source: 'YOUTUBE',
+                    type: 'video',
+                    duration: item.duration
+                };
+            } catch (e) { return null; }
+        }).filter(Boolean);
 
         res.json({ results: ytResults });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('❌ YouTube search error:', err.message);
+        res.json({ results: [], error: err.message });
     }
 });
 

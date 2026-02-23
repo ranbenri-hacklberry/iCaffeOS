@@ -122,8 +122,8 @@ const AlbumCard = ({
                 {/* Always-visible gradient + info at bottom */}
                 <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-12 pb-3 px-3 z-10 transition-transform duration-300
                     ${selectionMode && isSelected ? 'translate-y-0' : ''}`}>
-                    <h3 className="text-white font-bold text-sm truncate leading-tight">{album.name}</h3>
-                    <p className="text-white/60 text-xs truncate font-medium mt-0.5">{album.artist?.name || 'אמן לא ידוע'}</p>
+                    <h3 className="text-white font-bold text-sm truncate leading-tight" dir="ltr" style={{ textAlign: 'right' }}>{album.name}</h3>
+                    <p className="text-white/60 text-xs truncate font-medium mt-0.5" dir="ltr" style={{ textAlign: 'right' }}>{album.artist?.name || 'אמן לא ידוע'}</p>
                 </div>
 
             </div>

@@ -57,6 +57,14 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Computed
+    const shortagesCount = useMemo(() => {
+        return items.filter(item => {
+            const wpu = parseFloat(item.weight_per_unit as any) || 0;
+            const thresholdGrams = (parseFloat(item.low_stock_threshold_units as any) || 0) * (wpu || 1);
+            return thresholdGrams > 0 && item.current_stock <= thresholdGrams;
+        }).length;
+    }, [items]);
+
     const supplierCounts = useMemo(() => {
         const counts: Record<string, number> = {};
         items.forEach(item => {
@@ -126,6 +134,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 setActiveTab={setActiveTab}
                 onExit={onExit}
                 onShowReport={() => setShowReportModal(true)}
+                shortagesCount={shortagesCount}
             />
 
             <main className="flex-1 flex overflow-hidden">
