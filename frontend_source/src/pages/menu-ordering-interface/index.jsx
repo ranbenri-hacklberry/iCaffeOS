@@ -328,25 +328,26 @@ const MenuOrderingInterface = () => {
 
       // [CLEANED] console.log('✅ Order fetched successfully:', order.id);
 
-      // WORKAROUND: Fetch course_stage AND item_status directly from table because RPC likely misses it or returns stale data
+      // WORKAROUND: Fetch course_stage, item_status AND menu_item_id directly from table
       let itemsStageMap = {};
       let itemsStatusMap = {};
+      let itemsMenuIdMap = {};
 
       try {
         const { data: rawItemsData } = await supabase
           .from('order_items')
-          .select('id, course_stage, item_status')
+          .select('id, course_stage, item_status, menu_item_id')
           .eq('order_id', cleanOrderId);
 
         if (rawItemsData) {
           rawItemsData.forEach(item => {
             itemsStageMap[item.id] = item.course_stage;
             itemsStatusMap[item.id] = item.item_status;
+            itemsMenuIdMap[item.id] = item.menu_item_id;
           });
-          // [CLEANED] console.log('Data fetched directly:', { stages: itemsStageMap, statuses: itemsStatusMap });
         }
       } catch (e) {
-        console.error('Failed to fetch stages directly:', e);
+        console.error('Failed to fetch item data directly:', e);
       }
 
       // Merge stage info into RPC result
@@ -358,6 +359,10 @@ const MenuOrderingInterface = () => {
           // Override status if we have fresh data
           if (itemsStatusMap[item.id] !== undefined) {
             item.item_status = itemsStatusMap[item.id];
+          }
+          // Ensure menu_item_id is present
+          if (itemsMenuIdMap[item.id] !== undefined) {
+            item.menu_item_id = itemsMenuIdMap[item.id];
           }
         });
       }
