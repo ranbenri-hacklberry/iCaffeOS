@@ -919,4 +919,51 @@ router.get('/orders', async (req, res) => {
     }
 });
 
+// ------------------------------------------------------------------
+// 🎙️ WHISPER ASR PROXY — POST /api/maya/transcribe
+// Forwards audio to local Whisper-ASR service on port 9000.
+// Using a backend proxy avoids CORS issues from the browser.
+// ------------------------------------------------------------------
+router.post('/transcribe', async (req, res) => {
+    const WHISPER_URL = process.env.WHISPER_ASR_URL || 'http://localhost:9000';
+
+    try {
+        // Pass the raw multipart/form-data body directly to Whisper
+        const language = req.query.language || 'he';
+
+        // Pipe the incoming request body to Whisper ASR
+        const fetch = (await import('node-fetch')).default;
+        const whisperRes = await fetch(
+            `${WHISPER_URL}/asr?language=${language}&output=json&task=transcribe`,
+            {
+                method: 'POST',
+                body: req,  // pipe incoming stream directly
+                headers: {
+                    'content-type': req.headers['content-type'],
+                    'content-length': req.headers['content-length'],
+                },
+                timeout: 30000,
+            }
+        );
+
+        if (!whisperRes.ok) {
+            const errText = await whisperRes.text();
+            return res.status(whisperRes.status).json({ error: `Whisper error: ${errText}` });
+        }
+
+        const result = await whisperRes.json();
+        // Normalise: Whisper returns { text: "..." }
+        res.json({ text: result.text || '' });
+    } catch (err) {
+        console.error('🎙️ Whisper proxy error:', err.message);
+        if (err.message?.includes('ECONNREFUSED') || err.message?.includes('fetch failed')) {
+            return res.status(503).json({
+                error: 'Whisper ASR service is not running.',
+                hint: 'Run: docker compose -f docker-compose.whisper.yml up -d'
+            });
+        }
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

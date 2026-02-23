@@ -23,10 +23,8 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
 
         // If it's a local file path (not http), it needs to go through the cover proxy
         if (!possibleCover.startsWith('http') && !possibleCover.startsWith('blob:')) {
-            // Check if it's already a full relative path that just needs the prefixing or if it's a relative path starting from root
-            const path = possibleCover.startsWith('/') ? possibleCover.substring(1) : possibleCover;
-            // Use the music/cover endpoint which is designed to serve these files
-            return `${MUSIC_API_URL}/music/cover?path=${encodeURIComponent(path)}`;
+            // Pass the full path to the cover endpoint — it handles path resolution
+            return `${MUSIC_API_URL}/music/cover?path=${encodeURIComponent(possibleCover)}`;
         }
         return possibleCover;
     };

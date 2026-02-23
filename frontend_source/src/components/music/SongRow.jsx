@@ -83,11 +83,11 @@ const SongRow = ({
 
     return (
         <div
-            className={`music-song-row ${isCurrentSong ? 'playing' : ''} group`}
-            onClick={() => addToQueue(song, 'last')}
+            className={`music-song-row ${isCurrentSong ? 'playing' : ''} group cursor-pointer`}
+            onClick={handlePlay}
         >
-            {/* Track number / Playing indicator */}
-            <div className="w-10 flex-shrink-0 flex justify-center">
+            {/* Track number / Play button */}
+            <div className="w-10 flex-shrink-0 flex justify-center items-center relative">
                 {isCurrentSong && isPlaying ? (
                     <div className="music-playing-indicator">
                         <span></span>
@@ -96,14 +96,17 @@ const SongRow = ({
                         <span></span>
                     </div>
                 ) : (
-                    <span className="text-white/40 text-sm font-medium track-number">
-                        {index + 1}
-                    </span>
+                    <>
+                        <span className="text-white/40 text-sm font-medium track-number group-hover:opacity-0 transition-opacity">
+                            {(song.track_number || index + 1)}
+                        </span>
+                        <Play className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 absolute fill-white transition-opacity" />
+                    </>
                 )}
             </div>
 
             {/* Queue Plus Button (Left Side) */}
-            <div className="flex items-center justify-center w-10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center justify-center w-10">
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
@@ -113,8 +116,8 @@ const SongRow = ({
                             addToQueue(song, 'last');
                         }
                     }}
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-purple-500 text-white/40 hover:text-white flex items-center justify-center transition-all hover:scale-110"
-                    title="אפשרויות הוספה"
+                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-purple-500 text-white/40 hover:text-white flex items-center justify-center transition-all hover:scale-110 opacity-0 group-hover:opacity-100"
+                    title="הוסף לתור"
                 >
                     <Plus className="w-4 h-4" />
                 </button>
@@ -125,25 +128,24 @@ const SongRow = ({
                 <h4 className={`font-bold truncate text-sm leading-none mb-1 ${isCurrentSong ? 'text-purple-400' : 'text-white'}`}>
                     {main}
                 </h4>
-                {sub && (
+                {sub ? (
                     <p className="text-white/20 text-[9px] font-medium truncate leading-none uppercase tracking-wider">
                         {sub}
                     </p>
-                )}
-                {song.artist && !sub && (
+                ) : song.artist?.name ? (
                     <p className="text-white/40 text-[10px] truncate leading-none mt-1">
                         {song.artist.name}
                     </p>
-                )}
+                ) : null}
             </div>
 
 
             {/* Actions */}
-            <div className="flex-shrink-0 ml-3 flex items-center gap-1 sm:gap-2">
+            <div className="flex-shrink-0 ml-3 flex items-center gap-1 sm:gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {/* Delete button (Trash icon) */}
                 <button
                     onClick={(e) => { e.stopPropagation(); onDelete?.(song); }}
-                    className="p-2 sm:p-3 rounded-full transition-all transform hover:scale-110 text-white/20 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100"
+                    className="p-2 sm:p-3 rounded-full transition-all transform hover:scale-110 text-white/20 hover:text-red-400 hover:bg-red-500/10"
                     title="מחק שיר"
                 >
                     <Trash2 className="w-4 h-4" />

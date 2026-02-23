@@ -524,6 +524,7 @@ const MusicPageContent = () => {
     const handleBack = () => {
         setSelectedAlbum(null);
         setCurrentAlbumSongs([]);
+        setQueueContext(null);
     };
 
     // Handle exit
@@ -558,7 +559,9 @@ const MusicPageContent = () => {
             }
         }
 
-        playSong(songToPlay, [songToPlay], true);
+        // When playing a song from context of an album, pass the full song list
+        const queueSongs = currentAlbumSongs.length > 0 ? currentAlbumSongs : [songToPlay];
+        playSong(songToPlay, queueSongs, true);
     };
 
     // Handle rating
@@ -711,9 +714,9 @@ const MusicPageContent = () => {
                                 )}
 
                                 <button
-                                    onClick={() => setShowYouTubeIngest(true)}
+                                    onClick={() => navigate('/youtube')}
                                     className="w-10 h-10 rounded-2xl bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 flex items-center justify-center transition-all active:scale-95 shadow-sm"
-                                    title="ייבוא מ-YouTube"
+                                    title="הורדות YouTube"
                                 >
                                     <Download className="w-4 h-4 text-red-400" />
                                 </button>
@@ -955,7 +958,7 @@ const MusicPageContent = () => {
                                     </button>
                                     <div className="flex flex-col flex-1 min-w-0">
                                         <div className="flex items-center gap-4 mb-1">
-                                            <h2 className="text-white text-4xl font-black tracking-tight truncate drop-shadow-lg">{selectedAlbum.name}</h2>
+                                            <h2 className="text-white text-4xl font-black tracking-tight truncate drop-shadow-lg" dir="ltr" style={{ textAlign: 'right' }}>{selectedAlbum.name}</h2>
                                             <button
                                                 onClick={() => setQueueContext({ item: selectedAlbum, type: 'album' })}
                                                 className="group relative"

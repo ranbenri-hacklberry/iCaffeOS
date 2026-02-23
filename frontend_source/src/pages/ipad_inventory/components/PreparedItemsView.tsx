@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChefHat, Snowflake, Package, Plus, Minus, Save } from 'lucide-react';
+import { ChefHat, Snowflake, Package, Plus, Minus, AlertTriangle, Check } from 'lucide-react';
 import { InventoryItem } from '@/pages/ipad_inventory/types';
 
 const MotionDiv = motion.div as any;
@@ -39,95 +39,80 @@ const PreparedItemsView: React.FC<PreparedItemsViewProps> = ({ items, onUpdateSt
     }
 
     return (
-        <div className="flex-1 h-full overflow-y-auto p-6 bg-slate-50">
-            {/* Header with Stats */}
-            <div className="flex flex-col md:flex-row items-center justify-between mb-6 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-50 rounded-xl shadow-inner flex items-center justify-center text-indigo-600">
-                        <ChefHat size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-black text-slate-800 tracking-tight">הכנות והפשרות</h3>
-                        <div className="flex items-center gap-3 mt-1">
-                            <span className="flex items-center gap-1 text-xs font-bold text-slate-400">
-                                <Package size={12} />
-                                {items.length} פריטים במעקב
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex bg-slate-100 p-1 rounded-xl gap-2">
-                    <div className="flex flex-col items-center px-4 py-1.5 bg-white rounded-lg shadow-sm border border-slate-200/50">
-                        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">הכנות וייצור</span>
-                        <span className="text-lg font-black text-slate-700">{prepItems.length}</span>
-                    </div>
-                    <div className="flex flex-col items-center px-4 py-1.5 bg-white rounded-lg shadow-sm border border-slate-200/50">
-                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">הפשרה</span>
-                        <span className="text-lg font-black text-slate-700">{defrostItems.length}</span>
-                    </div>
-                </div>
-            </div>
-
+        <div className="flex-1 h-full overflow-y-auto p-6 bg-slate-50 no-scrollbar">
             {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center p-10 bg-white rounded-2xl border-2 border-dashed border-slate-100">
                     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
                         <Package size={32} />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-400">אין מנות למעקב מלאי</h3>
+                    <h3 className="text-lg font-bold text-slate-400">אין פריטים למעקב</h3>
                     <p className="text-slate-400 max-w-xs mx-auto mt-2 text-sm">
-                        רק מנות שהוגדרו עם ניהול מלאי מופיעות כאן.
+                        רק פריטים שהוגדרו עם ניהול מלאי הקשור להכנות והפשרות מופיעים כאן.
                     </p>
                 </div>
             ) : (
-                <div className="flex flex-col gap-6">
-                    {/* Prep & Production Section */}
-                    {prepItems.length > 0 && (
-                        <div className="bg-indigo-50/30 rounded-2xl p-4 border border-indigo-100/50">
-                            <div className="flex items-center justify-between mb-3 px-1">
-                                <h4 className="flex items-center gap-2 font-black text-indigo-900 text-base">
-                                    <ChefHat size={18} className="text-indigo-600" />
-                                    הכנות וייצור
-                                </h4>
-                                <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black shadow-sm">
-                                    {prepItems.length}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {prepItems.map(item => (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Preparations - 2 columns */}
+                    <div className="md:col-span-2 flex flex-col gap-4">
+                        <div className="flex items-center justify-between px-2">
+                            <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <ChefHat size={14} />
+                                הכנות וייצור
+                            </h4>
+                            <span className="text-[10px] font-black bg-slate-100/80 text-slate-400 px-2 py-0.5 rounded-full">
+                                {prepItems.length}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-h-[100px]">
+                            {prepItems.length === 0 ? (
+                                <div className="xl:col-span-2 flex flex-col items-center justify-center py-12 bg-white/50 rounded-3xl border border-dashed border-slate-200">
+                                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-200 mb-2">
+                                        <ChefHat size={24} />
+                                    </div>
+                                    <p className="font-black text-[10px] text-slate-300 uppercase tracking-widest">אין הכנות</p>
+                                </div>
+                            ) : (
+                                prepItems.map(item => (
                                     <PreparedItemCard
                                         key={item.id}
                                         item={item}
                                         onUpdateStock={onUpdateStock}
                                     />
-                                ))}
-                            </div>
+                                ))
+                            )}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Defrost Section */}
-                    {defrostItems.length > 0 && (
-                        <div className="bg-blue-50/30 rounded-2xl p-4 border border-blue-100/50">
-                            <div className="flex items-center justify-between mb-3 px-1">
-                                <h4 className="flex items-center gap-2 font-black text-blue-900 text-base">
-                                    <Snowflake size={18} className="text-blue-500" />
-                                    הפשרה
-                                </h4>
-                                <span className="bg-blue-500 text-white px-2 py-0.5 rounded-full text-[9px] font-black shadow-sm">
-                                    {defrostItems.length}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {defrostItems.map(item => (
+                    {/* Defrosting - 1 column */}
+                    <div className="md:col-span-1 flex flex-col gap-4">
+                        <div className="flex items-center justify-between px-2">
+                            <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <Snowflake size={14} />
+                                הפשרה
+                            </h4>
+                            <span className="text-[10px] font-black bg-slate-100/80 text-slate-400 px-2 py-0.5 rounded-full">
+                                {defrostItems.length}
+                            </span>
+                        </div>
+                        <div className="flex flex-col gap-3 min-h-[100px]">
+                            {defrostItems.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 bg-white/50 rounded-3xl border border-dashed border-slate-200">
+                                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-200 mb-2">
+                                        <Snowflake size={24} />
+                                    </div>
+                                    <p className="font-black text-[10px] text-slate-300 uppercase tracking-widest">אין הפשרות</p>
+                                </div>
+                            ) : (
+                                defrostItems.map(item => (
                                     <PreparedItemCard
                                         key={item.id}
                                         item={item}
                                         onUpdateStock={onUpdateStock}
                                     />
-                                ))}
-                            </div>
+                                ))
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             )}
         </div>
@@ -135,10 +120,14 @@ const PreparedItemsView: React.FC<PreparedItemsViewProps> = ({ items, onUpdateSt
 };
 
 const PreparedItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId: string, newStock: number) => void }> = ({ item, onUpdateStock }) => {
-    const [localStock, setLocalStock] = React.useState(item.current_stock);
-    const [isDirty, setIsDirty] = React.useState(false);
-    const [isSaving, setIsSaving] = React.useState(false);
-    const [lastCountedDate, setLastCountedDate] = React.useState(item.last_counted_at);
+    const wpu = parseFloat(item.weight_per_unit as any) || 0;
+    const thresholdGrams = (parseFloat(item.low_stock_threshold_units as any) || 0) * (wpu || 1);
+    const isLowStock = thresholdGrams > 0 && item.current_stock <= thresholdGrams;
+
+    const [localStock, setLocalStock] = useState(item.current_stock);
+    const [isDirty, setIsDirty] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [lastCountedDate, setLastCountedDate] = useState(item.last_counted_at);
 
     const handleIncrement = () => {
         const step = Number(item.count_step) || 1;
@@ -165,65 +154,56 @@ const PreparedItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId: 
     return (
         <MotionDiv
             layout
-            className="bg-white rounded-lg p-2.5 shadow-sm border border-slate-100 group hover:shadow-md hover:border-indigo-200 transition-all"
+            className={`group flex items-center gap-4 p-2.5 rounded-2xl border transition-all duration-200 bg-white shadow-sm ${isLowStock ? 'ring-1 ring-amber-200 border-amber-200' : 'border-slate-100 hover:border-slate-200'}`}
         >
-            {/* Single Line Layout - Same as Regular Inventory */}
-            <div className="flex items-center gap-2">
-                {/* Item Name & Unit */}
-                <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-black text-slate-900 leading-tight truncate">{item.name}</h4>
-                    <span className="inline-block text-[9px] font-bold px-1 py-0.5 rounded bg-slate-100 text-slate-500">
-                        {item.unit}
-                    </span>
+            {/* Complete/Save Button */}
+            <button
+                onClick={handleSave}
+                disabled={!isDirty || isSaving}
+                className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-90
+                    ${isDirty ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
+            >
+                {isSaving ? (
+                    <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                ) : (
+                    <Check size={20} strokeWidth={2.5} />
+                )}
+            </button>
+
+            {/* Middle Info */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center text-right">
+                <div className="flex items-center gap-2 justify-start">
+                    {isLowStock && <AlertTriangle size={14} className="text-amber-500 shrink-0" />}
+                    <h4 className="font-black text-slate-800 text-sm leading-tight truncate">{item.name}</h4>
+                    {isDirty && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />}
                 </div>
-
-                {/* Stock Controls */}
-                <div className="flex items-center gap-1 shrink-0">
-                    <button
-                        onClick={handleDecrement}
-                        className="w-7 h-7 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center hover:bg-slate-200 active:scale-95 transition-all"
-                    >
-                        <Minus size={14} />
-                    </button>
-
-                    <div className="min-w-[50px] text-center">
-                        <span className="text-lg font-black text-slate-900 tabular-nums">
-                            {localStock % 1 === 0 ? localStock : localStock.toFixed(2)}
-                        </span>
-                        <span className="text-[8px] text-slate-400 font-bold block leading-none">במלאי</span>
+                {lastCountedDate && !isDirty && (
+                    <div className="text-[9px] text-slate-400 font-bold mt-1">
+                        נספר: {new Date(lastCountedDate).toLocaleDateString('he-IL')}
                     </div>
+                )}
+            </div>
 
-                    <button
-                        onClick={handleIncrement}
-                        className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center hover:bg-indigo-100 active:scale-95 transition-all"
-                    >
-                        <Plus size={14} />
-                    </button>
+            {/* Counter */}
+            <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 h-10 shrink-0">
+                <button
+                    onClick={handleIncrement}
+                    className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-emerald-500 transition active:scale-90"
+                >
+                    <Plus size={14} />
+                </button>
+                <div className="w-12 text-center flex flex-col justify-center leading-none">
+                    <span className={`text-sm font-black ${isDirty ? 'text-indigo-600' : 'text-slate-600'} tabular-nums`}>
+                        {localStock % 1 === 0 ? localStock : localStock.toFixed(2)}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-bold">{item.unit || 'יח\''}</span>
                 </div>
-
-                {/* Fixed Width Container for Save Button / Date */}
-                <div className="w-[70px] shrink-0 flex items-center justify-center">
-                    {isDirty ? (
-                        <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-[10px] font-bold rounded-md hover:from-green-600 hover:to-emerald-600 active:scale-95 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1"
-                        >
-                            {isSaving ? (
-                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            ) : (
-                                <>
-                                    <Save size={10} />
-                                    <span>שמור</span>
-                                </>
-                            )}
-                        </button>
-                    ) : lastCountedDate ? (
-                        <div className="text-[9px] font-bold text-slate-400 text-center">
-                            {new Date(lastCountedDate).toLocaleDateString('he-IL')}
-                        </div>
-                    ) : null}
-                </div>
+                <button
+                    onClick={handleDecrement}
+                    className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-rose-500 transition active:scale-90"
+                >
+                    <Minus size={14} />
+                </button>
             </div>
         </MotionDiv>
     );

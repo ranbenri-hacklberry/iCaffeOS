@@ -143,7 +143,7 @@ const AlbumView = ({ album, onBack }) => {
                     <div className="flex-1 min-w-0">
                         <p className="text-white/70 text-sm font-medium mb-1">אלבום</p>
                         <div className="flex items-center gap-4 mb-2">
-                            <h1 className="text-white text-5xl font-black truncate drop-shadow-lg">
+                            <h1 className="text-white text-5xl font-black truncate drop-shadow-lg" dir="ltr" style={{ textAlign: 'right' }}>
                                 {album.name}
                             </h1>
                             <button

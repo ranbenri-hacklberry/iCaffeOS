@@ -554,7 +554,8 @@ ${contextData.salesLog}
             };
 
             const messagesPayload = [
-                { role: 'system', content: `🌸 אני מאיה - המנהלת הדיגיטלית של iCaffe!
+                {
+                    role: 'system', content: `🌸 אני מאיה - המנהלת הדיגיטלית של iCaffe!
 
 👩 האישיות שלי:
 - שמי מאיה, בחורה צעירה ואנרגטית
@@ -759,60 +760,104 @@ ${codeContext}
         } finally { setIsLoading(false); }
     }, [inputText, isLoading, contextData, currentUser, messages]);
 
-    const toggleListening = () => {
+    // -------------------------------------------------------------------
+    // 🎙️ toggleListening — Local Whisper ASR (Hebrew, offline-capable)
+    // Replaces browser SpeechRecognition (cloud-dependent, unreliable).
+    // Flow: MediaRecorder captures mic → stops on click → POST to
+    // /api/maya/transcribe (backend proxies to Whisper on port 9000)
+    // → receives {text} → fills input field.
+    // -------------------------------------------------------------------
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+
+    const toggleListening = async () => {
+        // --- STOP recording ---
         if (isListening) {
-            try {
-                if (recognitionRef.current) recognitionRef.current.stop();
-            } catch (e) { console.warn('Mic stop error:', e); }
+            if (mediaRecorderRef.current?.state === 'recording') {
+                mediaRecorderRef.current.stop(); // triggers ondataavailable → onstop
+            }
             setIsListening(false);
             return;
         }
 
-        if (!navigator.onLine) {
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: '❌ אין חיבור לאינטרנט. זיהוי קולי לא זמין.' }]);
-            return;
-        }
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert('הדפדפן שלך לא תומך בדיבור. נסה Chrome.');
-            return;
-        }
-
+        // --- START recording ---
         try {
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'he-IL';
-            recognition.interimResults = true;
-            recognition.continuous = false; // Stop after one sentence for stability
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    sampleRate: 16000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : 'audio/webm';
 
-            recognition.onstart = () => setIsListening(true);
+            const recorder = new MediaRecorder(stream, { mimeType });
+            audioChunksRef.current = [];
 
-            recognition.onresult = (event) => {
-                const transcript = Array.from(event.results)
-                    .map(r => r[0].transcript)
-                    .join('');
-                setInputText(transcript);
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
             };
 
-            recognition.onerror = (event) => {
-                console.warn('Speech Rec Error:', event.error);
+            recorder.onstop = async () => {
+                // Stop all tracks to release the microphone indicator
+                stream.getTracks().forEach(t => t.stop());
+
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                if (audioBlob.size < 1000) return; // ignore near-silence
+
                 setIsListening(false);
-                let msg = 'שגיאה בזיהוי דיבור.';
-                if (event.error === 'not-allowed') msg = '🚫 גישה למיקרופון נחסמה. נא לאשר בדפדפן.';
-                if (event.error === 'network') msg = '📡 בעיית רשת בזיהוי הדיבור.';
-                if (event.error === 'no-speech') return; // Ignore silence
+                setInputText('🎙️ מעבד...');
 
-                // Show error as a small toast or message (optional)
-                setInputText(''); // Clear partial input on error
+                try {
+                    const formData = new FormData();
+                    formData.append('audio_file', audioBlob, 'recording.webm');
+
+                    const response = await fetch(`/api/maya/transcribe?language=he`, {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (response.status === 503) {
+                        setInputText('');
+                        setMessages(prev => [...prev, {
+                            id: 'asr-err-' + Date.now(), role: 'assistant',
+                            content: '⚠️ שירות Whisper לא פעיל (Service Unavailable). ייתכן שהשרת בעומס או נכבה.'
+                        }]);
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        const errBody = await response.text().catch(() => 'No body');
+                        throw new Error(`HTTP ${response.status}: ${errBody}`);
+                    }
+
+                    const { text } = await response.json();
+                    setInputText(text?.trim() || '');
+                } catch (err) {
+                    console.error('🎙️ Whisper transcription error:', err);
+                    setInputText('');
+                    setMessages(prev => [...prev, {
+                        id: 'asr-err-' + Date.now(), role: 'assistant',
+                        content: '❌ שגיאה בזיהוי קולי. בדוק שה-Whisper רץ (port 9000).'
+                    }]);
+                }
             };
 
-            recognition.onend = () => setIsListening(false);
-
-            recognitionRef.current = recognition;
-            recognition.start();
-        } catch (e) {
-            console.error('Speech Init Error:', e);
+            mediaRecorderRef.current = recorder;
+            recorder.start();
+            setIsListening(true);
+        } catch (err) {
+            console.error('🎙️ Mic access error:', err);
             setIsListening(false);
+            if (err.name === 'NotAllowedError') {
+                setMessages(prev => [...prev, {
+                    id: 'asr-err-' + Date.now(), role: 'assistant',
+                    content: '🚫 גישה למיקרופון נחסמה. נא לאשר בדפדפן.'
+                }]);
+            }
         }
     };
 

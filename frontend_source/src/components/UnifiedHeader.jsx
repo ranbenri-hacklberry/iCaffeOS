@@ -13,6 +13,7 @@ const UnifiedHeader = ({
     onHome,
     children, // Left side components (in RTL)
     rightContent, // Next to Home button (in RTL)
+    headerTabs, // Standardized tab array: [{ id, label, icon: <Icon/>, onClick, isActive, colorClass (optional active color) }]
     className = '',
     forceMusicDark = false,
     showMusicPlayer = true
@@ -41,7 +42,7 @@ const UnifiedHeader = ({
     const clockColor = forceMusicDark ? 'text-white' : 'text-slate-800';
 
     return (
-        <header className={`${headerBg} backdrop-blur-2xl border-b px-6 h-[56px] z-50 shrink-0 sticky top-0 flex items-center ${className}`}>
+        <header className={`${headerBg} backdrop-blur-2xl border-b px-6 h-[65px] z-50 shrink-0 sticky top-0 flex items-center ${className}`}>
             <div className="flex items-center justify-between w-full h-full">
 
                 {/* RIGHT: Home, Title & custom right content */}
@@ -58,8 +59,33 @@ const UnifiedHeader = ({
 
                     {/* RIGHT CONTENT (Right of Home Button) */}
                     {rightContent && (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 shrink-0">
                             {rightContent}
+                        </div>
+                    )}
+
+                    {/* STANDARDIZED TABS (Picker) - rendering right after the rightContent */}
+                    {headerTabs && headerTabs.length > 0 && (
+                        <div className="flex bg-slate-100/80 p-0.5 rounded-2xl gap-0.5 border border-slate-200 shadow-inner h-10 shrink-0 overflow-hidden items-center ml-auto mr-1 rtl:ml-0 rtl:mr-1">
+                            {headerTabs.map(tab => {
+                                const activeColor = tab.colorClass || 'text-blue-600';
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={tab.onClick}
+                                        className={`px-4 rounded-xl text-sm font-bold flex items-center gap-2 transition-all h-full justify-center min-w-max outline-none focus:outline-none ${tab.isActive
+                                                ? `bg-white shadow-sm ring-1 ring-slate-900/5 ${activeColor}`
+                                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                            }`}
+                                    >
+                                        {tab.icon}
+                                        {tab.label && <span className="mt-[2px]">{tab.label}</span>}
+                                        {tab.count !== undefined && (
+                                            <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded-md font-black opacity-80">{tab.count}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
