@@ -175,6 +175,64 @@ export const MusicProvider = ({ children }) => {
         }
     }, [volume, activeAudio]);
 
+    // Handle Remote Commands (from Mobile)
+    useEffect(() => {
+        if (!currentUser?.business_id) return;
+
+        console.log('🎧 Desktop: Listening for secured remote commands...');
+
+        const commandChannelName = `music_commands_${currentUser.business_id}`;
+        const commandChannel = supabase.channel(commandChannelName)
+            .on('broadcast', { event: 'playback_command' }, ({ payload }) => {
+
+                // 1. Security & Stale Command Prevention
+                const now = Date.now();
+                if (now - payload.timestamp > 5000) {
+                    console.warn('⏱️ Ignored stale remote command:', payload.command);
+                    return;
+                }
+
+                console.log('📱 Executing remote command:', payload.command);
+
+                switch (payload.command) {
+                    case 'PLAY_SONG':
+                        // The playback logic is below, use handleNextRef or playSong if available.
+                        // However, playSong is defined later. We will use a ref or direct calling if it's hoisted?
+                        // Actually, playSong is defined AFTER this useEffect in the original file. 
+                        // To avoid circular dependencies, let's just create a ref for playSong.
+                        if (playSongRef.current) {
+                            playSongRef.current(payload.song, payload.playlist || null, payload.useCrossfade);
+                        }
+                        break;
+                    case 'TOGGLE_PLAY':
+                        if (togglePlayRef.current) togglePlayRef.current();
+                        break;
+                    case 'NEXT':
+                        if (handleNextRef.current) handleNextRef.current(true);
+                        break;
+                    case 'PREV':
+                        if (handlePreviousRef.current) handlePreviousRef.current();
+                        break;
+                    case 'VOLUME':
+                        if (setVolumeRef.current) setVolumeRef.current(payload.volume);
+                        break;
+                    case 'SEEK':
+                        if (seekRef.current) seekRef.current(payload.time);
+                        break;
+                }
+            })
+            .subscribe();
+
+        return () => supabase.removeChannel(commandChannel);
+    }, [currentUser?.business_id]); // We will use refs to avoid re-subscribing 
+
+    // Refs for remote commands
+    const playSongRef = useRef(() => { });
+    const togglePlayRef = useRef(() => { });
+    const handlePreviousRef = useRef(() => { });
+    const setVolumeRef = useRef(() => { });
+    const seekRef = useRef(() => { });
+
     // Log skip as dislike if skipped early
     const logSkip = useCallback(async (song, wasEarlySkip) => {
         if (!song || !currentUser) return;
@@ -475,7 +533,9 @@ export const MusicProvider = ({ children }) => {
     // Keep ref in sync with handleNext
     useEffect(() => {
         handleNextRef.current = handleNext;
-    }, [handleNext]);
+        playSongRef.current = playSong;
+        togglePlayRef.current = togglePlay;
+    }, [handleNext, playSong, togglePlay]);
 
     // Previous song
     const handlePrevious = useCallback(() => {
@@ -585,6 +645,13 @@ export const MusicProvider = ({ children }) => {
             audio2Ref.current.volume = activeAudio === 2 ? clampedVol : 0;
         }
     }, [activeAudio]);
+
+    // Update remaining refs
+    useEffect(() => {
+        handlePreviousRef.current = handlePrevious;
+        setVolumeRef.current = setVolume;
+        seekRef.current = seek;
+    }, [handlePrevious, setVolume, seek]);
 
 
     // Stop playback
