@@ -8,7 +8,7 @@ import multer from 'multer';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
 import FormData from 'form-data';
-import { createClient } from '@supabase/supabase-js';
+
 import dotenv from 'dotenv';
 import { getKlingKeys } from '../services/secretsService.js';
 
@@ -16,11 +16,7 @@ dotenv.config();
 
 const router = express.Router();
 
-// Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Supabase client unused in this file, removed to avoid crashes on missing credentials.
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({
