@@ -2,12 +2,38 @@ import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { PathManager } from '../utils/pathManager.js';
+import dotenv from 'dotenv';
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
-);
+// 1. Ensure environment variables are loaded
+dotenv.config();
 
+// 2. Fallback Chain for Supabase Keys
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+
+// Hierarchy: Service Role (Admin) -> Standard Server Key -> Anon Key
+const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY;
+
+// 3. Early Failure if configurations are entirely missing (Defensive Architecture)
+if (!supabaseUrl || !supabaseKey) {
+    console.error('🚨 [SyncManager] CRITICAL ERROR: Supabase credentials missing during module initialization.');
+    console.error(`- supabaseUrl present: ${!!supabaseUrl}`);
+    console.error(`- supabaseKey present: ${!!supabaseKey}`);
+    process.exit(1);
+}
+
+// 4. Initialize the Singleton Supabase Client
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+    }
+});
+
+// 5. Explicit Named Export for the SyncManager
 export const SyncManager = {
     /**
      * Compares local staging with external library

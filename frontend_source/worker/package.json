@@ -1,0 +1,19 @@
+{
+  "name": "cortex-dispatcher",
+  "version": "1.0.0",
+  "description": "icaffeOS Cortex Communication Dispatcher — Triple-Redundancy Worker",
+  "type": "module",
+  "main": "dispatcher.js",
+  "scripts": {
+    "start": "node dispatcher.js",
+    "dev": "node --watch dispatcher.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

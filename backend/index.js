@@ -1,6 +1,32 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 
+console.log('--- [iCaffeOS Backend: Validating Environment] ---');
+const requiredEnvVars = [
+    { name: 'PORT', fallback: '8081' },
+    { name: 'VITE_SUPABASE_URL', fallback: 'None (CRITICAL)' },
+];
+
+const hasRoleKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.SUPABASE_SERVICE_KEY;
+const hasStandardKey = !!process.env.SUPABASE_KEY;
+const hasAnonKey = !!process.env.VITE_SUPABASE_ANON_KEY;
+
+console.log(`- SUPABASE_URL: ${!!(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL)}`);
+console.log(`- SUPABASE_SERVICE_ROLE_KEY/SERVICE_KEY: ${hasRoleKey}`);
+console.log(`- SUPABASE_KEY: ${hasStandardKey}`);
+console.log(`- VITE_SUPABASE_ANON_KEY: ${hasAnonKey}`);
+console.log('------------------------------------------------');
+
+// Guard Execution
+if (!process.env.VITE_SUPABASE_URL && !process.env.SUPABASE_URL) {
+    console.error('🚨 FATAL: Missing Supabase URL. Exiting to prevent crash loop.');
+    process.exit(1);
+}
+if (!hasRoleKey && !hasStandardKey && !hasAnonKey) {
+    console.error('🚨 FATAL: Missing ALL Supabase Keys. Exiting to prevent crash loop.');
+    process.exit(1);
+}
+
 import os from 'os';
 import express from 'express';
 import cors from 'cors';
