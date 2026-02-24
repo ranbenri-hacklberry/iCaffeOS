@@ -1,0 +1,72 @@
+# /etc/systemd/system/cortex-worker.service
+#
+# icaffeOS Cortex Communication Dispatcher
+# Copy this file to /etc/systemd/system/ on the Ryzen 370AI server, then:
+#
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable cortex-worker
+#   sudo systemctl start cortex-worker
+#   sudo journalctl -u cortex-worker -f          # tail logs
+#
+# ── Setup on Ryzen ────────────────────────────────────────────────────
+#   1. git pull latest icaffeOS source
+#   2. cd /opt/icaffeos/worker && npm install
+#   3. cp .env.example .env && nano .env          # fill in secrets
+#   4. sudo cp cortex-worker.service /etc/systemd/system/
+#   5. sudo systemctl daemon-reload && sudo systemctl enable --now cortex-worker
+# ─────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=icaffeOS Cortex Communication Dispatcher (Triple-Redundancy Worker)
+Documentation=https://github.com/icaffeos/cortex-worker
+After=network-online.target
+Wants=network-online.target
+# If WAHA is also running as a service on this machine, start after it
+After=waha.service
+# Don't crash the whole system if dispatcher fails
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ran
+Group=ran
+WorkingDirectory=/opt/icaffeos/worker
+
+# Node.js binary — adjust if using nvm/fnm
+ExecStart=/usr/bin/node /opt/icaffeos/worker/dispatcher.js
+
+# Reload on file change (useful during deploys — remove in strict prod)
+# ExecReload=/bin/kill -HUP $MAINPID
+
+# Graceful stop: send SIGTERM, wait 30s, then SIGKILL
+KillMode=mixed
+TimeoutStopSec=35
+KillSignal=SIGTERM
+
+# Auto-restart on crash
+Restart=on-failure
+RestartSec=5s
+
+# Env file — contains secrets, chmod 600 this file!
+EnvironmentFile=/opt/icaffeos/worker/.env
+
+# Security hardening (keep sandboxed but allow exec for modem script)
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/tmp
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+CPUQuota=25%
+
+# Logging: all stdout/stderr goes to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cortex-worker
+
+[Install]
+WantedBy=multi-user.target
