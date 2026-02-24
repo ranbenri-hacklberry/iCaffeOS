@@ -31,6 +31,7 @@ process.on('uncaughtException', (err: any) => {
 
 // Service Dependency Check Constants
 const PG_PORT = 5432;
+const SUPABASE_PORT = 54321; // Local Supabase default Kong port
 const RAID_MOUNT = process.platform === 'linux' ? '/mnt/raid1' : path.join(app.getPath('userData'), 'data');
 const MUSIC_ROOT = process.platform === 'darwin' ? '/Volumes/RANTUNES' : '/mnt/music_ssd';
 const BACKEND_PORT = 8081;
@@ -277,6 +278,19 @@ async function checkServiceDependencies(updateStatus: (msg: string, progress: nu
         // Special logic for local DB recovery could go here
     }
 
+    // 2.5 Check Local Supabase Proxy (Port 54321/8000)
+    updateStatus('Checking Local Supabase Edge...', 45);
+    let supabaseRunning = await isPortOpen(SUPABASE_PORT);
+    if (!supabaseRunning) {
+        // Fallback check to generic 8000 for Cortex Gateway proxy mapping
+        supabaseRunning = await isPortOpen(8000);
+    }
+    if (!supabaseRunning) {
+        updateStatus('⚠️ Supabase Unreachable! Check Docker...', 50);
+        isDegraded = true;
+        failureReasons.push('SUPABASE_DOWN');
+    }
+
     // 3. Check Backend API (Port 8081)
     updateStatus('Checking Backend API...', 60);
     let apiRunning = await isPortOpen(BACKEND_PORT);
@@ -445,7 +459,7 @@ async function createMainWindow(): Promise<BrowserWindowType> {
     } else {
         // Use appPath for absolute reliability in production
         const appPath = app.getAppPath();
-        mainWindow.loadFile(path.join(appPath, 'build/index.html'));
+        mainWindow.loadFile(path.join(appPath, 'dist/index.html'));
     }
 
     togglePowerSave(true);
