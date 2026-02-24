@@ -30,10 +30,31 @@ import {
 const router = express.Router();
 
 // Initialize Supabase client
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
-);
+let supabaseInstance = null;
+const getSupabase = () => {
+    if (supabaseInstance) return supabaseInstance;
+    const url = process.env.SUPABASE_URL || process.env.LOCAL_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY;
+
+    if (!url || !key) {
+        console.warn('⚠️ mayaRoutes: Missing credentials, unable to connect to Supabase.');
+        return null;
+    }
+
+    supabaseInstance = createClient(url, key);
+    return supabaseInstance;
+};
+
+const supabase = new Proxy({}, {
+    get: function (target, prop) {
+        const instance = getSupabase();
+        if (!instance) {
+            return () => Promise.reject(new Error("Supabase client not configured"));
+        }
+        const val = Reflect.get(instance, prop);
+        return typeof val === 'function' ? val.bind(instance) : val;
+    }
+});
 
 // Health check
 router.get('/health', async (req, res) => {
