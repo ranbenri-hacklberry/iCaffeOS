@@ -1,24 +1,12 @@
 version: '3.8'
 
 services:
-  backend:
+  cortex_backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     ports:
       - "8081:8080"
-    environment:
-      - PORT=8080
-      - SUPABASE_URL=${VITE_SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      # Hybrid Mode Standartization
-      - LOCAL_SUPABASE_URL=http://supabase_kong_scarlet-zodiac:8000
-      - LOCAL_SUPABASE_SERVICE_KEY=${VITE_LOCAL_SERVICE_ROLE_KEY}
-      - IS_LOCAL_MODE=true
-      - BIOMETRIC_SCRAMBLE_KEY=${BIOMETRIC_SCRAMBLE_KEY}
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - MUSIC_DIRECTORY=/Volumes/RANTUNES
-      - WHISPER_ASR_URL=http://icaffe-whisper-asr:9000
     env_file:
       - .env
     extra_hosts:
@@ -33,22 +21,41 @@ services:
       - default
       - supabase
 
-  frontend:
+  cortex_frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
       - "4029:4029"
-    environment:
-      - PORT=4029
+    env_file:
+      - .env
     volumes:
       - .:/app
       - frontend_node_modules:/app/node_modules
     depends_on:
-      - backend
+      - cortex_backend
     restart: always
     networks:
       - default
+
+  cortex_worker:
+    build:
+      context: .
+      # If you have a specific dockerfile for the worker, e.g. Dockerfile.worker
+      # but assuming it runs node from the repository
+      dockerfile: Dockerfile.backend
+    command: [ "node", "worker/dispatcher.js" ]
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - backend_node_modules:/app/node_modules
+    depends_on:
+      - cortex_backend
+    restart: always
+    networks:
+      - default
+      - supabase
 
   frigate:
     container_name: frigate
@@ -78,7 +85,7 @@ networks:
     name: frontend_source_default
   supabase:
     external: true
-    name: supabase_network_scarlet-zodiac
+    name: supabase_network_iCaffeOS
 
 volumes:
   backend_node_modules:
