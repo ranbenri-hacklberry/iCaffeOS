@@ -135,7 +135,69 @@ app.get('/health', (req, res) => {
     });
 });
 
-// 🆕 Docker Observability Endpoint
+// 🆕 Aggregated Health Endpoint
+app.get('/api/system/health', async (req, res) => {
+    const results = {
+        backend: 'online',
+        database: 'offline',
+        cortex_gateway: 'offline',
+        ollama: 'offline',
+        gemini: 'offline'
+    };
+
+    const promises = [];
+
+    // 1. Database Check
+    promises.push((async () => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('businesses').select('id').limit(1);
+                if (!error) results.database = 'online';
+            }
+        } catch (e) { }
+    })());
+
+    // 2. Gateway Check (Internal)
+    promises.push((async () => {
+        try {
+            // Use host.docker.internal since gateway might be native or in different compose
+            const resp = await fetch('http://host.docker.internal:8000/health', { timeout: 3000 });
+            if (resp.ok) results.cortex_gateway = 'online';
+        } catch (e) { }
+    })());
+
+    // 3. Ollama Check
+    promises.push((async () => {
+        try {
+            const resp = await fetch('http://host.docker.internal:11434/api/tags', { timeout: 3000 });
+            if (resp.ok) results.ollama = 'online';
+        } catch (e) { }
+    })());
+
+    // 4. Gemini Check
+    promises.push((async () => {
+        try {
+            const key = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+            if (key) {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                const resp = await fetch(url, { timeout: 3000 });
+                if (resp.ok) results.gemini = 'online';
+            }
+        } catch (e) { }
+    })());
+
+    await Promise.allSettled(promises);
+
+    res.json({
+        status: Object.values(results).every(v => v === 'online') ? 'healthy' : 'degraded',
+        services: results,
+        timestamp: new Date().toISOString()
+    });
+});
+
+/**
+ * 🆕 Docker Observability Endpoint
+ */
 app.get('/api/system/containers', (req, res) => {
     exec('docker ps --format "{{.Names}}|{{.Status}}"', (error, stdout, stderr) => {
         if (error) {
@@ -4131,7 +4193,7 @@ app.post("/music/scan", async (req, res) => {
                         .select('id, name')
                         .maybeSingle();
                     if (vaRow) artistMap['Various Artists'] = vaRow.id;
-                } catch (_) {}
+                } catch (_) { }
                 // If upsert didn't return row, fetch it
                 if (!artistMap['Various Artists']) {
                     const { data: vaFetch } = await supabase

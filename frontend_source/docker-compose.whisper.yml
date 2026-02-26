@@ -1,0 +1,43 @@
+# ============================================================
+# Whisper ASR — Local Hebrew Speech-to-Text Service
+# Powered by: ahmetoner/whisper-asr-webservice
+# Port: 9000
+# Model: medium (best Hebrew accuracy / speed tradeoff on iGPU)
+#
+# Usage:
+#   docker compose -f docker-compose.whisper.yml up -d
+#
+# Test:
+#   curl -F "audio_file=@test.wav" "http://localhost:9000/asr?language=he&output=json"
+# ============================================================
+
+version: "3.8"
+
+services:
+  whisper-asr:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: icaffe-whisper-asr
+    ports:
+      - "9000:9000"
+    environment:
+      # Model: tiny | base | small | medium | large
+      # small = Best balance for local CPU-only processing
+      ASR_MODEL: small
+      # Force Hebrew as default language (can be overridden per-request)
+      ASR_ENGINE: openai_whisper
+    volumes:
+      # Cache the model weights so it doesn't re-download on restart
+      - whisper_model_cache:/root/.cache/whisper
+    restart: unless-stopped
+    # Resource limits
+    mem_limit: 4g
+    cpus: "3"
+  # Optional: GPU-accelerated variant (uncomment if CUDA/ROCm available)
+  # whisper-asr-gpu:
+  #   image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+  #   ...
+  #   runtime: nvidia  # or rocm for AMD
+
+volumes:
+  whisper_model_cache:
+    driver: local

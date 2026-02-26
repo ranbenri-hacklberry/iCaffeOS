@@ -41,6 +41,14 @@ export const MusicProvider = ({ children }) => {
     // Loading states
     const [isLoading, setIsLoading] = useState(false);
 
+    // Playback Destination (local browser or server output)
+    const [playbackTarget, setPlaybackTarget] = useState(localStorage.getItem('music_playback_target') || 'local');
+
+    // Persist target selection
+    useEffect(() => {
+        localStorage.setItem('music_playback_target', playbackTarget);
+    }, [playbackTarget]);
+
     // Initial Load: Restore queue from Dexie
     useEffect(() => {
         const initQueue = async () => {
@@ -773,6 +781,8 @@ export const MusicProvider = ({ children }) => {
         removeFromQueue,
         addToQueue,
         addPlaylistToQueue,
+        playbackTarget,
+        setPlaybackTarget,
 
         // Refs
         audioRef: activeAudio === 1 ? audio1Ref : audio2Ref

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { House } from 'lucide-react';
+import { House, Speaker, Tablet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import MiniMusicPlayer from './music/MiniMusicPlayer';
 import ConnectivityStatus from './ConnectivityStatus';
+import { useMusic } from '../context/MusicContext';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -20,7 +21,10 @@ const UnifiedHeader = ({
 }) => {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
+    const { playbackTarget, setPlaybackTarget } = useMusic();
     const [time, setTime] = useState(new Date());
+
+    const isMusicPage = location.pathname.startsWith('/music');
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -74,8 +78,8 @@ const UnifiedHeader = ({
                                         key={tab.id}
                                         onClick={tab.onClick}
                                         className={`px-4 rounded-xl text-sm font-bold flex items-center gap-2 transition-all h-full justify-center min-w-max outline-none focus:outline-none ${tab.isActive
-                                                ? `bg-white shadow-sm ring-1 ring-slate-900/5 ${activeColor}`
-                                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                            ? `bg-white shadow-sm ring-1 ring-slate-900/5 ${activeColor}`
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                             }`}
                                     >
                                         {tab.icon}
@@ -111,6 +115,26 @@ const UnifiedHeader = ({
                     {/* 1. MUSIC PLAYER (Rendered to the right of children in RTL) */}
                     {showMusicPlayer && (
                         <div className="flex items-center gap-3">
+                            {/* Audio Output Selector (Only on Music Page) */}
+                            {isMusicPage && (
+                                <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md shrink-0">
+                                    <button
+                                        onClick={() => setPlaybackTarget('local')}
+                                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${playbackTarget === 'local' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+                                        title="ניגון במכשיר זה (Local)"
+                                    >
+                                        <Tablet size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => setPlaybackTarget('server')}
+                                        className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${playbackTarget === 'server' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
+                                        title="ניגון ברמקולים של הבית (Ryzen AI)"
+                                    >
+                                        <Speaker size={18} />
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="shrink-0 scale-95 origin-left">
                                 <MiniMusicPlayer forceDark={forceMusicDark} />
                             </div>
