@@ -333,6 +333,19 @@ export const MusicProvider = ({ children }) => {
             // Check if file is reachable (optional head check or just rely on error handler)
             // For now, relies on error handler.
 
+            // Handle Server-Side Playback
+            if (playbackTarget === 'server') {
+                console.log('🔈 Sending play command to Server:', song.title);
+                fetch(`${MUSIC_API_URL}/music/play-server`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: song.file_path })
+                });
+                setCurrentSong(song);
+                setIsPlaying(true);
+                return;
+            }
+
             // Perform Crossfade if requested AND current player is actually playing (check DOM directly)
             const isActuallyPlaying = !currentPlayer.paused;
             console.log(`🎵 playSong: Crossfade=${useCrossfade}, IsPlaying=${isActuallyPlaying} (State: ${isPlaying})`);
@@ -463,19 +476,39 @@ export const MusicProvider = ({ children }) => {
 
     // Play/Pause toggle
     const togglePlay = useCallback(() => {
+        if (playbackTarget === 'server') {
+            if (isPlaying) {
+                fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' });
+                setIsPlaying(false);
+            } else if (currentSong) {
+                fetch(`${MUSIC_API_URL}/music/play-server`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: currentSong.file_path })
+                });
+                setIsPlaying(true);
+            }
+            return;
+        }
+
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         if (audio.paused) {
             audio.play();
         } else {
             audio.pause();
         }
-    }, [activeAudio]);
+    }, [activeAudio, playbackTarget, isPlaying, currentSong]);
 
     // Pause
     const pause = useCallback(() => {
+        if (playbackTarget === 'server') {
+            fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' });
+            setIsPlaying(false);
+            return;
+        }
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         audio.pause();
-    }, [activeAudio]);
+    }, [activeAudio, playbackTarget]);
 
     // Resume
     const resume = useCallback(() => {
