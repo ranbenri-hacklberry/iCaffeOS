@@ -17,7 +17,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
     const [lastSyncLabel, setLastSyncLabel] = useState('');
     const [pendingCount, setPendingCount] = useState(0);
     const [isN150Down, setIsN150Down] = useState(false);
-    const [machineName, setMachineName] = useState('N150');
+    const [machineName, setMachineName] = useState('Ryzen AI');
 
     // Hide on Manager/Admin pages (only relevant for fixed mode usually)
     // ALSO hide on pages that use UnifiedHeader (to avoid duplication)
@@ -60,7 +60,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
 
                     if (healthResp.ok) {
                         const health = await healthResp.json();
-                        let name = health.hostname || 'N150';
+                        let name = health.hostname || 'Ryzen AI';
 
                         // Smart Override for Mac / Local Dev
                         const isMac = /Macintosh/i.test(navigator.userAgent);
@@ -76,7 +76,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                         }
                         // 2. Otherwise use what the server says
                         else {
-                            const cleanName = (name || health.hostname || 'N150').split('.')[0];
+                            const cleanName = (name || health.hostname || 'Ryzen AI').split('.')[0];
                             setMachineName(cleanName === 'Mac M1' ? 'Mac M1' : cleanName);
                         }
                     }
@@ -141,7 +141,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                         <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isN150Down ? 'bg-red-500' : (pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500')}`}></span>
                     </div>
                     <span className={`text-[10px] font-bold leading-none ${isN150Down ? 'text-red-800' : (pendingCount > 0 ? 'text-amber-800' : 'text-emerald-700')}`}>
-                        {isN150Down ? 'Offline' : (pendingCount > 0 ? `מסנכרן ${pendingCount}` : machineName)}
+                        {isN150Down ? 'Offline' : (pendingCount > 0 ? `מסנכרן ${pendingCount}` : (machineName === 'n150' ? 'Ryzen AI' : machineName))}
                     </span>
                 </div>
 

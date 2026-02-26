@@ -5,7 +5,7 @@ import "os";
 import "child_process";
 import "net";
 import "url";
-import "./index-BkiyCPhv.js";
+import "./index-C9VGoPNN.js";
 import "crypto";
 import "fs/promises";
 import "zlib";

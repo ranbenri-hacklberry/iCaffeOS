@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cortexFetch, CORTEX_API } from "../cortexApi";
 import { useCortexStore } from "../cortexStore";
+import EntitiesPanel from "./EntitiesPanel";
 
 const VERTICAL_META = {
   IT_LAB: { icon: "🖥️", label: "Devices" },
@@ -248,9 +249,44 @@ function DocumentsSection({ recordId }) {
   );
 }
 
-// ── Main ───────────────────────────────────────────────────────────────
+// ── Tab strip ──────────────────────────────────────────────────────────
 
-export default function ContextPanel({ businessType, selectedRecordId, onSelectRecord }) {
+const TABS = [
+  { id: "records",   label: "Records"  },
+  { id: "entities",  label: "Entities" },
+];
+
+function TabStrip({ active, onChange }) {
+  return (
+    <div className="shrink-0 flex gap-1 px-4 pt-3 pb-0">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          className={[
+            "relative px-3 py-1.5 rounded-lg text-xs font-medium transition",
+            active === tab.id
+              ? "text-white bg-white/[0.10]"
+              : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.05]",
+          ].join(" ")}
+        >
+          {tab.label}
+          {active === tab.id && (
+            <motion.span
+              layoutId="ctx-tab-indicator"
+              className="absolute inset-0 rounded-lg ring-1 ring-indigo-500/50 bg-indigo-500/10"
+              transition={{ duration: 0.2 }}
+            />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── RecordsPanel (extracted from original ContextPanel body) ────────────
+
+function RecordsPanel({ businessType, selectedRecordId, onSelectRecord }) {
   const meta = VERTICAL_META[businessType] ?? { icon: "📋", label: "Records" };
 
   const [records, setRecords] = useState([]);
@@ -443,6 +479,50 @@ export default function ContextPanel({ businessType, selectedRecordId, onSelectR
             </AnimatePresence>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── ContextPanel (with tab navigation) ─────────────────────────────────
+
+export default function ContextPanel({ businessType, selectedRecordId, onSelectRecord }) {
+  const [activeTab, setActiveTab] = useState("records");
+
+  return (
+    <div className="flex flex-col h-full">
+      <TabStrip active={activeTab} onChange={setActiveTab} />
+
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        <AnimatePresence mode="wait" initial={false}>
+          {activeTab === "records" ? (
+            <motion.div
+              key="records"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.18, ease: "easeInOut" }}
+              className="absolute inset-0 overflow-y-auto"
+            >
+              <RecordsPanel
+                businessType={businessType}
+                selectedRecordId={selectedRecordId}
+                onSelectRecord={onSelectRecord}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="entities"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.18, ease: "easeInOut" }}
+              className="absolute inset-0 overflow-y-auto"
+            >
+              <EntitiesPanel />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -130,13 +130,18 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     const shouldShow = useCallback(() => {
         const path = location.pathname;
 
+        // Explicitly hide on auth screens
+        if (path === '/login' || path === '/mode-selection' || path.startsWith('/login')) {
+            return false;
+        }
+
         // Manager routes - always visible
-        if (ALLOWED_ROUTES.manager.some(route => path.startsWith(route))) {
+        if (ALLOWED_ROUTES.manager.some(route => route === '/' ? path === '/' : path.startsWith(route))) {
             return true;
         }
 
         // Owner routes - only for owners/admins
-        if (isOwner && ALLOWED_ROUTES.owner.some(route => path.startsWith(route))) {
+        if (isOwner && ALLOWED_ROUTES.owner.some(route => route === '/' ? path === '/' : path.startsWith(route))) {
             return true;
         }
 
@@ -163,10 +168,45 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     const [loading, setLoading] = useState(false);
 
     // Provider State
-    const [provider, setProvider] = useState<'local' | 'google' | 'anthropic' | 'xai'>('google');
-    const [model, setModel] = useState('gemini-3-flash-preview');
+    const [activeTab, setActiveTab] = useState<'local' | 'api'>('local');
+    const [availableProviders, setAvailableProviders] = useState<string[]>(['local']);
+    const [provider, setProvider] = useState<'local' | 'google' | 'anthropic' | 'xai'>('local');
+    const [model, setModel] = useState('gemma:2b');
     const [localAvailable, setLocalAvailable] = useState(true);
     const [lastUsage, setLastUsage] = useState<any>(null); // For token tracking
+
+    // Fetch available keys to filter API models (V-5017: Manual device mode / key filtering)
+    useEffect(() => {
+        if (!businessId) return;
+        const fetchKeys = async () => {
+            try {
+                const { data, error } = await supabase.from('businesses')
+                    .select('gemini_api_key, claude_api_key, grok_api_key')
+                    .eq('id', businessId)
+                    .single();
+
+                if (error) throw error;
+
+                const providers = ['local'];
+                if (data?.gemini_api_key) providers.push('google');
+                if (data?.claude_api_key) providers.push('anthropic');
+                if (data?.grok_api_key) providers.push('xai');
+
+                setAvailableProviders(providers);
+
+                // If currently on an API provider that is no longer available, switch to local
+                if (activeTab === 'api' && !providers.includes(provider)) {
+                    setProvider('local');
+                    setModel('gemma:2b');
+                    setActiveTab('local');
+                }
+            } catch (err) {
+                console.warn('⚠️ Could not check API keys for Maya:', err);
+                setAvailableProviders(['local']);
+            }
+        };
+        fetchKeys();
+    }, [businessId, activeTab, provider]);
 
     // 🎙️ Voice Transcription State
     const [isListening, setIsListening] = useState(false);
@@ -191,9 +231,9 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
             { id: 'grok-code-fast-1', name: 'Grok Code Fast 1' }
         ],
         'local': [
+            { id: 'gemma:2b', name: 'Google Gemma 3B (Backend)' },
             { id: 'dictalm-hebrew', name: 'DictaLM 3.0 (1.7B)' },
             { id: 'llama3.2', name: 'Llama 3.2 (3B)' },
-            { id: 'deepseek-r1:7b', name: 'DeepSeek R1 (7B)' },
             { id: 'maya', name: 'Maya Custom (2.0GB)' }
         ]
     };
@@ -842,10 +882,46 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                             </div>
 
                             <div className="flex items-center gap-1">
-                                {/* Model Selector Dropdown */}
+                                {/* Tab Switching (V-5017) */}
                                 {!isMinimized && (
-                                    <div className="flex items-center gap-2 bg-white/10 rounded-lg p-1 ml-2">
-                                        <Cpu className="w-3.5 h-3.5 text-indigo-300 ml-1" />
+                                    <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1 ml-4 border border-white/5 shadow-inner">
+                                        <button
+                                            onClick={() => {
+                                                setActiveTab('local');
+                                                setProvider('local');
+                                                setModel('gemma:2b');
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${activeTab === 'local'
+                                                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                                                    : 'text-white/40 hover:text-white/70'
+                                                }`}
+                                        >
+                                            LOCAL
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setActiveTab('api');
+                                                // Default to first available API provider
+                                                const firstApi = availableProviders.find(p => p !== 'local');
+                                                if (firstApi) {
+                                                    setProvider(firstApi as any);
+                                                    setModel(AI_MODELS[firstApi as keyof typeof AI_MODELS][0].id);
+                                                }
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${activeTab === 'api'
+                                                    ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg'
+                                                    : 'text-white/40 hover:text-white/70'
+                                                }`}
+                                        >
+                                            API
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Model Selector Dropdown - Only show relevant to active tab */}
+                                {!isMinimized && (
+                                    <div className="flex items-center gap-2 bg-white/5 rounded-xl border border-white/10 p-1 ml-2 backdrop-blur-md">
+                                        <Cpu className={`w-3.5 h-3.5 ${activeTab === 'local' ? 'text-blue-400' : 'text-purple-400'} ml-1`} />
                                         <div className="relative">
                                             <select
                                                 value={JSON.stringify({ p: provider, m: model })}
@@ -854,36 +930,47 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                     setProvider(val.p);
                                                     setModel(val.m);
                                                 }}
-                                                className="appearance-none bg-transparent text-xs font-medium text-white pl-2 pr-6 py-1 focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
+                                                className="appearance-none bg-transparent text-[10px] font-bold text-white/90 pl-1 pr-5 py-1 focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-white"
                                             >
-                                                <optgroup label="Anthropic (Claude)">
-                                                    {AI_MODELS['anthropic'].map(m => (
-                                                        <option key={m.id} value={JSON.stringify({ p: 'anthropic', m: m.id })}>{m.name}</option>
-                                                    ))}
-                                                </optgroup>
-                                                <optgroup label="Google (Gemini)">
-                                                    {AI_MODELS['google'].map(m => (
-                                                        <option key={m.id} value={JSON.stringify({ p: 'google', m: m.id })}>{m.name}</option>
-                                                    ))}
-                                                </optgroup>
-                                                <optgroup label="xAI (Grok)">
-                                                    {AI_MODELS['xai'].map(m => (
-                                                        <option key={m.id} value={JSON.stringify({ p: 'xai', m: m.id })}>{m.name}</option>
-                                                    ))}
-                                                </optgroup>
-                                                <optgroup label="Local (Ollama)">
-                                                    {AI_MODELS['local'].map(m => (
-                                                        <option key={m.id} value={JSON.stringify({ p: 'local', m: m.id })}>{m.name}</option>
-                                                    ))}
-                                                </optgroup>
+                                                {activeTab === 'local' ? (
+                                                    <optgroup label="Local (Ollama)">
+                                                        {AI_MODELS['local'].map(m => (
+                                                            <option key={m.id} value={JSON.stringify({ p: 'local', m: m.id })}>{m.name}</option>
+                                                        ))}
+                                                    </optgroup>
+                                                ) : (
+                                                    <>
+                                                        {availableProviders.includes('anthropic') && (
+                                                            <optgroup label="Anthropic (Claude)">
+                                                                {AI_MODELS['anthropic'].map(m => (
+                                                                    <option key={m.id} value={JSON.stringify({ p: 'anthropic', m: m.id })}>{m.name}</option>
+                                                                ))}
+                                                            </optgroup>
+                                                        )}
+                                                        {availableProviders.includes('google') && (
+                                                            <optgroup label="Google (Gemini)">
+                                                                {AI_MODELS['google'].map(m => (
+                                                                    <option key={m.id} value={JSON.stringify({ p: 'google', m: m.id })}>{m.name}</option>
+                                                                ))}
+                                                            </optgroup>
+                                                        )}
+                                                        {availableProviders.includes('xai') && (
+                                                            <optgroup label="xAI (Grok)">
+                                                                {AI_MODELS['xai'].map(m => (
+                                                                    <option key={m.id} value={JSON.stringify({ p: 'xai', m: m.id })}>{m.name}</option>
+                                                                ))}
+                                                            </optgroup>
+                                                        )}
+                                                    </>
+                                                )}
                                             </select>
                                             <div className="absolute inset-y-0 right-0 flex items-center pr-1 pointer-events-none">
-                                                <ChevronDown className="w-3 h-3 text-white/50" />
+                                                <ChevronDown className="w-2.5 h-2.5 text-white/30" />
                                             </div>
                                         </div>
 
                                         {/* Status Dot */}
-                                        <div className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`} />
+                                        <div className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400 opacity-80'}`} />
                                     </div>
                                 )}
                                 <motion.button
@@ -964,7 +1051,7 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
                                                             }}
                                                             className="px-3 py-2 bg-white/10 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-xl text-white text-xs font-medium flex items-center gap-2"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
                                                             שעון נוכחות
                                                         </motion.button>
 

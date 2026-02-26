@@ -1,8 +1,10 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCortexStream } from "../useCortexStream";
+import { useCortexStore } from "../cortexStore";
 import MessageBubble from "./MessageBubble";
 import SystemPulse from "./SystemPulse";
+import { supabase } from "../../../lib/supabase";
 
 const SCROLL_THRESHOLD = 120;
 
@@ -42,6 +44,28 @@ export default function ChatPanel({ tenant, selectedRecordId, showContextToggle 
   } = useCortexStream({ tenant, selectedRecordId });
 
   const [input, setInput] = useState("");
+
+  // ── Golden Answer: save a corrected AI response as training data ──────
+  const handleSaveGolden = useCallback(async (messageId, goldenAnswer) => {
+    // Find the preceding user message to use as the "query"
+    const msgIndex  = messages.findIndex((m) => m.id === messageId);
+    const userMsg   = messages.slice(0, msgIndex).reverse().find((m) => m.role === "user");
+    const query     = userMsg?.content ?? "Unknown query";
+    const bizId     = tenant?.id ?? useCortexStore.getState().tenant?.id;
+
+    if (!bizId) throw new Error("No business ID available");
+
+    const { error: rpcErr } = await supabase.rpc("fn_save_training_data", {
+      p_business_id:   bizId,
+      p_query:         query,
+      p_golden_answer: goldenAnswer,
+      p_skill_slug:    null,    // TODO: pass active skill slug from tenant config
+      p_source_msg_id: messageId,
+      p_quality_score: 5,
+    });
+
+    if (rpcErr) throw rpcErr;
+  }, [messages, tenant]);
 
   const threadRef = useRef(null);
   const bottomRef = useRef(null);
@@ -141,7 +165,13 @@ export default function ChatPanel({ tenant, selectedRecordId, showContextToggle 
             </motion.div>
           )}
         </AnimatePresence>
-        {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
+        {messages.map((msg) => (
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            onSaveGolden={msg.role === "assistant" ? handleSaveGolden : undefined}
+          />
+        ))}
         <div ref={bottomRef} />
       </div>
 

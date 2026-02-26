@@ -55,44 +55,34 @@ const BusinessNodeCard = ({ business, onClick, onDiagnostics }) => {
     }, [business.id]);
 
     useEffect(() => {
-        const probeNodes = async () => {
-            const ports = [4028, 8081, 54321];
-            const nextHealth = { ...health };
+        const fetchHealth = async () => {
+            try {
+                const baseUrl = window.location.port === '8081' ? '' : `http://${window.location.hostname}:8081`;
+                const response = await fetch(`${baseUrl}/api/system/health`);
 
-            for (const port of ports) {
-                try {
-                    const isSameOrigin = window.location.port === port.toString();
-                    const baseUrl = isSameOrigin ? '' : `http://${window.location.hostname}:${port}`;
-                    const url = port === 8081 ? `/api/system/validate-integrations?businessId=${business.id}` : (port === 54321 ? '/rest/v1/' : '/');
-
-                    const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 2000);
-
-                    const response = await fetch(`${baseUrl}${url}`, {
-                        method: port === 8081 ? 'GET' : 'HEAD',
-                        signal: controller.signal
+                if (response.ok) {
+                    const data = await response.json();
+                    setHealth({
+                        4028: 'online', // Frontend is online
+                        8081: 'online', // Backend is online
+                        54321: data.services?.database === 'online' ? 'online' : 'offline'
                     });
-
-                    if (port === 8081 && response.ok) {
-                        const data = await response.json();
-                        setMetrics({
-                            temp: data.checks?.hardware?.temp || 'N/A',
-                            node: data.checks?.hardware?.node || 'N150',
-                            integrations: data.checks || {}
-                        });
-                    }
-
-                    clearTimeout(timeout);
-                    nextHealth[port] = response.ok ? 'online' : 'offline';
-                } catch (e) {
-                    nextHealth[port] = 'offline';
+                    setMetrics(prev => ({
+                        ...prev,
+                        temp: data.services?.temp || prev.temp,
+                        integrations: data.services || {}
+                    }));
+                } else {
+                    setHealth({ 4028: 'online', 8081: 'offline', 54321: 'offline' });
                 }
+                setLastFetch(new Date());
+            } catch (e) {
+                setHealth({ 4028: 'online', 8081: 'offline', 54321: 'offline' });
             }
-            setHealth(nextHealth);
         };
 
-        probeNodes();
-        const interval = setInterval(probeNodes, 30000);
+        fetchHealth();
+        const interval = setInterval(fetchHealth, 15000);
         return () => clearInterval(interval);
     }, [business.id]);
 
@@ -194,12 +184,11 @@ const BusinessNodeCard = ({ business, onClick, onDiagnostics }) => {
 
                     {/* Integrated Keys Status (Text Only) */}
                     <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <KeyText label="Gemini" status={metrics.integrations?.gemini?.status === 'ok'} />
-                        <KeyText label="Grok" status={metrics.integrations?.grok?.status === 'ok'} />
-                        <KeyText label="Claude" status={metrics.integrations?.claude?.status === 'ok'} />
-                        <KeyText label="Ollama" status={metrics.integrations?.ollama?.status === 'ok'} />
-                        <KeyText label="YouTube" status={metrics.integrations?.youtube?.status === 'ok'} />
-                        <KeyText label="WA" status={metrics.integrations?.whatsapp?.status === 'ok'} />
+                        <KeyText label="Gemini" status={metrics.integrations?.gemini === 'online'} />
+                        <KeyText label="Gateway" status={metrics.integrations?.cortex_gateway === 'online'} />
+                        <KeyText label="Ollama" status={metrics.integrations?.ollama === 'online'} />
+                        <KeyText label="DB" status={metrics.integrations?.database === 'online'} />
+                        <KeyText label="BE" status={health[8081] === 'online'} />
                     </div>
                 </div>
 
