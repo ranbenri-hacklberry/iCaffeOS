@@ -363,7 +363,7 @@ import { mayaTools, toolHandler } from '../utils/mayaTools.js';
 /**
  * צ'אט עם Gemini (תומך ב-Tools)
  */
-async function chatWithGemini(messages, systemPrompt, businessId, tools = null) {
+async function chatWithGemini(messages, systemPrompt, businessId, tools = null, modelName = 'gemini-1.5-flash') {
     const apiKey = await getGeminiKey(businessId);
     if (!apiKey) {
         throw new Error('Gemini API key not configured');
@@ -372,7 +372,7 @@ async function chatWithGemini(messages, systemPrompt, businessId, tools = null) 
     const genAI = new GoogleGenerativeAI(apiKey);
 
     // Configure model with tools if provided (Super Admin only)
-    const modelParams = { model: 'gemini-1.5-flash' };
+    const modelParams = { model: modelName || 'gemini-1.5-flash' };
     if (tools) {
         modelParams.tools = [{ functionDeclarations: tools }];
     }
@@ -454,7 +454,7 @@ async function chatWithGemini(messages, systemPrompt, businessId, tools = null) 
 /**
  * צ'אט עם Maia - תומך בספקים שונים
  */
-export async function chatWithMaya(messages, businessId, provider = 'local', employee = null) {
+export async function chatWithMaya(messages, businessId, provider = 'local', employee = null, modelName = null) {
     console.log('═══════════════════════════════════════════════');
     console.log('🤖 Maya Chat');
     console.log('   Provider:', provider);
@@ -504,9 +504,9 @@ You are chatting with a SUPER ADMIN. You have access to the database via tools.
 
     // Use Gemini if requested OR if tools are needed (Ollama doesn't support tools yet in this code)
     if (provider === 'google' || provider === 'gemini' || availableTools) {
-        console.log('🌐 Using Google Gemini (Tools Active:', !!availableTools, ')');
+        console.log(`🌐 Using Google Gemini (${modelName || 'gemini-1.5-flash'}) (Tools Active: ${!!availableTools})`);
         try {
-            const response = await chatWithGemini(messages, finalSystemPrompt, businessId, availableTools);
+            const response = await chatWithGemini(messages, finalSystemPrompt, businessId, availableTools, modelName);
             console.log('✅ Gemini response:', response?.substring(0, 200));
             return response || 'לא קיבלתי תשובה מגוגל...';
         } catch (err) {
@@ -524,7 +524,7 @@ You are chatting with a SUPER ADMIN. You have access to the database via tools.
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: MODEL_NAME,
+                model: modelName || MODEL_NAME,
                 messages: allMessages,
                 stream: false
             })

@@ -883,7 +883,7 @@ DIAGNOSTICS:
                 await fetch(`${baseUrl}/api/admin/sync-cloud-to-local`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ businessId })
+                    body: JSON.stringify({ businessId, fullSync: true })
                 });
                 await new Promise(r => setTimeout(r, 2000));
                 addLog('✓ Cloud sync triggered', 'success');

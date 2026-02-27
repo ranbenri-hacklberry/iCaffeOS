@@ -11,8 +11,8 @@ import OpenAI from 'openai'; // For Grok (compatible API)
 import fetch from 'node-fetch'; // or built-in in Node 18+
 import { getProviderKey as getProviderKeyFromSecrets } from './secretsService.js';
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const MODEL_NAME = process.env.MAYA_MODEL || 'dictalm-hebrew';
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
+const MODEL_NAME = process.env.MAYA_MODEL || 'dictalm-hebrew:latest';
 console.log(`🤖 Maya Service using model: ${MODEL_NAME}`);
 const TIMEOUT_MS = parseInt(process.env.MAYA_TIMEOUT) || 30000;
 const DEFAULT_BUSINESS_ID = process.env.DEFAULT_BUSINESS_ID || '22222222-2222-2222-2222-222222222222';
@@ -474,7 +474,7 @@ async function chatWithGemini(messages, systemPrompt, businessId, modelName = 'g
 
     const chat = model.startChat({
         history,
-        systemInstruction: systemPrompt
+        systemInstruction: { parts: [{ text: systemPrompt }] }
     });
 
     const lastMessage = messages[messages.length - 1];
@@ -540,7 +540,7 @@ If asked about revenue, profits, or financial details, respond: "אני לא י�
 
         if (provider === 'google' || provider === 'gemini') {
             console.log(`🌐 Using Google Gemini (${model || 'default'})...`);
-            responseData = await chatWithGemini(messages, finalSystemPrompt, businessId, model || 'gemini-3-flash-preview');
+            responseData = await chatWithGemini(messages, finalSystemPrompt, businessId, model || 'gemini-1.5-flash');
         }
         else if (provider === 'anthropic' || provider === 'claude') {
             console.log(`🧠 Using Anthropic Claude (${model || 'default'})...`);
@@ -722,16 +722,25 @@ async function generateStoryCaption(vipName, items, businessId) {
 }
 
 export async function checkHealth() {
+    // Backend is always healthy if this code is running
+    const result = {
+        healthy: true,
+        localAvailable: false,
+        hasMaya: false,
+        url: OLLAMA_URL
+    };
+
     try {
         const res = await fetch(`${OLLAMA_URL}/api/tags`);
-        if (!res.ok) return { healthy: false };
-        const data = await res.json();
-        return {
-            healthy: true,
-            hasMaya: data.models?.some(m => m.name.includes(MODEL_NAME)),
-            url: OLLAMA_URL
-        };
+        if (res.ok) {
+            const data = await res.json();
+            result.localAvailable = true;
+            result.hasMaya = data.models?.some(m => m.name.includes(MODEL_NAME));
+        }
     } catch (e) {
-        return { healthy: false, error: e.message };
+        // Ollama not available, but backend is still healthy
+        result.localAvailable = false;
     }
+
+    return result;
 }

@@ -109,6 +109,52 @@ router.get('/health', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/maya/providers
+ * Securely check which AI providers are available for a business
+ */
+router.get('/providers', async (req, res) => {
+    try {
+        const { businessId } = req.query;
+        if (!businessId) return res.json(['local']);
+
+        const providers = ['local'];
+
+        // Check business_secrets table
+        const { data: secrets } = await supabase
+            .from('business_secrets')
+            .select('gemini_api_key, claude_api_key, grok_api_key')
+            .eq('business_id', businessId)
+            .single();
+
+        if (secrets) {
+            if (secrets.gemini_api_key) providers.push('google');
+            if (secrets.claude_api_key) providers.push('anthropic');
+            if (secrets.grok_api_key) providers.push('xai');
+        } else {
+            // Fallback to businesses table
+            const { data: biz } = await supabase
+                .from('businesses')
+                .select('gemini_api_key, claude_api_key, grok_api_key')
+                .eq('id', businessId)
+                .single();
+
+            if (biz) {
+                if (biz.gemini_api_key) providers.push('google');
+                if (biz.claude_api_key) providers.push('anthropic');
+                if (biz.grok_api_key) providers.push('xai');
+            }
+        }
+
+        res.json(providers);
+    } catch (err) {
+        console.warn('Providers fetch error:', err.message);
+        res.json(['local']);
+    }
+});
+
+
+
 // Chat with Maya (with history)
 router.post('/chat', async (req, res) => {
     try {

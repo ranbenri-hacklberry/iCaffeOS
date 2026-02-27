@@ -305,9 +305,24 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
             }));
     }, [rawMenuData, getCategoryId]);
 
-    // 🎯 Filter out categories that have no items
+    // 🎯 Filter out categories that have no items and deduplicate
     const availableCategories = useMemo(() => {
-        if (menuLoading && categories.length > 0) return categories;
+        const deduplicate = (cats) => {
+            const unique = [];
+            const seen = new Set();
+            for (const c of cats) {
+                const name = c.name_he || c.name;
+                if (name && !seen.has(name)) {
+                    seen.add(name);
+                    unique.push(c);
+                }
+            }
+            return unique;
+        };
+
+        if (menuLoading && categories.length > 0) {
+            return deduplicate([...categories].sort((a, b) => (a.position || 0) - (b.position || 0)));
+        }
 
         const usedCategories = new Set();
         menuItems.forEach(item => {
@@ -315,9 +330,16 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
             if (item.db_category) usedCategories.add(item.db_category);
         });
 
-        return categories
-            .filter(cat => usedCategories.has(cat.id) || usedCategories.has(cat.name) || usedCategories.has(cat.name_he) || usedCategories.has(cat.db_name))
-            .sort((a, b) => (a.position || 0) - (b.position || 0));
+        // 1. Filter out categories not in use
+        const filtered = categories.filter(cat =>
+            usedCategories.has(cat.id) ||
+            usedCategories.has(cat.name) ||
+            usedCategories.has(cat.name_he) ||
+            usedCategories.has(cat.db_name)
+        );
+
+        // 2. Deduplicate visually by name to avoid empty ghost tabs
+        return deduplicate(filtered).sort((a, b) => (a.position || 0) - (b.position || 0));
     }, [categories, menuItems, menuLoading]);
 
     // 🚀 Handle initial category selection or invalid selection

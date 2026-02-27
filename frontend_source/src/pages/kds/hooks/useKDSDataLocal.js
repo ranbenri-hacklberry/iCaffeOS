@@ -12,7 +12,7 @@
  * - Automatic real-time sync via OfflineContext
  */
 
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/context/AuthContext';
 import db from '@/db/database';
@@ -424,7 +424,7 @@ export const useKDSDataLocal = () => {
     // ACTIONS - All go through offline queue
     // ============================================
 
-    const updateItemStatus = async (itemId, newStatus) => {
+    const updateItemStatus = useCallback(async (itemId, newStatus) => {
         console.log(`🔄 [KDS Local] Updating item ${itemId} to status: ${newStatus}`);
 
         // 1. Update Dexie immediately (Optimistic UI)
@@ -438,9 +438,9 @@ export const useKDSDataLocal = () => {
         const { supabase } = await import('@/lib/supabase');
         supabase.from('order_items').update({ item_status: newStatus, updated_at: new Date().toISOString() }).eq('id', itemId)
             .then(({ error }) => error ? console.error(`❌ Sync failed:`, error) : console.log(`📤 Synced item ${itemId}`));
-    };
+    }, []);
 
-    const updateOrderStatus = async (orderId, currentStatus, targetStatusOverride = null) => {
+    const updateOrderStatus = useCallback(async (orderId, currentStatus, targetStatusOverride = null) => {
         const order = await db.orders.get(orderId);
         if (!order) return;
 
@@ -527,9 +527,9 @@ export const useKDSDataLocal = () => {
                 db.orders.update(orderId, { pending_sync: false });
             }
         });
-    };
+    }, [handleSendSms]);
 
-    const fireItem = async (itemId) => {
+    const fireItem = useCallback(async (itemId) => {
         const payload = {
             item_status: 'in_progress',
             item_fired_at: new Date().toISOString()
@@ -542,15 +542,15 @@ export const useKDSDataLocal = () => {
         const { supabase } = await import('@/lib/supabase');
         supabase.from('order_items').update(payload).eq('id', itemId)
             .then(({ error }) => error ? console.error(`❌ Sync failed:`, error) : console.log(`📤 Synced fire item ${itemId}`));
-    };
+    }, []);
 
-    const handleFireItems = async (orderId, itemIds) => {
+    const handleFireItems = useCallback(async (orderId, itemIds) => {
         for (const itemId of itemIds) {
             await fireItem(itemId);
         }
-    };
+    }, [fireItem]);
 
-    const handleReadyItems = async (orderId, itemIds) => {
+    const handleReadyItems = useCallback(async (orderId, itemIds) => {
         for (const itemId of itemIds) {
             await updateItemStatus(itemId, 'ready');
         }
@@ -558,8 +558,8 @@ export const useKDSDataLocal = () => {
         // 📱 Check if ALL items in the order are now ready/completed
         // If so, and the order wasn't ready before, send SMS
         try {
-            const orderItems = await db.order_items.where('order_id').equals(orderId).toArray();
-            const allReady = orderItems.every(i => ['ready', 'completed', 'cancelled'].includes(i.item_status));
+            const oItems = await db.order_items.where('order_id').equals(orderId).toArray();
+            const allReady = oItems.every(i => ['ready', 'completed', 'cancelled'].includes(i.item_status));
 
             if (allReady) {
                 const order = await db.orders.get(orderId);
@@ -581,9 +581,9 @@ export const useKDSDataLocal = () => {
         } catch (e) {
             console.error('Error in SMS/Ready check:', e);
         }
-    };
+    }, [updateItemStatus, updateOrderStatus, handleSendSms]);
 
-    const handleToggleEarlyDelivered = async (orderId, itemId, currentValue) => {
+    const handleToggleEarlyDelivered = useCallback(async (orderId, itemId, currentValue) => {
         const newValue = !currentValue;
         console.log(`🔄 [KDS Local] Toggling early delivery for item ${itemId}: ${currentValue} -> ${newValue}`);
 
@@ -602,13 +602,13 @@ export const useKDSDataLocal = () => {
             if (error) console.error(`❌ Early Delivered Sync failed:`, error);
             else console.log(`📤 Synced early delivery for ${itemId}`);
         });
-    };
+    }, []);
 
-    const handleCancelOrder = async (orderId) => {
+    const handleCancelOrder = useCallback(async (orderId) => {
         await updateOrderStatus(orderId, null, 'cancelled');
-    };
+    }, [updateOrderStatus]);
 
-    const handleConfirmPayment = async (orderId, paymentMethod) => {
+    const handleConfirmPayment = useCallback(async (orderId, paymentMethod) => {
         const payload = {
             is_paid: true,
             payment_method: paymentMethod,
@@ -623,101 +623,122 @@ export const useKDSDataLocal = () => {
         const { supabase } = await import('@/lib/supabase');
         supabase.from('orders').update(payload).eq('id', orderId)
             .then(({ error }) => error ? console.error(`❌ Sync failed:`, error) : console.log(`📤 Synced payment ${orderId}`));
-    };
+    }, []);
 
-    const fetchHistoryOrders = async (selectedDate, signal) => {
+    const fetchHistoryOrders = useCallback(async (selectedDate, signal) => {
+        if (!businessId) return [];
+
         const startOfDay = new Date(selectedDate);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(selectedDate);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // 1. Try Local First
-        let orders = await db.orders
-            .where('business_id')
-            .equals(businessId)
-            .filter(o => {
-                const createdAtTime = new Date(o.created_at).getTime();
-                return createdAtTime >= startOfDay.getTime() && createdAtTime <= endOfDay.getTime();
-            })
+        const startISO = startOfDay.toISOString();
+        const endISO = endOfDay.toISOString();
+
+        console.log(`📜 [KDS History] Fetching for ${selectedDate.toDateString()} [${startISO} to ${endISO}]`);
+
+        // 1. Try Local First using composite index if available
+        let ordersList = await db.orders
+            .where('[business_id+created_at]')
+            .between([businessId, startISO], [businessId, endISO])
             .toArray();
 
         // 2. If nothing found locally (and we are online), try to fetch from server
-        // This handles the case where history hasn't been synced to this device yet
-        if (orders.length === 0 && navigator.onLine) {
-            console.log(`📜 [KDS History] No local orders for ${selectedDate}, attempting server fetch...`);
+        if (ordersList.length === 0 && navigator.onLine) {
+            console.log(`📜 [KDS History] No local orders, attempting server fetch for biz ${businessId}...`);
             try {
-                // We use the existing sync service but we might need a specific "fetch history" RPC if syncOrders is limited.
-                // For now, let's assume syncOrders brings in enough data or we rely on the broader sync.
-                // Actually, let's manually fetch from Supabase to populate Dexie for this date!
                 const { supabase } = await import('@/lib/supabase');
+                // Use get_orders_history which returns ALL orders (history + active) for the period
+                // It also returns nested items_detail, so we don't need a separate fetch!
                 const { data: serverOrders, error } = await supabase
-                    .rpc('get_kds_orders', {
-                        p_business_id: businessId,
-                        p_date: startOfDay.toISOString()
+                    .rpc('get_orders_history', {
+                        p_from_date: startISO,
+                        p_to_date: endISO,
+                        p_business_id: businessId
                     });
 
-                if (!error && serverOrders && serverOrders.length > 0) {
-                    console.log(`📥 [KDS History] Fetched ${serverOrders.length} orders from server. Fetching items...`);
+                if (error) throw error;
 
-                    // 1. Save Orders
-                    await db.orders.bulkPut(serverOrders.map(o => ({
-                        ...o,
-                        is_offline: false,
-                        pending_sync: false
-                    })));
+                if (serverOrders && serverOrders.length > 0) {
+                    console.log(`📥 [KDS History] Fetched ${serverOrders.length} orders from server.`);
 
-                    // 2. Fetch & Save Items
-                    const orderIds = serverOrders.map(o => o.id);
-                    const { data: serverItems } = await supabase
-                        .from('order_items')
-                        .select('*')
-                        .in('order_id', orderIds);
+                    // 1. Prepare Orders and Items for bulk saving
+                    const ordersToSave = [];
+                    const itemsToSave = [];
 
-                    if (serverItems && serverItems.length > 0) {
-                        console.log(`__ [KDS History] Saving ${serverItems.length} items to Dexie...`);
-                        await db.order_items.bulkPut(serverItems);
+                    serverOrders.forEach(order => {
+                        const { items_detail, ...orderData } = order;
+                        ordersToSave.push({
+                            ...orderData,
+                            business_id: businessId,
+                            is_offline: false,
+                            pending_sync: false,
+                            updated_at: orderData.updated_at || new Date().toISOString()
+                        });
+
+                        if (items_detail && Array.isArray(items_detail)) {
+                            items_detail.forEach(item => {
+                                itemsToSave.push({
+                                    ...item,
+                                    order_id: orderData.id // Ensure linkage
+                                });
+                            });
+                        }
+                    });
+
+                    // 2. Save both to Dexie
+                    await db.orders.bulkPut(ordersToSave);
+                    if (itemsToSave.length > 0) {
+                        console.log(`__ [KDS History] Saving ${itemsToSave.length} nested items to Dexie...`);
+                        await db.order_items.bulkPut(itemsToSave);
                     }
 
-                    // Re-query Dexie
-                    orders = await db.orders
-                        .where('business_id')
-                        .equals(businessId)
-                        .filter(o => {
-                            const createdAtTime = new Date(o.created_at).getTime();
-                            return createdAtTime >= startOfDay.getTime() && createdAtTime <= endOfDay.getTime();
-                        })
+                    // Re-query Dexie to reflect saved data
+                    ordersList = await db.orders
+                        .where('[business_id+created_at]')
+                        .between([businessId, startISO], [businessId, endISO])
                         .toArray();
                 }
             } catch (err) {
-                console.warn('Failed to fetch history from server:', err);
+                console.warn('❌ Failed to fetch history from server:', err);
             }
         }
 
-        console.log(`📜 [KDS History] Final count: ${orders.length} orders for date ${selectedDate}`);
+        console.log(`📜 [KDS History] Final count: ${ordersList.length} orders`);
 
+        if (ordersList.length === 0) return [];
 
         // Get items for these orders
-        const orderIds = orders.map(o => o.id);
-        const items = await db.order_items
+        const orderIds = ordersList.map(o => o.id);
+        const allItems = await db.order_items
             .filter(item => orderIds.some(oid => String(oid) === String(item.order_id)))
             .toArray();
 
-        // Process similar to active orders
+        const customerIds = [...new Set(ordersList.map(o => o.customer_id).filter(Boolean))];
+        const customersMap = await db.customers
+            .where('id').anyOf(customerIds)
+            .toArray()
+            .then(custs => new Map(custs.map(c => [c.id, c])));
+
+        // Process for UI
         const menuItemsMap = await db.menu_items.toArray().then(items =>
             new Map(items.map(m => [m.id, m]))
         );
 
-        return orders.map(order => {
-            const orderItems = items.filter(i => String(i.order_id) === String(order.id));
+        return ordersList.map(order => {
+            const orderItems = allItems.filter(i => String(i.order_id) === String(order.id));
+            const customer = customersMap.get(order.customer_id);
+            const derivedCustomerName = order.customer_name || order.customerName || customer?.name || customer?.phone_number || (order.order_number ? `#${order.order_number}` : 'אורח');
 
             return {
                 id: order.id,
                 order_number: order.order_number,
                 order_status: order.order_status,
                 orderNumber: order.order_number || `#${String(order.id).slice(0, 8)}`,
-                customerName: order.customer_name || order.customerName || (order.order_number ? `#${order.order_number}` : 'אורח'),
-                customer_name: order.customer_name || order.customerName,
-                customer_phone: order.customer_phone || order.customerPhone,
+                customerName: derivedCustomerName,
+                customer_name: derivedCustomerName,
+                customer_phone: order.customer_phone || order.customerPhone || customer?.phone_number,
                 isPaid: order.is_paid,
                 is_paid: order.is_paid,
                 totalAmount: order.total_amount,
@@ -726,47 +747,69 @@ export const useKDSDataLocal = () => {
                     hour: '2-digit',
                     minute: '2-digit'
                 }),
-                order_items: orderItems.map(item => {
+                items: orderItems.map(item => {
                     const menuItem = menuItemsMap.get(item.menu_item_id) || { name: 'Unknown', price: 0 };
+
+                    let parsedMods = [];
+                    try {
+                        if (typeof item.mods === 'string') {
+                            parsedMods = JSON.parse(item.mods);
+                        } else if (Array.isArray(item.mods)) {
+                            parsedMods = item.mods;
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    // Supress KDS Override tag from rendering in KDS
+                    if (Array.isArray(parsedMods)) {
+                        parsedMods = parsedMods.filter(m => {
+                            if (typeof m === 'string') return m !== '__KDS_OVERRIDE__';
+                            if (m && m.text) return m.text !== '__KDS_OVERRIDE__';
+                            if (m && m.valueName) return m.valueName !== '__KDS_OVERRIDE__';
+                            return true;
+                        });
+                    }
+
                     return {
                         id: item.id,
-                        menu_items: {
-                            name: menuItem.name,
-                            price: menuItem.price
-                        },
+                        name: menuItem.name || item.name, // Try falling back if present on item
+                        price: menuItem.price,
                         quantity: item.quantity,
-                        item_status: item.item_status
+                        item_status: item.item_status,
+                        modifiers: parsedMods,
+                        is_early_delivered: item.is_early_delivered
                     };
                 })
             };
         });
-    };
+    }, [businessId]);
 
-    const findNearestActiveDate = async (currentDate) => {
+    const findNearestActiveDate = useCallback(async (currentDate) => {
+        if (!businessId) return null;
         // Look for orders in the past 30 days
         const thirtyDaysAgo = new Date(currentDate);
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const orders = await db.orders
+        const ordersList = await db.orders
             .where('business_id')
             .equals(businessId)
             .filter(o => new Date(o.created_at) >= thirtyDaysAgo)
             .toArray();
 
-        if (orders.length === 0) return null;
+        if (ordersList.length === 0) return null;
 
         // Find the most recent date
-        const dates = orders.map(o => new Date(o.created_at));
+        const dates = ordersList.map(o => new Date(o.created_at));
         dates.sort((a, b) => b - a); // Descending
         return dates[0];
-    };
+    }, [businessId]);
 
-    const handleUndoLastAction = async () => {
+    const handleUndoLastAction = useCallback(async () => {
         // TODO: Implement undo via offline queue
         console.log('Undo not yet implemented in local-first version');
-    };
+    }, []);
 
-    const fetchOrders = async (signal) => {
+    const fetchOrders = useCallback(async (signal) => {
+        if (!businessId) return { success: false };
         console.log('🔄 [KDS] Refreshing - pulling latest from Supabase...');
         try {
             // Pull latest orders from Supabase to Dexie
@@ -783,9 +826,9 @@ export const useKDSDataLocal = () => {
             console.error('❌ [KDS] Refresh failed:', err);
             return { success: false, error: err.message };
         }
-    };
+    }, [businessId]);
 
-    return {
+    return useMemo(() => ({
         currentOrders: processedOrders.current || [],
         completedOrders: processedOrders.completed || [],
         isLoading: false,
@@ -811,5 +854,22 @@ export const useKDSDataLocal = () => {
         handleToggleEarlyDelivered,
         handleItemStatusChange: updateItemStatus,
         handleOrderStatusChange: updateOrderStatus
-    };
+    }), [
+        processedOrders,
+        smsToast,
+        setSmsToast,
+        isSendingSms,
+        updateItemStatus,
+        updateOrderStatus,
+        fireItem,
+        handleFireItems,
+        handleReadyItems,
+        handleCancelOrder,
+        handleConfirmPayment,
+        fetchOrders,
+        fetchHistoryOrders,
+        findNearestActiveDate,
+        handleUndoLastAction,
+        handleToggleEarlyDelivered
+    ]);
 };
