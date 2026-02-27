@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body>
+    <script>
+        const db = new Dexie('KDSDatabase');
+        db.version(24).stores({
+            orders: 'id, order_number, order_status, order_type, order_origin, is_paid, customer_id, business_id, created_at, updated_at, server_updated_at, seen_at, _processing, [business_id+created_at], [business_id+order_status]'
+        });
+        db.orders.where('order_number').equals(4857).toArray().then(orders => {
+            document.body.innerHTML += "Order 4857:<br>";
+            document.body.innerHTML += JSON.stringify(orders[0]) + "<br>";
+        }).catch(e => {
+            document.body.innerHTML += "Error: " + e;
+        });
+    </script>
+</body>
+</html>

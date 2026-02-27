@@ -71,30 +71,25 @@ const getClient = (url, key) => {
 
 const isElectron = window.navigator.userAgent.toLowerCase().includes('electron');
 
-// PRODUCTION CHECK: If we are on Vercel or any non-local hostname, ALWAYS use cloud. No exceptions.
-const isProduction = !isElectron && (
-    window.location.hostname.includes('vercel.app') ||
-    window.location.hostname.includes('.com') ||
-    window.location.hostname.includes('.co.il') ||
-    (!window.location.hostname.startsWith('192.168.') &&
-        !window.location.hostname.startsWith('10.') &&
-        !window.location.hostname.startsWith('100.') &&
-        !window.location.hostname.startsWith('172.') &&
-        window.location.hostname !== 'localhost' &&
-        window.location.hostname !== '127.0.0.1' &&
-        window.location.hostname !== '')
-);
+// PRODUCTION CHECK: If we are on Vercel or any common deployment hostnames, use cloud.
+// But we allow LOCAL bypass if the user is on a Tailscale IP or common LAN IP.
+const isProductionHostname = window.location.hostname.includes('vercel.app') ||
+    window.location.hostname.includes('herokuapp.com') ||
+    window.location.hostname.includes('supabase.co');
 
-// Lock to Local if explicitly on localhost/127.0.0.1/192.168.x/10.x/100.x AND not production
-const isStrictlyLocal = isElectron || (!isProduction && (
-    window.location.hostname === 'localhost' ||
+const isLocalIp = window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
     window.location.hostname.startsWith('192.168.') ||
     window.location.hostname.startsWith('10.') ||
     window.location.hostname.startsWith('100.') ||
-    window.location.hostname.startsWith('172.') ||
-    window.location.search.includes('local=true')
-));
+    window.location.hostname.startsWith('172.');
+
+const isProduction = !isElectron && isProductionHostname && !isLocalIp;
+
+// Lock to Local if explicitly on local IPs OR forced via query/env
+const isStrictlyLocal = isElectron || isLocalIp ||
+    window.location.search.includes('local=true') ||
+    import.meta.env?.VITE_FORCE_LOCAL === 'true';
 
 // --- ROBUST INITIALIZATION ---
 // We DO NOT FALLBACK to Cloud if we are strictly local. This prevents the "Frankfurt Loop"

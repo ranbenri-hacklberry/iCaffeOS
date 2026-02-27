@@ -360,10 +360,16 @@ export const syncTable = async (localTable, remoteTable, filter = null, business
             'recurring_tasks',
             'task_completions',
             'suppliers',
-            'inventory_items'
+            'inventory_items',
+            'item_category',
+            'businesses'
         ];
         if (businessId && multiTenantTables.includes(remoteTable)) {
-            query = query.eq('business_id', businessId);
+            if (remoteTable === 'businesses') {
+                query = query.eq('id', businessId);
+            } else {
+                query = query.eq('business_id', businessId);
+            }
         }
 
         // Apply date filter for orders (only today's orders)

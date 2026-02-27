@@ -16,7 +16,7 @@ export default defineConfig(async ({ mode }) => {
 
   // Docker networking: use service name 'backend' when running in container
   const backendTarget = process.env.DOCKER_ENV === 'true'
-    ? 'http://backend:8080'
+    ? 'http://backend:8081'
     : 'http://localhost:8081';
 
   // Check if running in a container, Linux environment without display (headless), or Vercel

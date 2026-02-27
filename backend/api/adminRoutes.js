@@ -442,22 +442,28 @@ router.post('/sync-local-to-cloud', async (req, res) => {
                     continue;
                 }
 
-                // Upsert to Cloud (conflict resolution: newer wins)
-                const { error: cloudError } = await cloudSupabase
-                    .from(tableName)
-                    .upsert(dockerData, {
-                        onConflict: 'id',
-                        ignoreDuplicates: false
-                    });
+                // Upsert to Cloud in chunks to prevent large payload failures
+                const chunkSize = 50;
+                let pushedInTable = 0;
 
-                if (cloudError) {
-                    console.error(`[DockerSync] Cloud upsert error for ${tableName}:`, cloudError);
-                    results[tableName] = { success: false, error: cloudError.message };
-                    totalErrors++;
-                    continue;
+                for (let i = 0; i < dockerData.length; i += chunkSize) {
+                    const chunk = dockerData.slice(i, i + chunkSize);
+                    const { error: cloudError } = await cloudSupabase
+                        .from(tableName)
+                        .upsert(chunk, {
+                            onConflict: 'id',
+                            ignoreDuplicates: false
+                        });
+
+                    if (cloudError) {
+                        console.error(`[DockerSync] Cloud upsert error for ${tableName} (chunk ${i}):`, cloudError);
+                        results[tableName] = { success: false, error: cloudError.message };
+                        throw new Error(`Cloud upsert failed for ${tableName}`); // Break the inner loop but catch below
+                    }
+                    pushedInTable += chunk.length;
                 }
 
-                console.log(`[DockerSync] ✓ Pushed ${dockerData.length} rows for ${tableName}`);
+                console.log(`[DockerSync] ✓ Pushed ${pushedInTable} rows for ${tableName}`);
                 results[tableName] = { success: true, count: dockerData.length, action: 'pushed' };
                 totalPushed += dockerData.length;
 

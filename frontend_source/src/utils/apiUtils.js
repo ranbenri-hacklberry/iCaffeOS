@@ -31,7 +31,8 @@ export const resolveUrl = async () => {
         hostname.startsWith('192.168.') ||
         hostname.startsWith('10.') ||
         hostname.startsWith('100.') ||
-        hostname.startsWith('172.');
+        hostname.startsWith('172.') ||
+        import.meta.env.VITE_FORCE_LOCAL === 'true';
 
     // For browser development, return current hostname to allow LAN access (iPad)
     if (isLocalOrLan && protocol.startsWith('http')) {
@@ -59,7 +60,8 @@ export const getBackendApiUrl = () => {
         hostname.startsWith('192.168.') ||
         hostname.startsWith('10.') ||
         hostname.startsWith('100.') ||
-        hostname.startsWith('172.');
+        hostname.startsWith('172.') ||
+        import.meta.env.VITE_FORCE_LOCAL === 'true';
 
     // For browser development, return current hostname to allow LAN access (iPad)
     return (isLocalOrLan && protocol.startsWith('http')) ? `http://${hostname}:8081` : CLOUD_URL;

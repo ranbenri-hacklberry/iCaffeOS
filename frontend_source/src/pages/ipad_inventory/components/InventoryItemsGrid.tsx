@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Plus, Minus, History, AlertTriangle, Save, Check, Package } from 'lucide-react';
+import { Search, Plus, Minus, AlertTriangle, Check, Package } from 'lucide-react';
 import { InventoryItem } from '@/pages/ipad_inventory/types';
 
 const MotionDiv = motion.div as any;
@@ -17,14 +17,28 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
     isLoading
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>('הכל');
 
     const categories = useMemo(() => {
-        return Array.from(new Set(items.map(item => item.category).filter(Boolean))) as string[];
+        const allCats = new Set<string>();
+        items.forEach(item => {
+            if (item.category) {
+                // Split by comma and trim each category
+                item.category.split(',').forEach(c => {
+                    const trimmed = c.trim();
+                    if (trimmed) allCats.add(trimmed);
+                });
+            }
+        });
+        return ['הכל', ...Array.from(allCats).sort()];
     }, [items]);
 
     const filteredItems = items.filter(item => {
-        if (!selectedCategory || item.category !== selectedCategory) return false;
+        if (selectedCategory && selectedCategory !== 'הכל') {
+            const itemCats = item.category?.split(',').map(c => c.trim()) || [];
+            if (!itemCats.includes(selectedCategory)) return false;
+        }
+
         if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         return true;
     });
@@ -35,13 +49,16 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
             <div className="px-6 py-4 flex flex-col md:flex-row gap-4 items-center justify-between border-b border-slate-100 bg-white shadow-sm shrink-0 z-10">
                 {/* Categories */}
                 <div className="flex bg-slate-100/80 p-1 rounded-2xl gap-1 border border-slate-200 shadow-inner overflow-x-auto no-scrollbar max-w-full">
+                    {categories.length === 0 && (
+                        <div className="px-4 py-2 text-sm font-bold text-slate-400 italic">ללא קטגוריות</div>
+                    )}
                     {categories.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
                             className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${selectedCategory === cat
-                                    ? 'bg-white shadow-sm text-indigo-600 ring-1 ring-slate-900/5'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                ? 'bg-white shadow-sm text-indigo-600 ring-1 ring-slate-900/5'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                 }`}
                         >
                             {cat}
@@ -108,16 +125,26 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     const [isSaving, setIsSaving] = useState(false);
     const [lastCountedDate, setLastCountedDate] = useState(item.last_counted_at);
 
+    // Calculate display units
+    // If wpu is 1000g and localStock is 500g, displayUnits = 0.5
+    const displayUnits = wpu > 0 ? localStock / wpu : localStock;
+
     const handleIncrement = () => {
-        const step = Number(item.count_step) || 1;
-        const next = localStock + step;
+        // Increment by count_step. If count_step is in units (e.g. 1 unit), 
+        // and we store grams, we multiply by wpu.
+        const unitStep = Number(item.count_step) || 1;
+        const gramStep = wpu > 0 ? unitStep * wpu : unitStep;
+
+        const next = localStock + gramStep;
         setLocalStock(next);
         setIsDirty(true);
     };
 
     const handleDecrement = () => {
-        const step = Number(item.count_step) || 1;
-        const next = Math.max(0, localStock - step);
+        const unitStep = Number(item.count_step) || 1;
+        const gramStep = wpu > 0 ? unitStep * wpu : unitStep;
+
+        const next = Math.max(0, localStock - gramStep);
         setLocalStock(next);
         setIsDirty(true);
     };
@@ -125,7 +152,6 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     const handleSave = async () => {
         setIsSaving(true);
         await onUpdateStock(item.id, localStock);
-        // Update the date to today after successful save
         setLastCountedDate(new Date().toISOString());
         setIsSaving(false);
         setIsDirty(false);
@@ -134,55 +160,60 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     return (
         <MotionDiv
             layout
-            className={`group flex items-center gap-4 p-2.5 rounded-2xl border transition-all duration-200 bg-white shadow-sm ${isLowStock ? 'ring-1 ring-amber-200 border-amber-200' : 'border-slate-100 hover:border-slate-200'}`}
+            className={`group grid grid-cols-[1fr_auto] items-center gap-4 py-3 px-4 rounded-2xl border transition-all duration-200 bg-white shadow-sm h-[76px] ${isLowStock ? 'ring-1 ring-amber-200 border-amber-200' : 'border-slate-100 hover:border-slate-200'}`}
         >
-            {/* Complete/Save Button */}
-            <button
-                onClick={handleSave}
-                disabled={!isDirty || isSaving}
-                className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-90
-                    ${isDirty ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
-            >
-                {isSaving ? (
-                    <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                ) : (
-                    <Check size={20} strokeWidth={2.5} />
-                )}
-            </button>
-
-            {/* Middle Info */}
-            <div className="flex-1 min-w-0 flex flex-col justify-center text-right">
+            {/* 1. RIGHT SIDE: Name & Info (First in JSX = Right in RTL) */}
+            <div className="flex flex-col justify-center text-right overflow-hidden min-w-0 flex-1">
                 <div className="flex items-center gap-2 justify-start">
-                    {isLowStock && <AlertTriangle size={14} className="text-amber-500 shrink-0" />}
-                    <h4 className="font-black text-slate-800 text-sm leading-tight truncate">{item.name}</h4>
-                    {isDirty && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />}
+                    {isDirty && <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />}
+                    <h4 className="font-extrabold text-slate-800 text-[15.5px] leading-tight truncate text-right w-full" title={item.name}>
+                        {item.name}
+                    </h4>
+                    {isLowStock && <AlertTriangle size={16} className="text-amber-500 shrink-0" />}
                 </div>
                 {lastCountedDate && !isDirty && (
-                    <div className="text-[9px] text-slate-400 font-bold mt-1">
+                    <div className="text-[10px] text-slate-400 font-bold mt-1">
                         נספר: {new Date(lastCountedDate).toLocaleDateString('he-IL')}
                     </div>
                 )}
             </div>
 
-            {/* Counter */}
-            <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-100 h-10 shrink-0">
-                <button
-                    onClick={handleIncrement}
-                    className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-emerald-500 transition active:scale-90"
-                >
-                    <Plus size={14} />
-                </button>
-                <div className="w-12 text-center flex flex-col justify-center leading-none">
-                    <span className={`text-sm font-black ${isDirty ? 'text-indigo-600' : 'text-slate-600'} tabular-nums`}>
-                        {localStock % 1 === 0 ? localStock : localStock.toFixed(2)}
-                    </span>
-                    <span className="text-[9px] text-slate-400 font-bold">{item.unit || 'יח\''}</span>
+            {/* 2. LEFT SIDE: Actions (Last in JSX = Left in RTL) */}
+            <div className="flex items-center gap-2.5 shrink-0">
+                {/* Counter Group */}
+                <div className="flex items-center bg-slate-50/80 p-0.5 rounded-xl border border-slate-100 h-11 shrink-0">
+                    <button
+                        onClick={handleDecrement}
+                        className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-rose-500 transition"
+                    >
+                        <Minus size={14} />
+                    </button>
+                    <div className="w-14 text-center flex flex-col justify-center leading-none">
+                        <span className={`text-[15px] font-black ${isDirty ? 'text-indigo-600' : 'text-slate-800'} tabular-nums`}>
+                            {displayUnits % 1 === 0 ? displayUnits : displayUnits.toFixed(2)}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">יח'</span>
+                    </div>
+                    <button
+                        onClick={handleIncrement}
+                        className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-emerald-500 transition"
+                    >
+                        <Plus size={14} />
+                    </button>
                 </div>
+
+                {/* Save Button */}
                 <button
-                    onClick={handleDecrement}
-                    className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-400 hover:text-rose-500 transition active:scale-90"
+                    onClick={handleSave}
+                    disabled={!isDirty || isSaving}
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all shadow-sm active:scale-95 shrink-0
+                        ${isDirty ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
                 >
-                    <Minus size={14} />
+                    {isSaving ? (
+                        <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                    ) : (
+                        <Check size={22} strokeWidth={2.5} />
+                    )}
                 </button>
             </div>
         </MotionDiv>

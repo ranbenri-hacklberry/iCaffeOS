@@ -69,7 +69,7 @@ router.get('/health', async (req, res) => {
 // Chat with Maya (with history)
 router.post('/chat', async (req, res) => {
     try {
-        const { messages, businessId, provider, employeeId } = req.body;
+        const { messages, businessId, provider, model, employeeId } = req.body;
 
         if (!businessId) {
             return res.status(400).json({ error: 'businessId required (נדרש)' });
@@ -97,8 +97,8 @@ router.post('/chat', async (req, res) => {
             }
         }
 
-        const response = await chatWithMaya(messages, businessId, provider || 'local', employee);
-        res.json({ response, provider: provider || 'local', timestamp: new Date().toISOString() });
+        const response = await chatWithMaya(messages, businessId, provider || 'local', employee, model);
+        res.json({ response, provider: provider || 'local', model: model || 'default', timestamp: new Date().toISOString() });
 
     } catch (err) {
         console.error('Maya chat error:', err);

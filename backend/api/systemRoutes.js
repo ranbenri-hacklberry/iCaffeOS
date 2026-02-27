@@ -1,8 +1,30 @@
 
 import express from 'express';
 import { exec } from 'child_process';
+import { createClient } from '@supabase/supabase-js';
+import { getAggregatedHealth } from '../services/healthService.js';
 
 const router = express.Router();
+
+/**
+ * GET /api/system/health
+ * Aggregated health status for all services
+ */
+router.get('/health', async (req, res) => {
+    try {
+        const health = await getAggregatedHealth();
+        // Ensure explicit CORS for this endpoint if needed, 
+        // though standard middleware usually handles it.
+        res.json(health);
+    } catch (err) {
+        res.status(500).json({
+            status: 'error',
+            message: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 
 /**
  * GET /api/system/containers
@@ -49,8 +71,9 @@ router.get('/validate-integrations', async (req, res) => {
     const businessId = req.query.businessId || DEFAULT_BUSINESS_ID;
 
     // 2. Fetch Configuration (non-secret) & Keys (from business_secrets)
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const { getSecrets } = await import('../services/secretsService.js');
 
     const { data: business, error } = await supabase
