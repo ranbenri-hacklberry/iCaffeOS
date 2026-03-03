@@ -81,8 +81,8 @@
 
 /* === PLAYER CONTROLS === */
 .music-player-btn {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -187,8 +187,8 @@
 }
 
 .music-mini-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -367,8 +367,8 @@
   }
 
   .music-mini-btn {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -655,20 +655,51 @@
     flex-direction: column-reverse;
   }
 
+  /* On mobile: turntable panel is compact - just enough for mini player controls */
   .music-split-right {
     width: 100%;
     min-width: unset;
     max-width: unset;
-    height: 50vh;
+    height: auto;
+    min-height: unset;
+    max-height: 120px;
+    overflow: hidden;
+    padding: 0;
   }
 
+  /* Hide the full vinyl turntable on mobile - too large and covers content */
+  .music-split-right .vinyl-container {
+    display: none !important;
+  }
+
+  /* Hide the vinyl info text too */
+  .music-split-right .vinyl-info {
+    display: none !important;
+  }
+
+  /* Show only the player controls bar on mobile */
+  .music-split-right > div > div {
+    width: 100%;
+  }
+
+  /* Album list takes all remaining space on mobile */
   .music-split-left {
-    height: 50vh;
+    flex: 1;
+    height: auto;
+    min-height: 0;
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    overflow-y: auto;
   }
 
   .vinyl-turntable-base {
     transform: scale(0.75);
+  }
+}
+
+/* Extra small screens (phones) */
+@media (max-width: 600px) {
+  .music-split-right {
+    max-height: 100px;
   }
 }
