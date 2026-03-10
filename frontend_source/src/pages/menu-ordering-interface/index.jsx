@@ -8,6 +8,7 @@ import SmartCart from './components/SmartCart';
 import CheckoutButton from './components/CheckoutButton';
 import PaymentSelectionModal from './components/PaymentSelectionModal';
 import ModifierModal from './components/ModifierModal';
+import ProductDetailModal from './components/ProductDetailModal';
 import SaladPrepDecision from './components/SaladPrepDecision';
 import MTOQuickNotesModal from './components/MTOQuickNotesModal';
 import DeliveryAddressModal from './components/DeliveryAddressModal';
@@ -23,6 +24,7 @@ import Icon from '../../components/AppIcon';
 import { useMenuItems, useLoyalty, useCart } from './hooks';
 
 const ORDER_ORIGIN_STORAGE_KEY = 'order_origin';
+const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
 
 const MenuOrderingInterface = () => {
   // [CLEANED] console.log('🚀 MenuOrderingInterface component rendering...');
@@ -36,6 +38,7 @@ const MenuOrderingInterface = () => {
   const {
     menuItems,
     menuLoading,
+    isHydrated,
     error,
     activeCategory,
     filteredItems,
@@ -62,7 +65,20 @@ const MenuOrderingInterface = () => {
     updateCartWithHistory: cartUpdateWithHistory,
     normalizeSelectedOptions: cartNormalizeOptions,
     getCartItemSignature: cartGetSignature
-  } = useCart([]);
+  } = useCart(() => {
+    // 🎯 SYNC INITIALIZATION: Prevent flashing old dishes
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === 'true' || params.get('editOrderId')) return [];
+
+    const pending = sessionStorage.getItem('pendingCartState');
+    if (pending) {
+      try {
+        const data = JSON.parse(pending);
+        if (data.cartItems) return data.cartItems;
+      } catch (e) { }
+    }
+    return [];
+  }, currentUser?.business_id);
 
   // Adjust stock based on items already in cart (visual only before checkout)
   const itemsWithCartStock = useMemo(() => {
@@ -95,12 +111,53 @@ const MenuOrderingInterface = () => {
   const [showMTONotesModal, setShowMTONotesModal] = useState(false);
   const [selectedItemForMod, setSelectedItemForMod] = useState(null);
   const [editingCartItem, setEditingCartItem] = useState(null);
+  const [showProductDetailModal, setShowProductDetailModal] = useState(false);
+  const [selectedProductForDetails, setSelectedProductForDetails] = useState(null);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const editDataLoadedRef = useRef(false); // Track if edit data was loaded
-  const [editingOrderData, setEditingOrderData] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === 'true') return false;
+    if (params.get('editOrderId')) return true;
+
+    const pending = sessionStorage.getItem('pendingCartState');
+    if (pending) {
+      try {
+        const data = JSON.parse(pending);
+        return !!data.isEditMode;
+      } catch (e) { }
+    }
+    return false;
+  });
+
+  const [editingOrderData, setEditingOrderData] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === 'true') return null;
+
+    const pending = sessionStorage.getItem('pendingCartState');
+    if (pending) {
+      try {
+        const data = JSON.parse(pending);
+        return data.editingOrderData || null;
+      } catch (e) { }
+    }
+    return null;
+  });
+
   const [currentCustomer, setCurrentCustomer] = useState(() => {
+    // If opening a new order, ignore current local storage to prevent flashing old data
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === 'true') return null;
+
+    // Check sessionStorage first (restoration priority)
+    const pending = sessionStorage.getItem('pendingCartState');
+    if (pending) {
+      try {
+        const data = JSON.parse(pending);
+        if (data.currentCustomer) return data.currentCustomer;
+      } catch (e) { }
+    }
+
     const raw = localStorage.getItem('currentCustomer');
     return raw ? JSON.parse(raw) : null;
   });
@@ -148,6 +205,19 @@ const MenuOrderingInterface = () => {
       sessionStorage.setItem(ORDER_ORIGIN_STORAGE_KEY, 'kds');
     }
   }, [fromKDSParam]);
+
+  // Handle new order explicit request
+  useEffect(() => {
+    const isNew = searchParams.get('new') === 'true';
+    if (isNew) {
+      console.log('🆕 Explicit new order request, forcefully cleaning old state');
+      clearOrderSessionState();
+      // Remove 'new' from URL without triggering a full page reload so it stays clean
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('new');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // --- Edit Mode Logic ---
   useEffect(() => {
@@ -201,44 +271,14 @@ const MenuOrderingInterface = () => {
     }
   }, [location.state, location.search]);
 
-  // --- Restore Cart State after adding customer mid-order ---
+  // --- Clean up Restore Cart State after mount ---
   useEffect(() => {
+    // The state is now initialized synchronously in useCart/useState above.
+    // This effect now only handles cleaning up the sessionStorage to avoid repeats.
     const pendingCartStateRaw = sessionStorage.getItem('pendingCartState');
     if (pendingCartStateRaw) {
-      try {
-        // [CLEANED] console.log('🔄 Restoring cart state after customer identification...');
-        const pendingCartState = JSON.parse(pendingCartStateRaw);
-
-        // Restore cart items
-        if (pendingCartState.cartItems && pendingCartState.cartItems.length > 0) {
-          cartSetItems(pendingCartState.cartItems);
-          // [CLEANED] console.log('🛒 Restored cart items:', pendingCartState.cartItems.length);
-        }
-
-        // Restore modifier options cache
-        // modifierOptionsCache restoration removed to ensure fresh prices
-
-        // Restore edit mode if applicable
-        if (pendingCartState.isEditMode && pendingCartState.editingOrderData) {
-          setIsEditMode(true);
-          setEditingOrderData(pendingCartState.editingOrderData);
-        }
-
-        // Clear the pending state
-        sessionStorage.removeItem('pendingCartState');
-        // [CLEANED] console.log('✅ Cart state restored successfully');
-
-        // Update currentCustomer from localStorage (should be set by phone/name screens)
-        const storedCustomer = localStorage.getItem('currentCustomer');
-        if (storedCustomer) {
-          const customer = JSON.parse(storedCustomer);
-          setCurrentCustomer(customer);
-          // [CLEANED] console.log('👤 Updated customer:', customer.name);
-        }
-      } catch (error) {
-        console.error('❌ Error restoring cart state:', error);
-        sessionStorage.removeItem('pendingCartState');
-      }
+      console.log('🧹 Cleaning up restored session state');
+      sessionStorage.removeItem('pendingCartState');
     }
 
     // --- CLEANUP SCRIPT FOR DUPLICATE LINKS (ITEMS 7, 8, 9) ---
@@ -886,17 +926,17 @@ const MenuOrderingInterface = () => {
   const handleAddToCart = (item) => {
     if (isRestrictedMode) {
       console.log('🚫 Adding items disabled in Restricted Mode');
-      // Optional: Add toast notification here
+      return;
+    }
+
+    // 🌿 NURSERY SPECIAL: Open full product detail page
+    if (currentUser?.business_id === NURSERY_BIZ_ID) {
+      setSelectedProductForDetails(item);
+      setShowProductDetailModal(true);
       return;
     }
 
     const normalizedOptions = normalizeSelectedOptions(item?.selectedOptions || []);
-
-    // Determine if we should open the Modifier Modal
-    // Open for:
-    // 1. Items with KDS routing logic (Salads, etc.)
-    // 2. Items that require modifiers (Coffee with milk options)
-    // 3. Food items that might need notes (Sandwiches, Toast, Pizza) even if no options
 
     const kdsLogic = item?.kds_routing_logic;
     const isFood = isFoodItem(item);
@@ -912,23 +952,24 @@ const MenuOrderingInterface = () => {
         selectedOptions: normalizedOptions
       });
       setEditingCartItem(null);
-      // Use the standard ModifierModal for everything
       setShowModifierModal(true);
       return;
     }
 
+    addItemWithHistory(item, normalizedOptions);
+  };
+
+  // Helper dedicated to the actual addition logic to share between modes
+  const addItemWithHistory = (item, options = [], quantity = 1) => {
     updateCartWithHistory((prevItems) => {
       const candidateItem = {
         ...item,
-        selectedOptions: normalizedOptions,
-        quantity: 1,
-        signature: getCartItemSignature({ ...item, selectedOptions: normalizedOptions }),
-        // Generate unique ID to prevent grouping and allow individual status control
+        selectedOptions: options,
+        quantity: quantity,
+        signature: getCartItemSignature({ ...item, selectedOptions: options }),
         tempId: `cart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         isDelayed: false
       };
-
-      // Always add as new item (no grouping)
       return [...prevItems, candidateItem];
     });
   };
@@ -1786,6 +1827,7 @@ const MenuOrderingInterface = () => {
 
           return {
             item_id: itemId, // menu_item_id (integer)
+            name: item.name, // 🛡️ PRESERVE NAME FOR OFFLINE ROBUSTNESS 
             order_item_id: orderItemId, // UUID for existing item, null for new items
             quantity: item.quantity,
             price: itemPrice,
@@ -1860,6 +1902,7 @@ const MenuOrderingInterface = () => {
 
             return {
               item_id: itemId,
+              name: item.name, // 🛡️ PRESERVE NAME FOR OFFLINE ROBUSTNESS
               quantity: item.quantity || 1,
               price: itemPrice || 0,
               final_price: finalPricePerItem || 0,
@@ -2111,14 +2154,15 @@ const MenuOrderingInterface = () => {
             await db.order_items.put({
               id: uuidv4(), // Use proper UUID
               order_id: localOrderId,
-              menu_item_id: item.menu_item_id,
+              menu_item_id: item.item_id,
+              name: item.name, // 🛡️ SAVE NAME TO DB FOR KDS OFFLINE VIEW
               quantity: item.quantity,
               price: item.price,
               notes: item.notes,
               mods: {
-                selectedOptions: item.selectedOptions || [],
+                selectedOptions: item.selected_options || [],
                 custom_mods: item.mods || {},
-                kds_override: item.kds_override || item.mods?.kds_override || false
+                kds_override: !!(item.mods?.includes('__KDS_OVERRIDE__'))
               },
               item_status: item.item_status || 'new', // Shows in KDS
               course_stage: item.course_stage || 1,
@@ -2316,6 +2360,7 @@ const MenuOrderingInterface = () => {
         refundAmount,
         isPaid: orderData?.is_paid ?? true,
         isEdit: isEditMode,
+        businessId: currentUser?.business_id,
         // Pass info for navigation after close
         navigationTarget: 'active'
       });
@@ -2398,7 +2443,8 @@ const MenuOrderingInterface = () => {
 
   // ... (שאר הקוד נשאר כפי שהוא, כולל ה-return JSX)
 
-  if (menuLoading) {
+  // 🚀 CRITICAL: Block UI until hydrated to prevent "Ghost" categories/items
+  if (menuLoading || !isHydrated) {
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'} gap-8 px-6 transition-all duration-500`} dir="rtl">
         <div className="relative w-32 h-32 md:w-40 md:h-40">
@@ -2548,6 +2594,7 @@ const MenuOrderingInterface = () => {
               groupedItems={groupedItems}
               onAddToCart={handleAddToCart}
               isLoading={isLoading}
+              categories={categories}
             />
           </div>
         </div>
@@ -2597,6 +2644,7 @@ const MenuOrderingInterface = () => {
           disabled={isProcessingOrder}
           isEditMode={isEditMode}
           editingOrderData={editingOrderData}
+          businessId={currentUser?.business_id}
         />
       </div>
 
@@ -2610,38 +2658,25 @@ const MenuOrderingInterface = () => {
             setSelectedItemForMod(null);
           }}
           onAddItem={handleAddItemWithModifiers}
-          // Caching disabled to fix price sync issues
-          // optionsCache={modifierOptionsCache}
-          // onCacheUpdate={setModifierOptionsCache}
-          // Prevent auto-add for food items OR items with allow_notes enabled so user can add notes
-          allowAutoAdd={!isFoodItem(selectedItemForMod) && selectedItemForMod?.allow_notes === false}
-          extraGroups={
-            (selectedItemForMod?.kds_routing_logic === 'hybrid' || selectedItemForMod?.kds_routing_logic === 'CONDITIONAL')
-              ? [{
-                id: 'kds_routing',
-                name: 'אופן הכנה',
-                is_required: true,
-                is_multiple_select: false,
-                values: [
-                  {
-                    id: 'ready',
-                    name: 'קיבל מוכן (מהמדף)',
-                    priceAdjustment: 0,
-                    is_default: (selectedItemForMod?.current_stock > 0)
-                  },
-                  {
-                    id: 'prep',
-                    name: 'דורש הכנה (הכן עכשיו)',
-                    priceAdjustment: 0,
-                    is_default: (selectedItemForMod?.current_stock <= 0)
-                  }
-                ]
-              }]
-              : []
-          }
+          optionsCache={modifierOptionsCache}
+          onCacheUpdate={setModifierOptionsCache}
         />
       )}
 
+      {/* Nursery Product Detail Modal */}
+      <ProductDetailModal
+        isOpen={showProductDetailModal}
+        item={selectedProductForDetails}
+        onClose={() => {
+          setShowProductDetailModal(false);
+          setSelectedProductForDetails(null);
+        }}
+        onAddToCart={(itemWithQty) => {
+          // If the item has modifiers, we might still want the modifier modal 
+          // But for now, let's keep it simple as plants usually don't have them
+          addItemWithHistory(itemWithQty, [], itemWithQty.quantity);
+        }}
+      />
       {/* Payment Selection Modal */}
       {(() => {
         const originalTotal = editingOrderData?.originalTotal || 0;
