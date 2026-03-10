@@ -924,13 +924,19 @@ const MenuOrderingInterface = () => {
 
   // Handle adding item to cart
   const handleAddToCart = (item) => {
+    // [CLEANED] console.log('🛒 handleAddToCart called for:', item?.name, 'ID:', item?.id, 'Biz:', item?.business_id);
+
     if (isRestrictedMode) {
       console.log('🚫 Adding items disabled in Restricted Mode');
       return;
     }
 
     // 🌿 NURSERY SPECIAL: Open full product detail page
-    if (currentUser?.business_id === NURSERY_BIZ_ID) {
+    // Using direct item check + currentUser check for guest/clerk robustness
+    const isNurseryItem = item?.business_id === NURSERY_BIZ_ID || currentUser?.business_id === NURSERY_BIZ_ID;
+
+    if (isNurseryItem) {
+      // [CLEANED] console.log('🌿 Opening Nursery Detail Modal for:', item?.name);
       setSelectedProductForDetails(item);
       setShowProductDetailModal(true);
       return;
