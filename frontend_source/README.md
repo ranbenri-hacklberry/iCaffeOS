@@ -147,6 +147,63 @@ The application uses a **Queue-Based Sync System**:
 
 ---
 
+## 🚀 Hardware Strategy: High-Performance Edge Infrastructure
+
+icaffeOS is designed to run on a tiered architecture, ensuring 100% operational sovereignty and zero latency for AI inference. We’ve deprecated lower-end hardware to focus on high-throughput, deterministic performance.
+
+### Tier 1 — Local Edge · *The "On-Site" Unit*
+
+| Spec | Details |
+|---|---|
+| **Hardware** | Apple Mac Mini (M4), NVIDIA AGX Orin/Thor |
+| **RAM** | 16–32 GB (Unified Memory) |
+| **Terminals** | icaffeOS Custom SBC Edge Terminals (<$100) |
+
+### Tier 2 — Office / Studio Hub · *Performance Intelligence*
+
+| Spec | Details |
+|---|---|
+| **Hardware** | Mac Studio (M2/M3 Ultra) / Mac Mini M4 Pro |
+| **RAM** | 32–128 GB |
+| **Role** | Multi-tenant management, high-parameter inference |
+
+### Tier 3 — Sovereign Enterprise · *The Beast*
+
+| Spec | Details |
+|---|---|
+| **Hardware** | NVIDIA AGX Orin / AGX Spark |
+| **Role** | Multi-tenant deployments, complex agentic workflows |
+
+### Tier 4 — Future-Proof Edge AI · *Next-Gen*
+
+| Spec | Details |
+|---|---|
+| **Hardware** | NVIDIA AGX Thor |
+| **Role** | Robotics integration, real-time world-model processing |
+
+---
+
+## 📉 The $100 Edge Terminal: Disruption Strategy
+
+While Apple Silicon and Nvidia AGX handle the Heavy Lifting (Inference & DB), the user interaction layer (Terminals) is optimized for extreme cost-efficiency and durability.
+
+### The Problem with Tablets (iPad/Android)
+
+* **High CapEx:** $300-$500 per unit.
+* **Fragility:** Not designed for 70°C kitchen environments.
+* **Lifecycle:** Battery degradation and forced OS updates.
+
+### The icaffeOS Solution: Custom Edge Terminals (<$100)
+
+We deploy low-cost, high-performance Linux-based SBCs (Single Board Computers) paired with industrial-grade touch interfaces.
+
+* **Thin-Client Logic:** All heavy processing is offloaded to the local Mac Mini/AGX Hub.
+* **Web-Socket Streaming:** React 18 UI delivered with zero latency via local network.
+* **Durability:** Fanless, ruggedized enclosures designed for high-heat, high-grease environments.
+* **Cost Efficiency:** By shifting from general-purpose tablets to specialized Edge Terminals, we reduce terminal CapEx by 75%.
+
+---
+
 ## 🛡️ Security
 
 * **RLS (Row Level Security):** Supabase policies ensure data isolation between tenants (businesses).

@@ -65,10 +65,10 @@ Every transaction, every customer interaction, every AI-generated insight stays 
 
 | Requirement | Minimum | Recommended |
 |---|---|---|
-| **OS** | Ubuntu 22.04 / macOS 13+ / Debian 12+ | Debian 13 (headless server) |
-| **CPU** | Intel N100 / Apple M1 | Intel N150+ / Apple M1 Pro+ |
-| **RAM** | 8 GB | 16–32 GB |
-| **Storage** | 64 GB SSD | 256 GB+ NVMe SSD |
+| **OS** | icaffeOS Sovereign Node | Sovereign OS Core |
+| **CPU** | Apple M4 / NVIDIA AGX Orin | Apple M4 Pro / NVIDIA AGX Thor |
+| **RAM** | 16 GB (Unified Memory) | 32 GB+ |
+| **Storage** | 128 GB NVMe SSD | 512 GB+ NVMe SSD |
 | **Node.js** | v18.x | v20.x LTS |
 | **PostgreSQL** | 15 (via Supabase) | Supabase Self-Hosted |
 | **Docker** | v24+ | v25+ with Compose v2 |
@@ -175,17 +175,16 @@ The SDK allows the system to be adapted and extended **without touching the core
 
 icaffeOS dynamically detects available compute resources and adjusts the complexity of its Agentic Loop accordingly.
 
-### Tier 1 — Local Edge · *The "On-Site" Unit*
-
-> **Target:** Single-site cafes, boutique bakeries, food trucks.
+### Tier 1 — Local Edge · _The "On-Site" Unit_
 
 | Spec | Details |
 |---|---|
-| **Hardware** | Morefine M6s (Intel N150), Mac Mini (M2/M4), Ryzen AI 370 |
-| **RAM** | 8–16 GB |
-| **Budget** | ~$150–$700 |
+| **Hardware** | Apple Mac Mini (M4), NVIDIA AGX Orin/Thor |
+| **RAM** | 16–32 GB (Unified Memory) |
+| **Terminals** | icaffeOS Custom SBC Edge Terminals (<$100) |
 
 **Capabilities:**
+
 - ✅ Full POS & KDS with zero-latency sync
 - ✅ Local inference for 7B–8B models (Llama 3.1 8B)
 - ✅ Real-time rantunes audio management
@@ -193,7 +192,7 @@ icaffeOS dynamically detects available compute resources and adjusts the complex
 
 ---
 
-### Tier 2 — Office / Studio Hub · *Performance Intelligence*
+### Tier 2 — Office / Studio Hub · _Performance Intelligence_
 
 > **Target:** Restaurant groups, management offices, 3–10 locations.
 
@@ -204,6 +203,7 @@ icaffeOS dynamically detects available compute resources and adjusts the complex
 | **Budget** | ~$2,000–$5,000 |
 
 **Capabilities:**
+
 - ✅ Centralized Maya Assistant for multi-tenant management
 - ✅ High-parameter inference (14B–70B models) for deep business insights
 - ✅ Cortex RAG Hub — process massive customer feedback across branches
@@ -211,7 +211,7 @@ icaffeOS dynamically detects available compute resources and adjusts the complex
 
 ---
 
-### Tier 3 — Enterprise Grade · *The Sovereign Cloud*
+### Tier 3 — Enterprise Grade · _The Sovereign Cloud_
 
 > **Target:** Global coffee chains, hotel franchises, retail conglomerates.
 
@@ -222,6 +222,7 @@ icaffeOS dynamically detects available compute resources and adjusts the complex
 | **Budget** | $10,000+ |
 
 **Capabilities:**
+
 - ✅ Massive-scale inference for hundreds of concurrent agents
 - ✅ Real-time global inventory optimization & predictive supply chain
 - ✅ Full Data Sovereignty — private LLM backbone for entire franchise

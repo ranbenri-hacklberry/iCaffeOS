@@ -1,6 +1,6 @@
 # 🚀 KDS Observability Module - Installation Guide
 
-## ✅ מה הותקן עד עכשיו (בסביבת פיתוח מקומית):
+## ✅ מה הותקן עד עכשיו (בסביבת פיתוח מקומית)
 
 1. ✅ **KDSObservability Component** - `/src/components/super-admin/KDSObservability.jsx`
 2. ✅ **SuperAdminPortal Updated** - הוספנו כפתור וmodal חדש
@@ -8,7 +8,7 @@
 
 ---
 
-## 📋 שלבים נותרים:
+## 📋 שלבים נותרים
 
 ### **שלב 1: הרץ את ה-SQL Schema ב-Supabase**
 
@@ -18,6 +18,7 @@
 4. לחץ **Run** ✅
 
 **וידוא:**
+
 ```sql
 -- בדוק שהטבלה נוצרה
 SELECT * FROM system_alerts ORDER BY created_at DESC LIMIT 5;
@@ -50,6 +51,7 @@ npm run dev
 ```
 
 **גש ל:**
+
 ```
 http://localhost:4028/super-admin
 ```
@@ -72,6 +74,7 @@ http://localhost:4028/super-admin
 ### **שלב 1: העתק screenshot.sh המעודכן**
 
 **מהדסקטופ בMacBook:**
+
 ```bash
 # הקובץ screenshot.sh נמצא ב:
 # /sessions/brave-trusting-darwin/mnt/outputs/screenshot.sh
@@ -81,6 +84,7 @@ ssh icaffe@100.97.166.104 "chmod +x /home/icaffe/screenshot.sh"
 ```
 
 **עדכן את ה-Supabase Service Key בקובץ:**
+
 ```bash
 ssh icaffe@100.97.166.104
 nano /home/icaffe/screenshot.sh
@@ -123,6 +127,7 @@ git push origin main
 ```
 
 **במחשב המרוחק:**
+
 ```bash
 ssh icaffe@100.97.166.104
 cd /home/icaffe/icaffeos
@@ -153,19 +158,22 @@ tail -f /home/icaffe/screenshot_monitor.log
 
 ---
 
-## 🧪 בדיקות סופיות:
+## 🧪 בדיקות סופיות
 
 ### **1. בדיקת Web Access:**
+
 ```
 http://100.97.166.104:4028/screenshots/latest_kds.png
 ```
 
 ### **2. בדיקת SuperAdmin:**
-1. התחבר ל-http://100.97.166.104:4028/super-admin
+
+1. התחבר ל-<http://100.97.166.104:4028/super-admin>
 2. לחץ על "צפייה ב-KDS"
 3. אמור לראות את צילום המסך האחרון ✅
 
 ### **3. בדיקת Fail-Safe:**
+
 ```bash
 # עצור את ה-KDS כדי לגרום ל-scrot לכשל
 # בדוק שנוצר alert ב-Supabase:
@@ -174,20 +182,21 @@ SELECT * FROM system_alerts WHERE alert_type = 'UI_HALT' ORDER BY created_at DES
 
 ---
 
-## 📊 תכונות המודול:
+## 📊 תכונות המודול
 
 ✅ **Self-Cleaning** - מוחק אוטומטית צילומי מסך ישנים מעל 24 שעות
 ✅ **Static Ref** - `latest_kds.png` תמיד מצביע על הקובץ האחרון
 ✅ **Fail-Safe** - אם `scrot` נכשל, שולח alert ל-Supabase
 ✅ **Live Monitoring** - רענון אוטומטי כל 30 שניות
 ✅ **Fullscreen View** - לחיצה על התמונה פותחת fullscreen
-✅ **Mobile Friendly** - עובד מצוין גם מהPixel 8!
+✅ **Mobile Friendly** - עובד מצוין גם מה-iPhone!
 
 ---
 
-## 🚨 Troubleshooting:
+## 🚨 Troubleshooting
 
 ### **בעיה: Component לא נטען**
+
 ```bash
 # בדוק שהקובץ קיים
 ls -la /Users/user/.gemini/antigravity/scratch/my_app/frontend_source/src/components/super-admin/KDSObservability.jsx
@@ -197,6 +206,7 @@ npm run dev
 ```
 
 ### **בעיה: צילום מסך לא מופיע**
+
 ```bash
 # בדוק שהתיקייה קיימת
 ls -la public/screenshots/
@@ -206,6 +216,7 @@ ls -la public/screenshots/latest_kds.png
 ```
 
 ### **בעיה: Supabase Alert לא נשלח**
+
 ```bash
 # בדוק את ה-service key
 grep SUPABASE_SERVICE_KEY /home/icaffe/screenshot.sh
@@ -220,10 +231,11 @@ curl -X POST "https://gxzsxvbercpkgxraiaex.supabase.co/rest/v1/system_alerts" \
 
 ---
 
-## ✅ סיימנו!
+## ✅ סיימנו
 
 **עכשיו Ran יכול לצפות ב-KDS מכל מקום בלי SSH!** 🎉
-- 📱 מהPixel 8
+
+- 📱 מה-iPhone 15 Pro
 - 💻 מהMacBook Pro 14
 - 🌍 מכל דפדפן
 
