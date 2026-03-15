@@ -5,7 +5,7 @@ import { CheckCircle, Loader2, Database } from 'lucide-react';
 import db from '@/db/database';
 import { initialLoad } from '@/services/syncService';
 import { useAuth } from '@/context/AuthContext';
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { getBackendApiUrl, CORTEX_CLOUD_URL, BACKEND_CLOUD_URL } from '@/utils/apiUtils';
 
 /**
  * SyncStatusModal - Auto-detects missing data and syncs from Supabase
@@ -55,7 +55,8 @@ const SyncStatusModal = () => {
                 const queue = await db.offline_queue_v3.where('status').equals('pending').count();
                 setPendingCount(queue);
 
-                const isLocal = window.location.hostname !== 'aimanageragentrani-625352399481.europe-west1.run.app';
+                const isLocal = window.location.hostname !== new URL(CORTEX_CLOUD_URL).hostname &&
+                               window.location.hostname !== new URL(BACKEND_CLOUD_URL).hostname;
                 if (!isLocal) return;
 
                 // Wellness check against N150

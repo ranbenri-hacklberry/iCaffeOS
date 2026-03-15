@@ -6,9 +6,9 @@
  */
 
 import { useCortexStore } from "./cortexStore";
+import { getCortexApiUrl } from "@/utils/apiUtils";
 
-export const CORTEX_API =
-  import.meta.env.VITE_CORTEX_API_URL ?? "http://localhost:8000";
+export const CORTEX_API = getCortexApiUrl();
 
 /** @returns {{ "X-Cortex-Tenant-ID": string } | {}} */
 function tenantHeaders() {
