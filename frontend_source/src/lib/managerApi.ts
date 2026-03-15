@@ -2,9 +2,9 @@ import { OptionGroup } from '@/components/manager/types';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/db/database';
 
-const DEFAULT_API_BASE_URL = 'https://aimanageragentrani-625352399481.europe-west1.run.app';
+import { getBackendApiUrl } from '@/utils/apiUtils';
 
-const API_BASE_URL = (import.meta.env.VITE_MANAGER_API_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '');
+const API_BASE_URL = getBackendApiUrl();
 
 const JSON_HEADERS: HeadersInit = {
   'Content-Type': 'application/json',
@@ -39,12 +39,14 @@ export const normalizeOptionGroups = (rawGroups: any[] = []): OptionGroup[] => {
   return rawGroups
     .filter(Boolean)
     .map((group) => {
-      const values = Array.isArray(group?.values) ? group.values : [];
+      const values = Array.isArray(group?.values) ? group.values : (Array.isArray(group?.options) ? group.options : []);
+      const title = group?.title || group?.name || group?.group || 'אפשרות';
+
       return {
-        id: String(group?.id ?? group?.group_id ?? crypto.randomUUID?.() ?? Date.now()),
-        title: group?.title || group?.name || 'אפשרות',
-        type: group?.is_multiple_select ? 'multi' : 'single',
-        category: group?.category || categorizeGroup(group?.name),
+        id: String(group?.id ?? group?.group_id ?? group?.id ?? crypto.randomUUID?.() ?? Date.now()),
+        title: title,
+        type: group?.is_multiple_select ? 'multi' : (group?.type || 'single'),
+        category: group?.category || categorizeGroup(title),
         required: Boolean(group?.is_required ?? group?.required),
         is_required: Boolean(group?.is_required ?? group?.required),
         min_selection: Number(group?.min_selection ?? (Boolean(group?.is_required ?? group?.required) ? 1 : 0)),
@@ -52,15 +54,18 @@ export const normalizeOptionGroups = (rawGroups: any[] = []): OptionGroup[] => {
         description: group?.description ?? null,
         values: values
           .filter(Boolean)
-          .map((value: any) => ({
-            id: String(value?.id ?? value?.value_id ?? crypto.randomUUID?.() ?? Date.now()),
-            name: value?.name || value?.value_name || 'בחירה',
-            price: Number(value?.price ?? value?.price_adjustment ?? 0),
-            priceAdjustment: Number(value?.price_adjustment ?? value?.price ?? 0),
-            is_default: Boolean(value?.is_default),
-            description: value?.description ?? null,
-            metadata: value?.metadata ?? null,
-          })),
+          .map((value: any, vIdx: number) => {
+            const price = Number(value?.price ?? value?.price_adjustment ?? 0);
+            return {
+              id: String(value?.id ?? value?.value_id ?? `${title}_${vIdx}`),
+              name: value?.name || value?.value_name || 'בחירה',
+              price: price,
+              priceAdjustment: price,
+              is_default: Boolean(value?.is_default),
+              description: value?.description ?? null,
+              metadata: value?.metadata ?? null,
+            };
+          }),
       };
     });
 };

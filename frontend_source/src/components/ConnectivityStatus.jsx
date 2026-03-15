@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isLocalInstance } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { resolveUrl, CLOUD_URL } from '../utils/apiUtils';
+import { resolveUrl, CORTEX_CLOUD_URL, BACKEND_CLOUD_URL } from '../utils/apiUtils';
 import db from '../db/database';
 
 /**
@@ -20,7 +20,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
     const [machineName, setMachineName] = useState('Ryzen AI');
 
     // Hide on Manager/Admin pages (only relevant for fixed mode usually)
-    // ALSO hide on pages that use UnifiedHeader (to avoid duplication)
+    // 🛡️ REVISION: KDS and Prep SHOULD show the status if explicitly requested (forceShow)
     const isManagerPage = location.pathname.startsWith('/data-manager') ||
         location.pathname.startsWith('/super-admin') ||
         location.pathname.startsWith('/dexie-admin') ||
@@ -33,58 +33,63 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
         location.pathname.startsWith('/mode-selection') ||
         location.pathname.startsWith('/menu-ordering') ||
         location.pathname.startsWith('/menu-editor') ||
-        location.pathname.startsWith('/ipad-menu-editor'); // Uses UnifiedHeader
+        location.pathname.startsWith('/ipad-menu-editor');
 
     useEffect(() => {
         const checkStatus = async () => {
             // 1. Check Local N150 Connectivity
-            const isLocalClient = window.location.hostname !== 'aimanageragentrani-625352399481.europe-west1.run.app';
+            const isLocalClient = window.location.hostname !== new URL(CORTEX_CLOUD_URL).hostname &&
+                window.location.hostname !== new URL(BACKEND_CLOUD_URL).hostname &&
+                window.location.hostname !== 'icaffe.vercel.app';
             setIsLocal(isLocalClient);
 
-            if (isLocalClient) {
-                try {
-                    const baseUrl = await resolveUrl();
+            try {
+                const baseUrl = await resolveUrl();
 
-                    // 🛡️ [SYNC STABILITY] Skip health check for Cloud URL to avoid 404 noise
-                    if (baseUrl === CLOUD_URL) {
-                        setIsN150Down(false);
-                        setMachineName('Cloud');
-                        return;
-                    }
+                // 🛡️ [SYNC STABILITY] Skip health check for Cloud URL to avoid 404 noise
+                if (baseUrl === BACKEND_CLOUD_URL || baseUrl === CORTEX_CLOUD_URL) {
+                    // If we are on a cloud domain (Vercel), "Cloud" is the intended state.
+                    const isCloudDomain = window.location.hostname.includes('vercel.app') ||
+                        window.location.hostname.includes('run.app') ||
+                        window.location.hostname.includes('hacklberryfinn.com');
 
-                    const controller = new AbortController();
-                    const id = setTimeout(() => controller.abort(), 5000);
-
-                    const healthResp = await fetch('/api/maya/health', { signal: controller.signal });
-                    clearTimeout(id);
-
-                    if (healthResp.ok) {
-                        const health = await healthResp.json();
-                        let name = health.hostname || 'Ryzen AI';
-
-                        // Smart Override for Mac / Local Dev
-                        const isMac = /Macintosh/i.test(navigator.userAgent);
-                        // Also check for Electron explicitly
-                        const isElectron = /Electron/i.test(navigator.userAgent);
-                        const isLocalhost = window.location.hostname === 'localhost' ||
-                            window.location.hostname === '127.0.0.1' ||
-                            window.location.hostname === '';
-
-                        // 1. Prioritize Local Mac Detection
-                        if (isMac && (isLocalhost || isElectron)) {
-                            setMachineName('המחשב שלי');
-                        }
-                        // 2. Otherwise use what the server says
-                        else {
-                            const cleanName = (name || health.hostname || 'Ryzen AI').split('.')[0];
-                            setMachineName(cleanName === 'Mac M1' ? 'Mac M1' : cleanName);
-                        }
-                    }
-                    setIsN150Down(!healthResp.ok);
-                } catch (err) {
-                    console.warn('Connectivity check failed:', err);
-                    setIsN150Down(true);
+                    setIsN150Down(!isCloudDomain);
+                    setMachineName(isCloudDomain ? 'Cloud' : 'Offline');
+                    return;
                 }
+
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 5000);
+
+                const healthResp = await fetch('/api/maya/health', { signal: controller.signal });
+                clearTimeout(id);
+
+                if (healthResp.ok) {
+                    const health = await healthResp.json();
+                    let name = health.hostname || 'Ryzen AI';
+
+                    // Smart Override for Mac / Local Dev
+                    const isMac = /Macintosh/i.test(navigator.userAgent);
+                    // Also check for Electron explicitly
+                    const isElectron = /Electron/i.test(navigator.userAgent);
+                    const isLocalhost = window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname === '';
+
+                    // 1. Prioritize Local Mac Detection
+                    if (isMac && (isLocalhost || isElectron)) {
+                        setMachineName('המחשב שלי');
+                    }
+                    // 2. Otherwise use what the server says
+                    else {
+                        const cleanName = (name || health.hostname || 'Ryzen AI').split('.')[0];
+                        setMachineName(cleanName === 'Mac M1' ? 'Mac M1' : cleanName);
+                    }
+                }
+                setIsN150Down(!healthResp.ok);
+            } catch (err) {
+                console.warn('Connectivity check failed:', err);
+                setIsN150Down(true);
             }
 
             // 2. Check Queue Status (Dexie)
@@ -140,8 +145,8 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isN150Down ? 'bg-red-400' : (pendingCount > 0 ? 'bg-amber-400' : 'bg-emerald-400')}`}></span>
                         <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isN150Down ? 'bg-red-500' : (pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500')}`}></span>
                     </div>
-                    <span className={`text-[10px] font-bold leading-none ${isN150Down ? 'text-red-800' : (pendingCount > 0 ? 'text-amber-800' : 'text-emerald-700')}`}>
-                        {isN150Down ? 'Offline' : (pendingCount > 0 ? `מסנכרן ${pendingCount}` : (machineName === 'n150' ? 'Ryzen AI' : machineName))}
+                    <span className={`text-[10px] font-bold leading-none ${isN150Down ? 'text-red-800' : 'text-emerald-700'}`}>
+                        {isN150Down ? (window.location.hostname.includes('vercel.app') ? 'Not Connected' : 'Offline') : (machineName === 'n150' ? 'Ryzen AI' : machineName)}
                     </span>
                 </div>
 
