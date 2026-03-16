@@ -193,13 +193,13 @@ ${internallyDetectedDescription ? `**DETAILS:** ${internallyDetectedDescription}
 **CRITICAL FIDELITY RULES:**
 1. REPLICATE SEEDS EXACTLY: Use the provided REFERENCE PHOTO for the subject and the BACKGROUND_REFERENCE for the environment.
 2. NO BEAUTIFICATION: Avoid adjectives like "breathtaking", "stunning", or "cinematic". No sun flares or extra lighting.
-3. CONTAINER: If the subject is a plant, it MUST be in a "simple brown plastic nursery pot" as shown in the reference. NEVER upgrade to decorative pots.
-4. BACKGROUND: If the background seed shows a specific floor or wall, REPLICATE IT. Do NOT default to desert/mountains unless they appear in the seed.
-5. COMPOSITION: Subject must be centered and fill 75% of the frame. Pure white background is only allowed if the seed is white.
+3. CONTAINER: If the subject is a plant, it MUST be in a "simple brown plastic nursery pot" as shown in the reference. Crop it so only a small portion is visible at the bottom.
+4. BACKGROUND & BOKEH: Apply a STRONG BOKEH effect to the background. The background should be very blurred, slightly brighter, soft, and out of focus so the subject stands out perfectly.
+5. COMPOSITION: Subject must be centered and fill exactly 75% of the entire frame. The plant is the absolute center of attention.
 
 **PHOTOGRAPHIC GUIDELINES:**
 - Focus: Razor-sharp on the ${itemName}.
-- Style: Flat, commercial, factual.`;
+- Style: Premium commercial catalog photography, bright and inviting.`;
     }
 
     try {
@@ -207,9 +207,9 @@ ${internallyDetectedDescription ? `**DETAILS:** ${internallyDetectedDescription}
 
         const timeout = (aiSettings?.generation_timeout_seconds || 30) * 1000;
 
-        // 🛑 DO NOT CHANGE THIS MODEL WITHOUT EXPLICIT USER APPROVAL. USE 3.0+ 🛑
+        // 🛑 DO NOT CHANGE THIS MODEL WITHOUT EXPLICIT USER APPROVAL. USE 3.1 FLASH 🛑
         const model = genAI.getGenerativeModel({
-            model: "gemini-3-pro-image-preview",
+            model: "gemini-3.1-flash-image-preview",
             generationConfig: { responseModalities: ["IMAGE", "TEXT"] }
         });
 

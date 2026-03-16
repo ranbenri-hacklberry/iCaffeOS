@@ -9,7 +9,8 @@ const HeroCard = ({
     gradient,
     delay = 0,
     stats,
-    onClick
+    onClick,
+    compact = false
 }) => {
     return (
         <motion.div
@@ -22,7 +23,7 @@ const HeroCard = ({
             whileTap={{ scale: 0.98 }}
 
             onClick={onClick}
-            className={`relative h-64 rounded-[2rem] overflow-hidden cursor-pointer shadow-lg ${gradient} select-none touch-none`}
+            className={`relative ${compact ? 'h-32 sm:h-40' : 'h-48 sm:h-64'} rounded-[2rem] overflow-hidden cursor-pointer shadow-lg ${gradient}`}
         >
             {/* 3. רקע דקורטיבי: Wireframe SVG */}
             <div className="absolute -top-4 right-0 w-full h-full opacity-30 text-white rotate-[-8deg] scale-[1.3] translate-x-6 translate-y-4 transition-all duration-700">
@@ -57,10 +58,10 @@ const HeroCard = ({
 
                 {/* חלק תחתון: טקסטים גדולים וברורים */}
                 <div>
-                    <h2 className="text-4xl font-black text-white leading-tight drop-shadow-lg">
+                    <h2 className={`${compact ? 'text-xl sm:text-2xl' : 'text-4xl'} font-black text-white leading-tight drop-shadow-lg`}>
                         {title}
                     </h2>
-                    <p className="text-lg text-white/80 font-bold mt-1">
+                    <p className={`${compact ? 'text-sm' : 'text-lg'} text-white/80 font-bold mt-1`}>
                         {subtitle}
                     </p>
                 </div>

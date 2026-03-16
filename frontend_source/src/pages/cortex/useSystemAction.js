@@ -130,7 +130,7 @@ export function useSystemAction() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           command,
-          jwt: import.meta.env.VITE_LAB_JWT ?? "superadmin-ryzen",
+          jwt: import.meta.env.VITE_LAB_JWT ?? "superadmin-edgehub",
         }),
         signal: ctrl.signal,
       });

@@ -58,7 +58,7 @@ const SYSTEM_PAGES = [
         importance: 1,
         route: '/music',
         file: 'src/pages/music/index.jsx',
-        description: 'Atmosphere management via Spotify API integration.',
+        description: 'Atmosphere management via RanTunes – local file library and playlists.',
         specs: ['BPM-synced VU', 'Playlist queuing', 'Device selection'],
         tables: ['music_settings']
     },
@@ -102,7 +102,7 @@ const SystemMap = () => {
 
     const generateContextMarkdown = () => {
         let md = "## icaffeOS Tech-Manifest (AI-Optimized)\n\n";
-        md += "**Tech Stack**: React/Vite, Supabase (PgSQL), Dexie.js (Offline-First), Framer Motion, Gemini AI (OCR), Spotify API, SMS/WA Gateways.\n\n";
+        md += "**Tech Stack**: React/Vite, Supabase (PgSQL), Dexie.js (Offline-First), Framer Motion, Gemini AI (OCR), RanTunes (Local Music), SMS/WA Gateways.\n\n";
 
         SYSTEM_PAGES.forEach(p => {
             const stars = '★'.repeat(p.importance).padEnd(3, '');

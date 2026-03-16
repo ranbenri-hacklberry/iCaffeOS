@@ -13,12 +13,16 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - /Volumes:/Volumes
+      - /mnt:/mnt
+      - /media:/media
       - .:/app
       - backend_node_modules:/app/node_modules
-    restart: always
+    devices:
+      - /dev/snd:/dev/snd
+    privileged: true
+    restart: "no"
     networks:
       - default
-      - supabase
 
   frontend:
     build:
@@ -33,15 +37,13 @@ services:
       - frontend_node_modules:/app/node_modules
     depends_on:
       - backend
-    restart: always
+    restart: "no"
     networks:
       - default
 
   worker:
     build:
       context: .
-      # If you have a specific dockerfile for the worker, e.g. Dockerfile.worker
-      # but assuming it runs node from the repository
       dockerfile: Dockerfile.backend
     command: [ "node", "worker/dispatcher.js" ]
     env_file:
@@ -51,15 +53,14 @@ services:
       - backend_node_modules:/app/node_modules
     depends_on:
       - backend
-    restart: always
+    restart: "no"
     networks:
       - default
-      - supabase
 
   frigate:
     container_name: frigate
     privileged: true
-    restart: unless-stopped
+    restart: "no"
     image: ghcr.io/blakeblackshear/frigate:stable
     shm_size: "64mb"
     volumes:
@@ -77,7 +78,7 @@ services:
     networks:
       - default
     devices:
-      - /dev/video0:/dev/video0 # Map USB Camera
+      - /dev/video0:/dev/video0
 
 networks:
   default:

@@ -211,7 +211,13 @@ const MenuOrderingInterface = () => {
     const isNew = searchParams.get('new') === 'true';
     if (isNew) {
       console.log('🆕 Explicit new order request, forcefully cleaning old state');
+      // 🔑 FIX: Preserve origin BEFORE clearing (clearOrderSessionState removes it)
+      const preservedOrigin = sessionStorage.getItem(ORDER_ORIGIN_STORAGE_KEY) || (fromKDSParam ? 'kds' : null);
       clearOrderSessionState();
+      // Restore origin so back navigation works correctly after order completion
+      if (preservedOrigin) {
+        sessionStorage.setItem(ORDER_ORIGIN_STORAGE_KEY, preservedOrigin);
+      }
       // Remove 'new' from URL without triggering a full page reload so it stays clean
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('new');
@@ -548,7 +554,8 @@ const MenuOrderingInterface = () => {
             is_hot_drink: item.menu_items.is_hot_drink,
             selectedOptions: selectedOptions,
             notes: item.notes,
-            isDelayed: item.item_status === 'held', // Reflects current KDS state (Fired items are not delayed)
+            isDelayed: (item.item_status === 'held' || item.course_stage === 2), 
+            course_stage: item.course_stage || 1,
             originalStatus: item.item_status, // Keep track of backend status
             tempId: uuidv4() // Ensure stable ID for React keys
           };
@@ -1738,195 +1745,75 @@ const MenuOrderingInterface = () => {
       let preparedItems = [];
       let cancelledItems = [];
 
-      // Debug: בדיקת selectedOptions לפני המרה
-      // [CLEANED] console.log('🔍 Cart items before preparation:', cartItems.map(item => ({
-      // [CLEANED] id: item.id,
-      // [CLEANED]   name: item.name,
-      // [CLEANED]     selectedOptions: item.selectedOptions,
-      // [CLEANED]       selectedOptions_type: Array.isArray(item.selectedOptions) ? 'array' : typeof item.selectedOptions
-      // [CLEANED] })));
+      // Unified item preparation function
+      const prepareItemForBackend = (item) => {
+        // [CLEANED] Extract Options
+        const options = Array.isArray(item.selectedOptions)
+          ? item.selectedOptions
+            .filter(opt => {
+              if (typeof opt === 'string') return opt.trim().length > 0;
+              return opt?.valueId && !opt.valueName?.includes('רגיל');
+            })
+            .map(opt => (typeof opt === 'string' ? opt : (opt.valueName || opt.name || '')))
+            .filter(Boolean)
+          : [];
+
+        // [CLEANED] Extract IDs
+        const isUUIDValue = typeof item.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
+        const itemId = item.menu_item_id || (isUUIDValue ? null : item.id);
+        const currentOrderItemId = isUUIDValue ? item.id : null;
+
+        // [CLEANED] Status & Stage Logic
+        const isDelayed = item.isDelayed === true;
+        const isPrep = isKitchenPrep(item);
+        let finalStatus;
+        
+        if (isDelayed && !['in_progress', 'ready', 'completed', 'shipped'].includes(item.originalStatus)) {
+          finalStatus = 'held';
+        } else if (['in_progress', 'ready', 'completed', 'shipped'].includes(item.originalStatus)) {
+          finalStatus = item.originalStatus;
+        } else {
+          finalStatus = isPrep ? 'in_progress' : 'ready';
+        }
+
+        const stage = isDelayed ? 2 : 1;
+
+        // [CLEANED] Pricing & Discount
+        const itemPrice = item.price || item.unit_price;
+        const discountPercent = soldierDiscountEnabled ? 0.10 : 0;
+        const discountForItem = Math.floor(itemPrice * discountPercent * 100) / 100;
+        const finalPricePerItem = itemPrice - discountForItem;
+
+        return {
+          item_id: itemId,
+          name: item.name,
+          order_item_id: currentOrderItemId,
+          quantity: item.quantity || 1,
+          price: itemPrice || 0,
+          final_price: finalPricePerItem || 0,
+          discount_applied: discountForItem || 0,
+          selected_options: options,
+          mods: [
+            ...options,
+            ...((item.kds_routing_logic === 'MADE_TO_ORDER' || item.is_hot_drink) ? ['__KDS_OVERRIDE__'] : []),
+            ...((item.custom_note || item.mods?.custom_note) ? [`__NOTE__:${item.custom_note || item.mods.custom_note}`] : [])
+          ],
+          notes: item.notes || null,
+          item_status: finalStatus,
+          course_stage: stage,
+          is_hot_drink: !!item.is_hot_drink
+        };
+      };
 
       if (isEditMode && editingOrderData?.originalItems) {
         const currentOrderItemIds = new Set(cartItems.map(item => item.id).filter(Boolean));
-
-        cancelledItems = editingOrderData.originalItems.filter(originalItem =>
-          !currentOrderItemIds.has(originalItem.id)
-        );
-
-        console.log("Cancelled items to send:", cancelledItems.length);
-
-        // פריטים פעילים - שליחת UUIDs כ-strings
-        // IMPORTANT: Filter out delivery fee items - they're handled separately via p_delivery_fee
-        preparedItems = cartItems.filter(item => !item.isDeliveryFee).map(item => {
-          const options = Array.isArray(item.selectedOptions)
-            ? item.selectedOptions
-              .filter(opt => {
-                // [CLEANED] console.log('🔍 Filtering option:', opt);
-                // FIX: Allow strings (loaded from DB) to pass!
-                if (typeof opt === 'string') return true;
-                return opt?.valueId && !opt.valueName?.includes('רגיל');
-              })
-              .map(opt => {
-                // Use Name for KDS display, not UUID
-                // Handle case where opt is already a string (from DB load)
-                if (typeof opt === 'string') return opt;
-                // [CLEANED] console.log('🔍 Keeping option Name:', opt.valueName);
-                return opt.valueName || opt.name;
-              })
-            : [];
-
-
-          // Extract valid menu_item_id (skip local- temporary IDs)
-          let itemId = item.menu_item_id || item.id;
-          // If ID is a temporary local ID, try to find the real menu_item_id
-          if (typeof itemId === 'string' && itemId.startsWith('local-')) {
-            console.error('⚠️ Found local ID in edit mode, item missing menu_item_id:', item);
-            throw new Error(`Invalid item ID: ${item.name} has temporary ID but no menu_item_id`);
-          }
-
-          // [CLEANED] console.log('🔍 Item ID extraction:', {
-          // [CLEANED] name: item.name,
-          // [CLEANED]   menu_item_id: item.menu_item_id,
-          // [CLEANED]     id: item.id,
-          // [CLEANED]       final_item_id: itemId
-          // [CLEANED]     });
-
-          // Check if item.id is a valid UUID (existing item) or a temporary ID (new item)
-          // Simple UUID regex check
-          const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-
-          const orderItemId = isUUID(item.id) ? item.id : null;
-
-          // CRITICAL FIX: Preserve status if item is already ready or completed
-          // to prevent overwriting KDS work while editing.
-          let finalStatus = item.originalStatus || (item.isDelayed ? 'held' : 'new');
-
-          // Only force 'new' for new items or items that were modified 
-          // (if we want to be safe, but for now let's just preserve 'ready' and 'completed')
-          // FIX: Allow bidirectional status change (Active <-> Delayed)
-          // If User explicitly delays item in UI, force 'held'.
-          if (item.isDelayed) {
-            finalStatus = 'held';
-          } else {
-            // Sent to kitchen (Active)
-            // Keep final states if they were already reached
-            if (['ready', 'completed', 'cancelled'].includes(item.originalStatus)) {
-              finalStatus = item.originalStatus;
-            } else {
-              // Otherwise set to in_progress (Active)
-              finalStatus = 'in_progress';
-            }
-          }
-
-          // [CLEANED] console.log('🛡️ Save Status Check:', {
-          // [CLEANED] name: item.name,
-          // [CLEANED]   isDelayed: item.isDelayed,
-          // [CLEANED]     originalStatus: item.originalStatus,
-          // [CLEANED]       finalStatus
-          // [CLEANED]   });
-
-          // Calculate discount per item if soldier discount is enabled
-          const itemPrice = item.price || item.unit_price;
-          const discountPercent = soldierDiscountEnabled ? 0.10 : 0;
-          const discountForItem = Math.floor(itemPrice * discountPercent * 100) / 100;
-          const finalPricePerItem = itemPrice - discountForItem;
-
-          return {
-            item_id: itemId, // menu_item_id (integer)
-            name: item.name, // 🛡️ PRESERVE NAME FOR OFFLINE ROBUSTNESS 
-            order_item_id: orderItemId, // UUID for existing item, null for new items
-            quantity: item.quantity,
-            price: itemPrice,
-            final_price: finalPricePerItem,
-            discount_applied: discountForItem,
-            selected_options: options,
-            mods: [
-              ...options,
-              ...((item.kds_override || item.mods?.kds_override) ? ['__KDS_OVERRIDE__'] : []),
-              ...((item.custom_note || item.mods?.custom_note) ? [`__NOTE__:${item.custom_note || item.mods.custom_note}`] : [])
-            ],
-            notes: item.notes || null,
-            item_status: finalStatus,
-            course_stage: item.isDelayed ? 2 : 1,
-            is_hot_drink: item.is_hot_drink || false // Pass to backend for loyalty calculation
-          };
-        });
-
-        // DO NOT add cancelled items to preparedItems (p_items).
-        // They are sent separately in p_cancelled_items.
-        // Adding them here caused them to be UPDATED with quantity 0 instead of CANCELLED status.
-
+        cancelledItems = editingOrderData.originalItems.filter(oi => !currentOrderItemIds.has(oi.id));
+        preparedItems = cartItems.filter(i => !i.isDeliveryFee).map(prepareItemForBackend);
       } else {
-        // מצב רגיל - שליחת UUIDs כ-strings
-        // IMPORTANT: Filter out delivery fee items - they're handled separately via p_delivery_fee
-        preparedItems = cartItems
-          .filter(item => !item.isDeliveryFee)
-          .map(item => {
-            const options = Array.isArray(item.selectedOptions)
-              ? item.selectedOptions
-                .filter(opt => {
-                  // Filter out invalid/empty options
-                  if (!opt) return false;
-                  if (typeof opt === 'string') return opt.trim().length > 0;
-                  // Filter out 'regular' options that shouldn't be saved
-                  return opt.valueId && !opt.valueName?.includes('רגיל');
-                })
-                .map(opt => {
-                  // Ensure we ONLY return a string
-                  if (typeof opt === 'string') return opt;
-                  // Extract name safely
-                  return String(opt.valueName || opt.name || '');
-                })
-                .filter(s => s.length > 0) // Final check for empty strings
-              : [];
-
-
-            // Extract valid menu_item_id (fallback to id)
-            let itemId = item.menu_item_id || item.id;
-
-            // Validate that we have a proper ID
-            if (!itemId) {
-              console.error('⚠️ Missing ID for item:', item);
-              throw new Error(`Invalid item: ${item.name} has no valid ID`);
-            }
-
-            // [CLEANED] console.log('🔍 Item ID extraction:', {
-            // [CLEANED] name: item.name,
-            // [CLEANED]   menu_item_id: item.menu_item_id,
-            // [CLEANED]     id: item.id,
-            // [CLEANED]       final_item_id: itemId
-            // [CLEANED]     });
-
-            // Calculate discount per item if soldier discount is enabled
-            const itemPrice = item.price || item.unit_price;
-            const discountPercent = soldierDiscountEnabled ? 0.10 : 0;
-            const discountForItem = Math.floor(itemPrice * discountPercent * 100) / 100;
-            const finalPricePerItem = itemPrice - discountForItem;
-
-            // NEW: Unified Prep Check from shared utility
-            const isPrep = isKitchenPrep(item);
-
-            return {
-              item_id: itemId,
-              name: item.name, // 🛡️ PRESERVE NAME FOR OFFLINE ROBUSTNESS
-              quantity: item.quantity || 1,
-              price: itemPrice || 0,
-              final_price: finalPricePerItem || 0,
-              discount_applied: discountForItem || 0,
-              selected_options: options,
-              is_hot_drink: !!item.is_hot_drink, // Ensure loyalty counts this
-              mods: [
-                ...options,
-                ...(isPrep ? ['__KDS_OVERRIDE__'] : []),
-                ...((item.custom_note || item.mods?.custom_note) ? [`__NOTE__:${item.custom_note || item.mods.custom_note}`] : [])
-              ],
-              notes: item.notes || null,
-              item_status: item.isDelayed ? 'held' : (isPrep ? 'in_progress' : 'ready'),
-              course_stage: item.isDelayed ? 2 : 1
-            };
-          });
-        cancelledItems = [];   // לא רלוונטי
+        preparedItems = cartItems.filter(i => !i.isDeliveryFee).map(prepareItemForBackend);
       }
+
+
       console.log('📝 Prepared Items for Backend:', preparedItems);
 
       // Generate unique identifier for guests without phone

@@ -54,9 +54,10 @@ const AlbumView = ({ album, onBack }) => {
         }
     };
 
-    // Handle song play - opens modal for singles/album tracks
+    // Handle song play - Immediate play based on user request
     const handleSongPlay = (song) => {
-        setQueueContext({ item: song, type: 'song' });
+        if ((song?.myRating || 0) === 1) return; // Skip if disliked
+        playSong(song, songs, true);
     };
 
     // Handle rating

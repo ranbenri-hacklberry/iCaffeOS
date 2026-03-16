@@ -142,28 +142,16 @@ export const syncTable = async (localTable, remoteTable, filter = null, business
 
 
 
-        // 🧹 [WIPE BEFORE SYNC] Ensure local Dexie mirrors the remote (Docker/Cloud) perfectly
+        // 🛡️ RECONCILIATION MODE: We no longer WIPE before sync.
+        // Wiping causes white screens and race conditions in useLiveQuery.
+        // We let bulkPut handle reconciliation (upsert).
         if (businessId) {
             try {
-                // 🗑️ HISTORICAL TABLES: Clear orders/order_items before loading fresh window
-                // Note: loyalty_transactions uses ADDITIVE sync, not wipe-and-replace
-                const historicalTables = ['orders', 'order_items'];
-                if (historicalTables.includes(localTable)) {
-                    console.log(`🧹 [Sync] CLEARING ALL ${localTable} (window sync)`);
-                    await db[localTable].clear();
-                } else if (localTable === 'prepared_items_inventory' || localTable === 'menuitemoptions' || localTable === 'optionvalues') {
-                    // ⚠️ CRITICAL CLEANUP: These join tables accumulate orphans easily.
-                    // Instead of smart filtering, we WIPE them completely to ensure exact mirror of Docker.
-                    console.log(`🧹 [Sync] Aggressively clearing ${localTable} to remove stale orphans...`);
-                    await db[localTable].clear();
-
-                } else if (db[localTable].schema.indexes.some(idx => idx.name === 'business_id')) {
-                    await db[localTable].where('business_id').equals(businessId).delete();
-                } else if (localTable === 'businesses') {
-                    await db.businesses.where('id').equals(businessId).delete();
-                }
+                // If the table has a business_id index, we could prune stale local records if needed.
+                // But for now, we just proceed to pull new data and reconcile.
+                console.log(`📡 [Sync] Reconciling ${localTable} for business context...`);
             } catch (wipeErr) {
-                console.warn(`⚠️ Dexie cleanup failed for ${localTable}:`, wipeErr);
+                console.warn(`⚠️ Dexie context check failed for ${localTable}:`, wipeErr);
             }
         }
 
@@ -257,10 +245,10 @@ export const syncTable = async (localTable, remoteTable, filter = null, business
                 // Use retry with backoff for network resilience
                 const fetchPage = async () => {
                     // Optimized single query using JOIN to filter by orders.business_id
-                    // This avoids the N+1 problem of fetching order IDs first
+                    // AND join menu_items to get the name for offline robustness
                     const { data, error } = await supabase
                         .from('order_items')
-                        .select('*, orders!inner(business_id, created_at)')
+                        .select('*, menu_items(name), orders!inner(business_id, created_at)')
                         .eq('orders.business_id', businessId)
                         .gte('created_at', isoDate) // Use order_items.created_at for date window
                         .range(page * 1000, (page + 1) * 1000 - 1);
@@ -273,8 +261,12 @@ export const syncTable = async (localTable, remoteTable, filter = null, business
                     const data = await retryWithBackoff(fetchPage, { maxRetries: 2 });
 
                     if (data && data.length > 0) {
-                        // Strip the join object (orders) before saving to Dexie
-                        const itemsToSave = data.map(({ orders, ...item }) => item);
+                        // Strip the join objects (orders, menu_items) before saving to Dexie
+                        // but preserve the joined name for offline-first resilience
+                        const itemsToSave = data.map(({ orders, menu_items, ...item }) => ({
+                            ...item,
+                            name: item.name || menu_items?.name
+                        }));
                         await db[localTable].bulkPut(itemsToSave);
                         syncedCount += data.length;
                         if (data.length < 1000) hasMore = false;
@@ -513,10 +505,10 @@ export const syncOrders = async (businessId) => {
         console.log(`📦 [syncOrders] Cloud returned ${orders.length} total orders (after pagination). Starting sync & pruning...`);
 
         await db.transaction('rw', [db.orders, db.order_items], async () => {
-            // 🧹 CLEAR ALL DATA FIRST - We want ONLY the 3-day window
-            console.log(`🧹 [syncOrders] Clearing orders and order_items before fresh load...`);
-            await db.orders.clear();
-            await db.order_items.clear();
+            // 🛡️ REMOVED AGGRESSIVE CLEARING: Wiping the DB causes white screens/flickers 
+            // in useLiveQuery. We now let bulkPut handle reconciliation (upsert).
+            // Pruning is handled separately below for truly deleted records.
+            console.log(`📦 [syncOrders] Reconciling ${orders.length} orders into local cache...`);
 
             // 1. Prepare bulk data
             const ordersToPut = [];
@@ -566,8 +558,11 @@ export const syncOrders = async (businessId) => {
                         driver_id: order.driver_id,
                         driver_name: order.driver_name,
                         driver_phone: order.driver_phone,
-                        courier_name: order.courier_name
+                        courier_name: order.courier_name,
+                        metadata: order.metadata || {},
+                        items: order.items || order.items_detail || []
                     });
+
 
                     const orderItems = order.order_items || order.items_detail || [];
                     for (const item of orderItems) {
@@ -575,6 +570,7 @@ export const syncOrders = async (businessId) => {
                             id: item.id,
                             order_id: order.id,
                             menu_item_id: item.menu_item_id || item.menu_items?.id,
+                            name: item.name || item.menu_items?.name, // 🛡️ SAVE NAME FOR OFFLINE ROBUSTNESS
                             quantity: item.quantity,
                             price: item.price || item.menu_items?.price,
                             mods: item.mods,
@@ -592,24 +588,36 @@ export const syncOrders = async (businessId) => {
             if (itemsToPut.length > 0) await db.order_items.bulkPut(itemsToPut);
 
 
-            // 2. AGGRESSIVE PRUNING: Find local records in this window that are NOT in the cloud response
-            // We fetch ALL local orders to ensure legacy/demo data (possibly with wrong business_id) is cleared.
-            const allLocalOrders = await db.orders.toArray();
-            const ordersToDelete = allLocalOrders.filter(o => {
-                const orderDate = new Date(o.created_at);
-                // Only prune within our 30-day sync window
-                if (orderDate < fromDate) return false;
-                // If it's a local order in our window but NOT in the cloud response -> Delete
-                return !cloudOrderIds.has(o.id);
-            });
+            // 2. AGGRESSIVE PRUNING: Only for CURRENT business to avoid loading whole DB
+            const allLocalOrders = await db.orders.where('business_id').equals(businessId).toArray();
 
-            if (ordersToDelete.length > 0) {
-                prunedCount = ordersToDelete.length;
-                const idsToDelete = ordersToDelete.map(o => o.id);
-                console.warn(`🧹 [syncOrders] PRUNING: Removing ${idsToDelete.length} deleted/demo orders...`);
-                await db.orders.bulkDelete(idsToDelete);
-                // Clean up orphaned items
-                await db.order_items.where('order_id').anyOf(idsToDelete).delete();
+            // 🛡️ SAFETY: If the server returned ZERO orders, it's highly suspicious (potential network/RPC error).
+            // We SKIP pruning in this case to avoid accidentally wiping all local data.
+            if (orders.length > 0) {
+                const ordersToDelete = allLocalOrders.filter(o => {
+                    const orderDate = new Date(o.created_at);
+
+                    // 1. Only prune within our 3-day sync window
+                    if (orderDate < fromDate) return false;
+
+                    // 2. 🛡️ PROTECTION: Never prune local orders that haven't synced yet
+                    if (o.pending_sync === true) return false;
+                    if (typeof o.id === 'string' && o.id.startsWith('L')) return false;
+
+                    // 3. If it's a server order in our window but NOT in the cloud response -> Delete (it was probably deleted on server)
+                    return !cloudOrderIds.has(o.id);
+                });
+
+                if (ordersToDelete.length > 0) {
+                    prunedCount = ordersToDelete.length;
+                    const idsToDelete = ordersToDelete.map(o => o.id);
+                    console.warn(`🧹 [syncOrders] PRUNING: Removing ${idsToDelete.length} deleted/stale records...`);
+                    await db.orders.bulkDelete(idsToDelete);
+                    // Clean up orphaned items
+                    await db.order_items.where('order_id').anyOf(idsToDelete).delete();
+                }
+            } else {
+                console.log(`🛡️ [syncOrders] Server returned 0 orders. Skipping pruning to protect local data.`);
             }
 
             // 3. DEEP CLEANUP: Remove ANY orders older than 60 days to keep Dexie fresh (Recommendation #4)

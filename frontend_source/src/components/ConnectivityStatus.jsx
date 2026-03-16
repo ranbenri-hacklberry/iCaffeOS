@@ -58,6 +58,11 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                     return;
                 }
 
+                // --- TEMPORARILY DISABLED MAYA HEALTH CHECK PER USER REQUEST ---
+                setIsN150Down(false);
+                setMachineName('המערכת המקומית');
+                
+                /*
                 const controller = new AbortController();
                 const id = setTimeout(() => controller.abort(), 5000);
 
@@ -87,9 +92,10 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                     }
                 }
                 setIsN150Down(!healthResp.ok);
+                */
             } catch (err) {
                 console.warn('Connectivity check failed:', err);
-                setIsN150Down(true);
+                setIsN150Down(false); // Changed from true so we don't show angry red errors while disabled
             }
 
             // 2. Check Queue Status (Dexie)

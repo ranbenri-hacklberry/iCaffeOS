@@ -564,27 +564,28 @@ const MenuEditModal = ({ item, onClose, onSave }) => {
             const activeRecipeId = Math.max(...recipeIds);
             setSelectedRecipeId(activeRecipeId);
             setHasRecipe(true);
-            // Include cost_per_unit from recipe_ingredients
-            const { data: ingredients } = await supabase.from('recipe_ingredients').select('id, recipe_id, inventory_item_id, quantity_used, unit_of_measure, cost_per_unit').eq('recipe_id', activeRecipeId);
+            // Fetch ingredients from recipe_ingredients (cost_per_unit removed from schema)
+            const { data: ingredients } = await supabase.from('recipe_ingredients').select('id, recipe_id, inventory_item_id, quantity_used, unit_of_measure').eq('recipe_id', activeRecipeId);
 
             // Build a map from the passed inventory data for name lookups
             const invMap = (inventoryData || []).reduce((acc, it) => {
-                acc[String(it.id)] = { ...it, price: it.cost_per_unit ? Number(it.cost_per_unit) : (it.price ? Number(it.price) : null) };
+                const itemCost = it.cost_per_unit ? Number(it.cost_per_unit) : 0;
+                acc[String(it.id)] = { ...it, price: itemCost };
                 return acc;
             }, {});
 
             setComponents((ingredients || []).map(row => {
                 const inv = invMap[String(row.inventory_item_id)] || {};
                 const qty = row.quantity_used ? Number(row.quantity_used) : 0;
-                const price = row.cost_per_unit ? Number(row.cost_per_unit) : (inv.price || null);
+                const price = inv.price || 0;
                 return {
                     id: row.id,
                     inventory_item_id: row.inventory_item_id,
                     name: inv.name || 'רכיב לא ידוע',
                     quantity: qty,
-                    unit: row.unit_of_measure || inv.unit || 'kg',
+                    unit: row.unit_of_measure || inv.display_unit || inv.base_unit || 'kg',
                     price: price,
-                    subtotal: (price && qty) ? price * qty : null
+                    subtotal: qty * price
                 };
             }));
         } catch (e) { console.error(e); setComponentsError('שגיאה בטעינת רכיבים'); }
@@ -598,10 +599,9 @@ const MenuEditModal = ({ item, onClose, onSave }) => {
         }
         try {
             console.log('🔄 Fetching inventory for business:', user.business_id);
-            // Use cost_per_unit instead of price
-            // And filter out deleted items
+            // Use base_unit, display_unit instead of legacy unit
             let { data, error } = await supabase.from('inventory_items')
-                .select('id, name, unit, cost_per_unit, quantity_step, recipe_step')
+                .select('id, name, base_unit, display_unit, cost_per_unit, quantity_step, recipe_step')
                 .eq('business_id', user.business_id)
                 .or('is_deleted.is.null,is_deleted.eq.false')
                 .order('name');
@@ -1255,21 +1255,19 @@ const MenuEditModal = ({ item, onClose, onSave }) => {
         const idsToDelete = Array.from(deletedComponentIds).filter(id => typeof id === 'number');
         if (idsToDelete.length) await supabase.from('recipe_ingredients').delete().in('id', idsToDelete);
 
-        // Include cost_per_unit in insert and update
+        // cost_per_unit removed from recipe_ingredients schema
         const toInsert = components.filter(c => c.isNew || typeof c.id === 'string').map(c => ({
             recipe_id: activeRecipeId,
             inventory_item_id: c.inventory_item_id,
             quantity_used: c.quantity,
-            unit_of_measure: c.unit,
-            cost_per_unit: c.price || 0
+            unit_of_measure: c.unit
         }));
         const toUpdate = components.filter(c => !c.isNew && typeof c.id === 'number' && !deletedComponentIds.has(c.id)).map(c => ({
             id: c.id,
             recipe_id: activeRecipeId,
             inventory_item_id: c.inventory_item_id,
             quantity_used: c.quantity,
-            unit_of_measure: c.unit,
-            cost_per_unit: c.price || 0
+            unit_of_measure: c.unit
         }));
 
         if (toInsert.length > 0) {
@@ -2381,6 +2379,21 @@ const MenuEditModal = ({ item, onClose, onSave }) => {
                                                                         <div className="flex flex-col sm:flex-row items-start gap-6">
                                                                             {/* Left Column: Stacked Pickers */}
                                                                             <div className="flex flex-col gap-4 flex-1">
+                                                                                {/* Inventory Link Row */}
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <span className="text-[10px] font-bold text-gray-400">קישור למלאי (להורדה מהמלאי במכירה)</span>
+                                                                                    <select
+                                                                                        className="w-full p-3 bg-blue-50/50 border border-blue-100 rounded-xl text-sm font-bold outline-none focus:border-blue-300 transition-colors"
+                                                                                        value={ov.inventory_item_id || ''}
+                                                                                        onChange={(e) => handleUpdateOption(ov.id, { inventory_item_id: e.target.value ? Number(e.target.value) : null })}
+                                                                                    >
+                                                                                        <option value="">בחר פריט מלאי...</option>
+                                                                                        {inventoryOptions.map(inv => (
+                                                                                            <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit || 'יח\''})</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                </div>
+
                                                                                 {/* Price Picker Row */}
                                                                                 <div className="flex items-center justify-between gap-2">
                                                                                     <span className="text-sm font-bold text-gray-500 w-20 shrink-0">תוספת מחיר</span>
@@ -2413,32 +2426,41 @@ const MenuEditModal = ({ item, onClose, onSave }) => {
 
                                                                                 {/* Weight Picker Row */}
                                                                                 <div className="flex items-center justify-between gap-2">
-                                                                                    <span className="text-sm font-bold text-gray-500 w-20 shrink-0">משקל (גרם)</span>
-                                                                                    <div className="flex items-center gap-1">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleUpdateOption(ov.id, { quantity: Math.max(0, (Number(ov.quantity) || 0) - 10) })}
-                                                                                            className="w-10 h-10 bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold border border-gray-200 rounded-xl active:bg-gray-200 flex items-center justify-center transition-colors"
-                                                                                        >
-                                                                                            <Minus size={16} strokeWidth={2.5} />
-                                                                                        </button>
-                                                                                        <div className="w-14 h-10 flex items-center justify-center font-black text-gray-800 bg-gray-50 border border-gray-200 rounded-xl">
-                                                                                            <input
-                                                                                                type="number"
-                                                                                                value={ov.quantity || ''}
-                                                                                                onChange={(e) => handleUpdateOption(ov.id, { quantity: e.target.value })}
-                                                                                                className="w-full h-full text-center outline-none bg-transparent text-base font-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                                                placeholder="0"
-                                                                                            />
-                                                                                        </div>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleUpdateOption(ov.id, { quantity: (Number(ov.quantity) || 0) + 10 })}
-                                                                                            className="w-10 h-10 bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold border border-gray-200 rounded-xl active:bg-gray-200 flex items-center justify-center transition-colors"
-                                                                                        >
-                                                                                            <Plus size={16} strokeWidth={2.5} />
-                                                                                        </button>
-                                                                                    </div>
+                                                                                    {(() => {
+                                                                                        const invItem = inventoryOptions.find(i => String(i.id) === String(ov.inventory_item_id));
+                                                                                        const unit = invItem?.unit || 'גרם';
+                                                                                        const isKg = ['kg', 'kilo', 'ק"ג', 'l', 'liter', 'ליטר'].includes(unit.toLowerCase());
+                                                                                        return (
+                                                                                            <>
+                                                                                                <span className="text-sm font-bold text-gray-500 w-20 shrink-0">כמות ({isKg ? 'גרם/מ"ל' : 'יח\''})</span>
+                                                                                                <div className="flex items-center gap-1">
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => handleUpdateOption(ov.id, { quantity: Math.max(0, (Number(ov.quantity) || 0) - (isKg ? 10 : 1)) })}
+                                                                                                        className="w-10 h-10 bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold border border-gray-200 rounded-xl active:bg-gray-200 flex items-center justify-center transition-colors"
+                                                                                                    >
+                                                                                                        <Minus size={16} strokeWidth={2.5} />
+                                                                                                    </button>
+                                                                                                    <div className="w-14 h-10 flex items-center justify-center font-black text-gray-800 bg-gray-50 border border-gray-200 rounded-xl">
+                                                                                                        <input
+                                                                                                            type="number"
+                                                                                                            value={ov.quantity || ''}
+                                                                                                            onChange={(e) => handleUpdateOption(ov.id, { quantity: e.target.value })}
+                                                                                                            className="w-full h-full text-center outline-none bg-transparent text-base font-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                                                            placeholder="0"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => handleUpdateOption(ov.id, { quantity: (Number(ov.quantity) || 0) + (isKg ? 10 : 1) })}
+                                                                                                        className="w-10 h-10 bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold border border-gray-200 rounded-xl active:bg-gray-200 flex items-center justify-center transition-colors"
+                                                                                                    >
+                                                                                                        <Plus size={16} strokeWidth={2.5} />
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             </div>
 

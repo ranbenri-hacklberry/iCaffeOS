@@ -12,7 +12,7 @@ export const useRecipe = (businessId) => {
         if (!businessId) return;
         try {
             const { data, error } = await supabase.from('inventory_items')
-                .select('id, name, unit, cost_per_unit, price')
+                .select('id, name, base_unit, display_unit, cost_per_unit, price')
                 .eq('business_id', businessId)
                 .order('name');
 
@@ -21,7 +21,8 @@ export const useRecipe = (businessId) => {
             // Normalize data: cost_per_unit is primary cost, fallback to price
             const mapped = (data || []).map(item => ({
                 ...item,
-                cost: Number(item.cost_per_unit || item.price || 0)
+                cost: Number(item.cost_per_unit || item.price || 0),
+                unit: item.display_unit || item.base_unit
             }));
 
             setInventoryOptions(mapped);
@@ -65,7 +66,8 @@ export const useRecipe = (businessId) => {
 
             const mappedComponents = (ingredients || []).map(row => {
                 const invItem = invMap.get(String(row.inventory_item_id));
-                const price = Number(row.cost_per_unit || invItem?.cost || 0);
+                // cost_per_unit removed from recipe_ingredients, fetch from invItem
+                const price = Number(invItem?.cost_per_unit || invItem?.price || 0);
                 const quantity = Number(row.quantity_used || 0);
 
                 return {
@@ -97,20 +99,7 @@ export const useRecipe = (businessId) => {
         if (!invItem) return null;
 
         const quantity = Number(quantityStr) || 0;
-        // Logic for Kg conversion from Grams if needed (from original code)
-        // Original: const isKg = ['kg',...].includes(unit); const dbQty = isKg ? q/1000 : q;
-        // We will keep UI quantity as entered, but handle storage conversion during SAVE or keep consistent?
-        // Original code *stored* kg but *displayed* ? 
-        // Original code: "Input is in grams for Kg items, convert to Kg for storage" (Line 623).
-        // Line 639: quantity: Number(newRow.quantity_used)
-        // If it was stored as 0.1 (kg), it loads as 0.1?
-        // I will stick to: Store what is used. If user types 100 grams, we should store 0.1 kg?
-        // Let's adopt a simpler approach: Store exactly what is inferred.
-        // If unit is Kg, and user enters 0.1, it is 0.1 Kg.
-        // If unit is Grams, it is 100.
-        // I will trust the input for now to avoid complexity, or check `unit`.
-
-        const cost = invItem.cost;
+        const cost = invItem.cost_per_unit || invItem.price || 0;
         return {
             id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             inventory_item_id: Number(invId),
@@ -154,19 +143,12 @@ export const useRecipe = (businessId) => {
 
         // 3. Upsert Components
         const attempts = components.map(async (comp) => {
-            // Prepare payload
-            // Convert Grams to Kg if needed? logic was:
-            // const isKg = ['kg', 'kilo', 'ק"ג'].includes(cleanUnit);
-            // const dbQuantity = (Number(quantity) || 0) / (isKg ? 1000 : 1);
-            // I'll stick to raw values for now to prevent double confusion unless I implement the unit converter helper.
-            // Assumption: User enters quantity matching the unit.
-
             const payload = {
                 recipe_id: currentRecipeId,
                 inventory_item_id: comp.inventory_item_id,
                 quantity_used: comp.quantity,
-                unit_of_measure: comp.unit,
-                cost_per_unit: comp.price
+                unit_of_measure: comp.unit
+                // cost_per_unit removed
             };
 
             if (comp.isNew || typeof comp.id === 'string') {

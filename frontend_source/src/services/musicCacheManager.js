@@ -1,4 +1,4 @@
-import { music_cache_stats } from '@/db/database';
+import { rantunes_cache_stats as music_cache_stats } from '@/db/database'; // ✅ Migrated: music_cache_stats → rantunes_cache_stats
 import { getBackendApiUrl } from '@/utils/apiUtils';
 
 const MUSIC_API_URL = getBackendApiUrl();

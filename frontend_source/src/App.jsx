@@ -14,10 +14,44 @@ function App() {
   const isLite = import.meta.env.VITE_APP_MODE === 'lite';
 
   useEffect(() => {
+    // 🛡️ GLOBAL CRASH MONITORING
+    const handleError = (e) => {
+      console.error("🔥 GLOBAL_CRASH:", e);
+      const errorMsg = e.message || (e.reason && e.reason.message) || "Unknown Crash";
+      if (typeof window !== 'undefined') {
+        const overlay = document.createElement('div');
+        overlay.id = 'crash-overlay';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:rgba(220,38,38,0.9);color:white;padding:20px;z-index:10000;font-family:sans-serif;text-align:center;direction:rtl;';
+        overlay.innerHTML = `<h3>⚠️ אירעה שגיאה באפליקציה</h3><p>${errorMsg}</p><button onclick="window.location.reload()" style="background:white;color:red;border:none;padding:10px 20px;border-radius:10px;font-weight:bold;">רענן דף</button>`;
+        if (!document.getElementById('crash-overlay')) {
+          document.body.appendChild(overlay);
+        }
+      }
+    };
+
+    window.onerror = (msg, url, line, col, error) => handleError(error || { message: msg });
+    window.onunhandledrejection = (event) => handleError(event);
+
+    // 🛡️ [SMART RESET] Detect environment changes and force-wipe Dexie if needed
+    const runMigration = async () => {
+      try {
+        const { autoDetectMigrationAndReset } = await import("./services/syncService");
+        await autoDetectMigrationAndReset();
+      } catch (e) {
+        console.error("Migration check failed:", e);
+      }
+    };
+    runMigration();
+
     // 🌍 Pre-warm the Active URL Resolver cache
     import("./utils/apiUtils.js").then(({ resolveUrl }) => {
       resolveUrl().catch(err => console.warn("Failed to pre-warm URL cache:", err));
     });
+
+    return () => {
+      window.onerror = null;
+      window.onunhandledrejection = null;
+    };
   }, []);
 
   if (isLoading) {

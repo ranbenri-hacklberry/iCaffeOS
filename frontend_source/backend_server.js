@@ -161,7 +161,7 @@ app.get('/api/system/health', async (req, res) => {
     promises.push((async () => {
         try {
             // Use host.docker.internal since gateway might be native or in different compose
-            const resp = await fetch('http://host.docker.internal:8000/health', { timeout: 3000 });
+            const resp = await fetch('http://127.0.0.1:8000/health', { timeout: 3000 });
             if (resp.ok) results.cortex_gateway = 'online';
         } catch (e) { }
     })());
@@ -169,7 +169,7 @@ app.get('/api/system/health', async (req, res) => {
     // 3. Ollama Check
     promises.push((async () => {
         try {
-            const resp = await fetch('http://host.docker.internal:11434/api/tags', { timeout: 3000 });
+            const resp = await fetch('http://127.0.0.1:11434/api/tags', { timeout: 3000 });
             if (resp.ok) results.ollama = 'online';
         } catch (e) { }
     })());

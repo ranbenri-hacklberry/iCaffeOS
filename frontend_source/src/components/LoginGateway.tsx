@@ -18,9 +18,17 @@ export const LoginGateway: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       console.log('🚀 [LoginGateway] User already authenticated, redirecting...', currentUser.name);
-      if (deviceMode === 'music') navigate('/music');
-      else if (deviceMode === 'kds') navigate('/kds');
-      else navigate('/');
+      // 👑 Super Admin always goes to portal - never to POS
+      const isSuperAdmin = currentUser.is_super_admin || currentUser.isSuperAdmin || currentUser.role === 'super_admin';
+      if (isSuperAdmin && !currentUser.is_impersonating) {
+        navigate('/super-admin');
+      } else if (deviceMode === 'music') {
+        navigate('/music');
+      } else if (deviceMode === 'kds') {
+        navigate('/kds');
+      } else {
+        navigate('/');
+      }
     }
   }, [currentUser, deviceMode, navigate]);
 

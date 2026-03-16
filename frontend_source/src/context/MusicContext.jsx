@@ -18,6 +18,8 @@ export const MusicProvider = ({ children }) => {
     const [activeAudio, setActiveAudio] = useState(1); // 1 or 2
     const isTransitionalRef = useRef(false);
     const fadeIntervalRef = useRef(null);
+    const serverProgressIntervalRef = useRef(null);
+    const serverEndTimeRef = useRef(0);
 
     const handleNextRef = useRef(() => { });
 
@@ -46,6 +48,7 @@ export const MusicProvider = ({ children }) => {
 
     // Persist target selection
     useEffect(() => {
+        console.log('🔈 [MusicContext] Playback Target Changed:', playbackTarget);
         localStorage.setItem('music_playback_target', playbackTarget);
     }, [playbackTarget]);
 
@@ -149,16 +152,20 @@ export const MusicProvider = ({ children }) => {
                 }
             },
             play: (e) => {
+                // If in server mode, local events should not dictate UI state
+                if (playbackTarget === 'server') return;
                 // Determine if this player is indeed the one that SHOULD be playing UI-wise
                 if (activeAudio === playerNum || isTransitionalRef.current) setIsPlaying(true);
             },
             pause: (e) => {
+                // If in server mode, local events should not dictate UI state
+                if (playbackTarget === 'server') return;
                 // Only pause UI if we're not in the middle of a crossfade (where one player pauses)
                 if (!isTransitionalRef.current && activeAudio === playerNum) setIsPlaying(false);
             },
             error: (e) => {
                 console.error(`🎵 Audio Player ${playerNum} Error:`, e.target.error);
-                if (activeAudio === playerNum) setIsPlaying(false);
+                if (activeAudio === playerNum && playbackTarget === 'local') setIsPlaying(false);
             }
         });
 
@@ -172,7 +179,7 @@ export const MusicProvider = ({ children }) => {
             Object.keys(h1).forEach(key => a1.removeEventListener(key, h1[key]));
             Object.keys(h2).forEach(key => a2.removeEventListener(key, h2[key]));
         };
-    }, [activeAudio, crossfadeSeconds]);
+    }, [activeAudio, crossfadeSeconds, playbackTarget]);
 
     // Volume syncing across players
     useEffect(() => {
@@ -295,6 +302,7 @@ export const MusicProvider = ({ children }) => {
             return;
         }
 
+        setIsPlaying(true); // 🚀 Immediate UI feedback
         setIsLoading(true);
 
         try {
@@ -334,15 +342,67 @@ export const MusicProvider = ({ children }) => {
             // For now, relies on error handler.
 
             // Handle Server-Side Playback
+            console.log('🎵 [MusicContext] playbackTarget current value:', playbackTarget);
+
             if (playbackTarget === 'server') {
-                console.log('🔈 Sending play command to Server:', song.title);
+                console.log('🔈 [ServerPlay] [Action] Sending play command to Server:', song.title);
+
+                // CRITICAL: Stop ANY local playback immediately to avoid overlap
+                player1.pause();
+                player1.src = '';
+                player1.load();
+
+                player2.pause();
+                player2.src = '';
+                player2.load();
+
+                if (fadeIntervalRef.current) {
+                    clearInterval(fadeIntervalRef.current);
+                    fadeIntervalRef.current = null;
+                }
+
+                if (serverProgressIntervalRef.current) {
+                    clearInterval(serverProgressIntervalRef.current);
+                    serverProgressIntervalRef.current = null;
+                }
+
+                setCurrentSong(song);
+                setDuration(song.duration_seconds || 0);
+                setCurrentTime(0);
+                setIsPlaying(true);
+
+                // Server play call
                 fetch(`${MUSIC_API_URL}/music/play-server`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: song.file_path })
-                });
-                setCurrentSong(song);
-                setIsPlaying(true);
+                    body: JSON.stringify({
+                        path: song.file_path,
+                        id: song.id,
+                        initialVolume: volume
+                    })
+                }).catch(err => console.error('❌ Server play failed:', err));
+
+                // ⏱️ Virtual Progress Tracker for Server Playback
+                // This simulates the progress since the server doesn't report back yet
+                if (song.duration_seconds) {
+                    const durationMs = song.duration_seconds * 1000;
+                    const startTime = Date.now();
+                    serverEndTimeRef.current = startTime + durationMs;
+
+                    serverProgressIntervalRef.current = setInterval(() => {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        setCurrentTime(elapsed);
+
+                        // Auto-crossfade trigger (Virtual)
+                        if (elapsed > song.duration_seconds - (crossfadeSeconds + 1)) {
+                            console.log('🎵 Virtual server-side auto-crossfade triggered');
+                            clearInterval(serverProgressIntervalRef.current);
+                            serverProgressIntervalRef.current = null;
+                            handleNextRef.current(true);
+                        }
+                    }, 1000);
+                }
+
                 return;
             }
 
@@ -383,34 +443,85 @@ export const MusicProvider = ({ children }) => {
                 setDuration(nextPlayer.duration || 0);
                 setCurrentTime(0);
 
-                // Volume Ramp
-                const steps = 60; // More steps for smoother transition
+                // Server-side Volume Ramp
+                const steps = 30;
                 const interval = (crossfadeSeconds * 1000) / steps;
                 let step = 0;
                 const startVol = targetVolumeRef.current;
 
-                fadeIntervalRef.current = setInterval(() => {
-                    step++;
-                    const progress = step / steps;
+                // 🆕 Server Crossfade Implementation
+                if (playbackTarget === 'server') {
+                    // Start next track on server
+                    fetch(`${MUSIC_API_URL}/music/play-server`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            path: song.file_path,
+                            id: song.id,
+                            initialVolume: 0,
+                            crossfade: true
+                        })
+                    });
 
-                    // Ease-in-out curve for volume
-                    const easeOut = 1 - Math.pow(1 - progress, 2);
-                    const easeIn = Math.pow(progress, 2);
+                    fadeIntervalRef.current = setInterval(() => {
+                        step++;
+                        const progress = step / steps;
+                        const outVol = Math.max(0, startVol * (1 - progress));
+                        const inVol = Math.min(startVol, startVol * progress);
 
-                    currentPlayer.volume = Math.max(0, startVol * (1 - easeOut));
-                    nextPlayer.volume = Math.min(startVol, startVol * easeIn);
+                        // Update server volumes
+                        fetch(`${MUSIC_API_URL}/music/volume-server`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: currentSong?.id, volume: outVol })
+                        });
+                        fetch(`${MUSIC_API_URL}/music/volume-server`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: song.id, volume: inVol })
+                        });
 
-                    if (step >= steps) {
-                        clearInterval(fadeIntervalRef.current);
-                        fadeIntervalRef.current = null;
-                        currentPlayer.pause();
-                        currentPlayer.currentTime = 0;
-                        isTransitionalRef.current = false;
-                        // Final snap to ensure volume is perfect
-                        nextPlayer.volume = targetVolumeRef.current;
+                        if (step >= steps) {
+                            clearInterval(fadeIntervalRef.current);
+                            fadeIntervalRef.current = null;
+                            isTransitionalRef.current = false;
+                            // Final cleanup: stop the previous song (implicitly handled if backend stops it or we just let it finish)
+                        }
+                    }, interval);
+
+                    // Also start the virtual progress tracker for the NEW song
+                    if (song.duration_seconds) {
+                        const startTime = Date.now();
+                        serverProgressIntervalRef.current = setInterval(() => {
+                            const elapsed = (Date.now() - startTime) / 1000;
+                            setCurrentTime(elapsed);
+                            if (elapsed > song.duration_seconds - (crossfadeSeconds + 1)) {
+                                clearInterval(serverProgressIntervalRef.current);
+                                handleNextRef.current(true);
+                            }
+                        }, 1000);
                     }
-                }, interval);
+                } else {
+                    // Local Audio Volume Ramp
+                    fadeIntervalRef.current = setInterval(() => {
+                        step++;
+                        const progress = step / steps;
+                        const easeOut = 1 - Math.pow(1 - progress, 2);
+                        const easeIn = Math.pow(progress, 2);
 
+                        currentPlayer.volume = Math.max(0, startVol * (1 - easeOut));
+                        nextPlayer.volume = Math.min(startVol, startVol * easeIn);
+
+                        if (step >= steps) {
+                            clearInterval(fadeIntervalRef.current);
+                            fadeIntervalRef.current = null;
+                            currentPlayer.pause();
+                            currentPlayer.currentTime = 0;
+                            isTransitionalRef.current = false;
+                            nextPlayer.volume = targetVolumeRef.current;
+                        }
+                    }, interval);
+                }
             } else {
                 // Immediate switch
                 if (fadeIntervalRef.current) {
@@ -439,32 +550,46 @@ export const MusicProvider = ({ children }) => {
             }
 
             // Remote history & Current Playback Sync
-            if (currentUser) {
-                // 1. History
-                await supabase.from('music_playback_history').insert({
-                    song_id: song.id,
-                    employee_id: currentUser.id,
-                    was_skipped: false,
-                    business_id: currentUser.business_id
-                });
+            if (currentUser && currentUser.id) {
+                try {
+                    // 1. History
+                    const historyData = {
+                        song_id: song.id,
+                        employee_id: currentUser.id,
+                        was_skipped: false,
+                    };
 
-                // 2. Current Playback (for MiniPlayer sync)
-                const playbackData = {
-                    user_email: currentUser.email,
-                    song_id: song.id,
-                    song_title: song.title,
-                    artist_name: song.artist?.name || 'Unknown Artist',
-                    album_name: song.album?.name || 'Unknown Album',
-                    cover_url: song.album?.cover_url || song.cover_url || song.thumbnail_url,
-                    is_playing: true,
-                    updated_at: new Date().toISOString(),
-                    business_id: currentUser.business_id
-                };
+                    if (currentUser.business_id) {
+                        historyData.business_id = currentUser.business_id;
+                    }
 
-                // Upsert based on user_email
-                await supabase
-                    .from('music_current_playback')
-                    .upsert(playbackData, { onConflict: 'user_email' });
+                    await supabase.from('music_playback_history').insert(historyData);
+
+                    // 2. Current Playback (for MiniPlayer sync)
+                    if (currentUser.email) {
+                        const playbackData = {
+                            user_email: currentUser.email,
+                            song_id: song.id,
+                            song_title: song.title,
+                            artist_name: song.artist?.name || 'Unknown Artist',
+                            album_name: song.album?.name || 'Unknown Album',
+                            cover_url: song.album?.cover_url || song.cover_url || song.thumbnail_url,
+                            is_playing: true,
+                            updated_at: new Date().toISOString()
+                        };
+
+                        if (currentUser.business_id) {
+                            playbackData.business_id = currentUser.business_id;
+                        }
+
+                        // Upsert based on user_email
+                        await supabase
+                            .from('music_current_playback')
+                            .upsert(playbackData, { onConflict: 'user_email' });
+                    }
+                } catch (syncErr) {
+                    console.warn('⚠️ Playback sync failed (non-critical):', syncErr.message);
+                }
             }
         } catch (error) {
             console.error('Error playing song:', error);
@@ -472,21 +597,44 @@ export const MusicProvider = ({ children }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser, playlist, isPlaying, activeAudio, crossfadeSeconds]);
+    }, [currentUser, playlist, isPlaying, activeAudio, crossfadeSeconds, playbackTarget, MUSIC_API_URL]);
 
     // Play/Pause toggle
     const togglePlay = useCallback(() => {
         if (playbackTarget === 'server') {
+            // Safety: ensure local is quiet
+            audio1Ref.current.pause();
+            audio2Ref.current.pause();
+
             if (isPlaying) {
                 fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' });
                 setIsPlaying(false);
+                if (serverProgressIntervalRef.current) {
+                    clearInterval(serverProgressIntervalRef.current);
+                    serverProgressIntervalRef.current = null;
+                }
             } else if (currentSong) {
                 fetch(`${MUSIC_API_URL}/music/play-server`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: currentSong.file_path })
+                    body: JSON.stringify({ path: currentSong.file_path, initialVolume: volume })
                 });
                 setIsPlaying(true);
+
+                // Resume virtual timer
+                if (currentSong.duration_seconds) {
+                    const remaining = currentSong.duration_seconds - currentTime;
+                    const startTime = Date.now() - (currentTime * 1000);
+                    serverProgressIntervalRef.current = setInterval(() => {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        setCurrentTime(elapsed);
+                        if (elapsed > currentSong.duration_seconds - (crossfadeSeconds + 1)) {
+                            clearInterval(serverProgressIntervalRef.current);
+                            serverProgressIntervalRef.current = null;
+                            handleNextRef.current(true);
+                        }
+                    }, 1000);
+                }
             }
             return;
         }
@@ -497,7 +645,7 @@ export const MusicProvider = ({ children }) => {
         } else {
             audio.pause();
         }
-    }, [activeAudio, playbackTarget, isPlaying, currentSong]);
+    }, [activeAudio, playbackTarget, isPlaying, currentSong, MUSIC_API_URL]);
 
     // Pause
     const pause = useCallback(() => {
@@ -508,13 +656,42 @@ export const MusicProvider = ({ children }) => {
         }
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         audio.pause();
-    }, [activeAudio, playbackTarget]);
+        setIsPlaying(false); // Explicit sync
+    }, [activeAudio, playbackTarget, MUSIC_API_URL]);
+
+    // Stop local audio when target changes to server
+    useEffect(() => {
+        if (playbackTarget === 'server') {
+            const a1 = audio1Ref.current;
+            const a2 = audio2Ref.current;
+            a1.pause();
+            a1.src = '';
+            a1.load();
+            a2.pause();
+            a2.src = '';
+            a2.load();
+            if (fadeIntervalRef.current) {
+                clearInterval(fadeIntervalRef.current);
+                fadeIntervalRef.current = null;
+            }
+            setIsPlaying(false);
+        }
+    }, [playbackTarget]);
 
     // Resume
     const resume = useCallback(() => {
+        if (playbackTarget === 'server') {
+            fetch(`${MUSIC_API_URL}/music/play-server`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: currentSong?.file_path })
+            });
+            setIsPlaying(true);
+            return;
+        }
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         audio.play();
-    }, [activeAudio]);
+    }, [activeAudio, playbackTarget, currentSong, MUSIC_API_URL]);
 
     // Next song with forced crossfade option
     const handleNext = useCallback((forceCrossfade = true) => {
@@ -680,12 +857,21 @@ export const MusicProvider = ({ children }) => {
         const clampedVol = Math.max(0, Math.min(1, vol));
         setVolumeState(clampedVol);
         targetVolumeRef.current = clampedVol;
+
+        if (playbackTarget === 'server') {
+            fetch(`${MUSIC_API_URL}/music/volume-server`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volume: clampedVol })
+            }).catch(err => console.error('❌ Server volume update failed:', err));
+        }
+
         // If not fading, update audio element volume directly
         if (!isTransitionalRef.current) {
             audio1Ref.current.volume = activeAudio === 1 ? clampedVol : 0;
             audio2Ref.current.volume = activeAudio === 2 ? clampedVol : 0;
         }
-    }, [activeAudio]);
+    }, [activeAudio, playbackTarget, MUSIC_API_URL]);
 
     // Update remaining refs
     useEffect(() => {
@@ -697,19 +883,26 @@ export const MusicProvider = ({ children }) => {
 
     // Stop playback
     const stop = useCallback(() => {
+        if (playbackTarget === 'server') {
+            fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' }).catch(() => { });
+        }
+
         if (fadeIntervalRef.current) {
             clearInterval(fadeIntervalRef.current);
             fadeIntervalRef.current = null;
         }
         audio1Ref.current.pause();
-        audio1Ref.current.currentTime = 0;
+        audio1Ref.current.src = '';
+        audio1Ref.current.load();
+
         audio2Ref.current.pause();
-        audio2Ref.current.currentTime = 0;
+        audio2Ref.current.src = '';
+        audio2Ref.current.load();
 
         setCurrentSong(null);
         setIsPlaying(false);
         isTransitionalRef.current = false;
-    }, []);
+    }, [playbackTarget, MUSIC_API_URL]);
 
     // Remove from queue
     const removeFromQueue = useCallback(async (songId) => {

@@ -171,6 +171,35 @@ async function enrichWithGoldenAnswer(businessId, message) {
   return message;
 }
 
+// ── Disturbance Filter ────────────────────────────────────────────────
+// Level 1: Only push 'Golden Answers' (quality >= 4).
+// Level 5: Push everything (including raw anomalies).
+
+async function shouldProcessMessage(businessId, message, isGolden) {
+  try {
+    const { data: config } = await supabase
+      .from("business_config")
+      .select("disturbance_level")
+      .eq("id", businessId)
+      .single();
+
+    const level = config?.disturbance_level ?? 3;
+
+    if (level === 1) {
+      return isGolden; // Only allow if it has a quality match
+    }
+    if (level === 5) {
+      return true; // Push everything
+    }
+
+    // Default/Mid-levels: push if it's golden or if it meets some other criteria (e.g. length)
+    return isGolden || level >= 3;
+  } catch (err) {
+    log("warn", "[filter] failed to fetch disturbance level:", err.message);
+    return true; // Fallback to push
+  }
+}
+
 // ── CHANNEL 1: WAHA (WhatsApp HTTP API) ──────────────────────────────
 
 async function sendViaWAHA(phone, message) {
@@ -316,7 +345,32 @@ async function processJob(job) {
   }
 
   // Enrich template with golden answer if available
-  const enrichedTemplate = await enrichWithGoldenAnswer(job.business_id, template);
+  const { data: goldenMatch } = await supabase.rpc("fn_get_training_context", {
+    p_business_id: job.business_id,
+    p_query: template,
+    p_limit: 1,
+  });
+
+  const isGolden = goldenMatch?.[0]?.quality_score >= 4;
+  const enrichedTemplate = isGolden
+    ? `${template}\n\n---\n${goldenMatch[0].golden_answer}`
+    : template;
+
+  // Apply Disturbance Level Filter
+  const allowed = await shouldProcessMessage(job.business_id, enrichedTemplate, isGolden);
+  if (!allowed) {
+    log("info", `[job:${jobId.slice(0, 8)}] 🔇 blocked by disturbance level filter`);
+    await supabase.rpc("fn_complete_job", {
+      p_job_id: jobId,
+      p_status: "filtered",
+      p_sent_via: null,
+      p_sent_count: 0,
+      p_failed_count: 0,
+      p_results: [],
+      p_error_log: "Message suppressed by disturbance level setting (Level 1)",
+    });
+    return;
+  }
 
   const results = [];
   const metaAudit = {};

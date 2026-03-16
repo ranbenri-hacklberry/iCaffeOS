@@ -117,22 +117,14 @@ export const useStore = create((set, get) => ({
                 items = await db.menu_items.toArray();
             }
 
-            if (items.length === 0) {
-                const demoItems = [
-                    { id: crypto.randomUUID(), name: 'הפוך גדול', price: 14, category: 'coffee' },
-                    { id: crypto.randomUUID(), name: 'אספרסו', price: 9, category: 'coffee' },
-                    { id: crypto.randomUUID(), name: 'קרואסון חמאה', price: 16, category: 'pastry' },
-                    { id: crypto.randomUUID(), name: 'כריך אבוקדו', price: 32, category: 'food' },
-                ];
-                if (!currentUser?.business_id) {
-                    await db.menu_items.bulkAdd(demoItems);
-                    set({ menuItems: demoItems });
-                    return;
-                }
-            }
-
+            // CRITICAL: DO NOT automatically fallback to demo items if items.length === 0
+            // This prevents "Ghost" data flickers during first load.
+            // If the user wants a demo, they should explicitly trigger it.
             set({ menuItems: items });
-        } catch (e) { console.error("Fetch Menu Error", e); }
+        } catch (e) {
+            console.error("Fetch Menu Error", e);
+            set({ menuItems: [] }); // Clear items on error to avoid stale ghost
+        }
     },
 
     // --- Cart State ---
@@ -307,7 +299,7 @@ export const useStore = create((set, get) => ({
                     p_items: cart.map(i => ({
                         menu_item_id: i.id,
                         quantity: i.quantity || 1,
-                        mods: (i.selectedOptions || i.mods || []).map(m => m.valueId || m.text || m)
+                        mods: i.selectedOptions || i.mods || []
                     })),
                     p_payment_method: paymentMethod,
                     p_is_paid: true,

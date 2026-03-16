@@ -15,7 +15,10 @@ export const AuthProvider = ({ children }) => {
     const [deviceMode, setDeviceMode] = useState(null); // 'kiosk', 'kds', 'manager', 'music'
     const [isLoading, setIsLoading] = useState(true);
 
+    /* 
     // 🚀 רני ביקש: בכל העלאה מחדש להכריח כניסה עם פין
+    // [DISABLED] This was causing 'flashing old memory' issues and UX confusion on Mac App reloads.
+    // We now favor standard session expiry based on inactivity/time instead of mount-clearing.
     useEffect(() => {
         // If we are in the middle of an impersonation flow, DO NOT clear the session
         const isImpersonating = localStorage.getItem('original_super_admin');
@@ -30,6 +33,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('kiosk_mode');
         localStorage.setItem('app_version', APP_VERSION);
     }, []);
+    */
 
     const [syncStatus, setSyncStatus] = useState({
         inProgress: false,
@@ -546,6 +550,12 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('kiosk_auth_time');
         localStorage.removeItem('kiosk_mode');
         localStorage.removeItem('last_sync_time');
+
+        // Clean up any pending order/edit state
+        sessionStorage.removeItem('pendingCartState');
+        sessionStorage.removeItem('editOrderData');
+        sessionStorage.removeItem('order_origin');
+
         window.location.href = '/mode-selection';
     };
 

@@ -10,8 +10,10 @@ export const useKDSSms = () => {
     const [isSendingSms, setIsSendingSms] = useState(false);
 
     const handleSendSms = async (phone, customerName = null) => {
-        if (!phone || phone === '0500000000' || phone === 'null') {
-            console.log('🚫 Skipping SMS: Invalid phone number');
+        // 🛠️ STRICT CHECK: Ensure phone exists and is valid before even attempting anything
+        const cleanPhone = String(phone || '').trim();
+        if (!cleanPhone || cleanPhone === '0500000000' || cleanPhone === 'null' || cleanPhone === 'undefined') {
+            console.log('🚫 Skipping SMS: No valid phone number provided');
             return;
         }
 

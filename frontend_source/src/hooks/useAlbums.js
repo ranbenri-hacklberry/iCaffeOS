@@ -16,6 +16,7 @@ export const useAlbums = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [isMusicDriveConnected, setIsMusicDriveConnected] = useState(false); // Start as false until we check
+    const [diskStatus, setDiskStatus] = useState(null); // { mounted, path, staging }
 
     const fetchRatingsMap = useCallback(async (songIds) => {
         if (!currentUser?.id) {
@@ -78,7 +79,9 @@ export const useAlbums = () => {
                 return (savedPath && path === savedPath) ||
                     name.includes('rantunes') ||
                     path.includes('rantunes') ||
-                    (v.path.startsWith('/Volumes/') && !name.includes('macintosh hd'));
+                    (v.path.startsWith('/Volumes/') && !name.includes('macintosh hd')) ||
+                    v.path.startsWith('/mnt/') ||
+                    v.path.startsWith('/media/');
             });
 
             const isConnected = !!externalDrive;
@@ -143,8 +146,10 @@ export const useAlbums = () => {
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch albums');
             const list = json.albums || [];
+        // Update disk status from backend response
+            if (json?.disk_status) setDiskStatus(json.disk_status);
 
-            // Merge logic: If DB album has 0 songs but Scan album has > 0, prefer Scan album metadata
+        // Merge logic: If DB album has 0 songs but Scan album has > 0, prefer Scan album metadata
             const merged = [...list];
             if (scanLibrary?.albums) {
                 scanLibrary.albums.forEach(sa => {
@@ -284,7 +289,7 @@ export const useAlbums = () => {
     const removePlaylistSong = useCallback(async (entryId) => {
         try {
             const { error } = await supabase
-                .from('music_playlist_songs')
+                .from('rantunes_playlist_songs')
                 .delete()
                 .eq('id', entryId);
 
@@ -301,7 +306,7 @@ export const useAlbums = () => {
         try {
             // Get last position
             const { data: maxPos } = await supabase
-                .from('music_playlist_songs')
+                .from('rantunes_playlist_songs')
                 .select('position')
                 .eq('playlist_id', playlistId)
                 .order('position', { ascending: false })
@@ -311,7 +316,7 @@ export const useAlbums = () => {
             const nextPos = (maxPos?.position || 0) + 1;
 
             const { data, error } = await supabase
-                .from('music_playlist_songs')
+                .from('rantunes_playlist_songs')
                 .insert({
                     playlist_id: playlistId,
                     song_id: songId,
@@ -332,7 +337,7 @@ export const useAlbums = () => {
     const fetchPlaylistSongs = useCallback(async (playlistId) => {
         try {
             setIsLoading(true);
-            const res = await fetch(`${MUSIC_API_URL}/music/library/playlists/${playlistId}/songs`);
+            const res = await fetch(`${MUSIC_API_URL}/music/library/playlists/${encodeURIComponent(playlistId)}/songs`);
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch playlist songs');
             const songs = json.songs || [];
@@ -369,7 +374,11 @@ export const useAlbums = () => {
                         const sAlbumId = normalizePath(s.album_id);
                         return sPath.startsWith(searchPath) || sAlbumId === searchPath;
                     })
-                    .sort((a, b) => (a.track_number || 0) - (b.track_number || 0));
+                    .sort((a, b) => {
+                        const trackSort = (a.track_number || 0) - (b.track_number || 0);
+                        if (trackSort !== 0) return trackSort;
+                        return (a.file_name || '').localeCompare(b.file_name || '');
+                    });
 
                 if (matching.length > 0) {
                     const coverUrl = albumMeta?.cover_url || albumMeta?.cover_path || null;
@@ -385,12 +394,17 @@ export const useAlbums = () => {
             }
 
             // 2. Fallback to Database
-            const res = await fetch(`${MUSIC_API_URL}/music/library/albums/${albumId}/songs`);
+            const res = await fetch(`${MUSIC_API_URL}/music/library/albums/${encodeURIComponent(albumId)}/songs`);
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch album songs');
             const songs = json.songs || [];
             const ratingMap = await fetchRatingsMap(songs.map(s => s.id).filter(Boolean));
-            return songs.map(s => ({ ...s, myRating: ratingMap.get(s.id) || 0 }));
+            return songs.map(s => ({ ...s, myRating: ratingMap.get(s.id) || 0 }))
+                .sort((a, b) => {
+                    const trackSort = (a.track_number || 0) - (b.track_number || 0);
+                    if (trackSort !== 0) return trackSort;
+                    return (a.file_name || a.title || '').localeCompare(b.file_name || b.title || '');
+                });
         } catch (err) {
             console.error('Error fetching album songs:', err);
             setError(err.message);
@@ -509,7 +523,7 @@ export const useAlbums = () => {
     const fetchArtistSongs = useCallback(async (artistId) => {
         try {
             setIsLoading(true);
-            const res = await fetch(`${MUSIC_API_URL}/music/library/artists/${artistId}/songs`);
+            const res = await fetch(`${MUSIC_API_URL}/music/library/artists/${encodeURIComponent(artistId)}/songs`);
             const json = await res.json();
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch artist songs');
             return json.songs || [];
@@ -555,6 +569,7 @@ export const useAlbums = () => {
 
         scanMusicDirectory,
         isMusicDriveConnected,
+        diskStatus,
         checkMusicDriveConnection,
         generateSmartPlaylist: useCallback(async (options = {}) => {
             const {

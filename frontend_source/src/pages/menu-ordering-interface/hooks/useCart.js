@@ -1,13 +1,37 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+
+const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
 
 /**
  * Custom hook for cart management
  * Handles cart state, history (undo), and item operations
  */
-export const useCart = (initialItems = []) => {
+export const useCart = (initialItems = [], businessId = null) => {
     const [cartItems, setCartItems] = useState(initialItems);
     const [cartHistory, setCartHistory] = useState([]);
+
+    // 🚚 Nursery Specific: Mandatory Delivery Fee Logic
+    useEffect(() => {
+        if (businessId === NURSERY_BIZ_ID) {
+            setCartItems(prev => {
+                const hasFee = prev.some(item => item.isDeliveryFee);
+                if (hasFee) return prev;
+
+                // Append non-removable delivery fee
+                const deliveryFeeItem = {
+                    id: 'delivery-fee',
+                    name: 'דמי משלוח (משתלה)',
+                    price: 30,
+                    quantity: 1,
+                    isDeliveryFee: true,
+                    isNonRemovable: true,
+                    tempId: 'delivery-fee-static'
+                };
+                return [...prev, deliveryFeeItem];
+            });
+        }
+    }, [businessId]);
 
     // Calculate cart total
     const cartTotal = useMemo(() => {
@@ -101,6 +125,9 @@ export const useCart = (initialItems = []) => {
     const removeItem = useCallback((itemId, itemSignature, tempId) => {
         updateCartWithHistory((prevItems) => {
             return prevItems.filter(item => {
+                // NEVER remove non-removable items (e.g. Delivery Fee)
+                if (item.isNonRemovable) return true;
+
                 // Match by tempId first (most reliable)
                 if (tempId && item.tempId === tempId) return false;
                 // Match by id and signature

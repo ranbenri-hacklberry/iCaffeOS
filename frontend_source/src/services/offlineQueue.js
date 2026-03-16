@@ -554,10 +554,17 @@ const processAction = async (action) => {
             const itemStatus = newStatus === 'completed' ? 'completed' :
                 newStatus === 'ready' ? 'ready' : 'in_progress';
 
-            const { error: itemsError } = await supabase
+            let itemsQuery = supabase
                 .from('order_items')
                 .update({ item_status: itemStatus, updated_at: new Date().toISOString() })
                 .eq('order_id', orderId);
+
+            // 🍫 SHOKO PROTECTION: Do not overwrite 'held' items when making the order ready/in_progress
+            if (itemStatus !== 'completed' && itemStatus !== 'cancelled') {
+                itemsQuery = itemsQuery.neq('item_status', 'held');
+            }
+
+            const { error: itemsError } = await itemsQuery;
 
             if (itemsError) console.warn('Failed to update order_items:', itemsError);
 
@@ -568,8 +575,12 @@ const processAction = async (action) => {
                     pending_sync: false
                 });
 
-                await db.order_items.where('order_id').equals(orderId).modify({
-                    item_status: itemStatus
+                await db.order_items.where('order_id').equals(orderId).modify(it => {
+                    // 🍫 SHOKO PROTECTION: Do not overwrite 'held' locally!
+                    if ((itemStatus !== 'completed' && itemStatus !== 'cancelled') && it.item_status === 'held') {
+                        return; // skip 'held' items
+                    }
+                    it.item_status = itemStatus;
                 });
 
                 console.log(`💾 Post-Sync: Updated Dexie for ${orderId} to ${newStatus}`);

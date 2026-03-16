@@ -58,6 +58,9 @@ import AdGenerator from './components/marketing/AdGenerator';
 import ProfileSettings from './pages/profile-settings';
 import AdminFixSuperAdmin from './pages/admin-fix-superadmin';
 import SMSDashboard from './components/SMSDashboard';
+import StaffDashboard from './pages/hotel/StaffDashboard';
+import HotelDashboard from './pages/hotel/HotelDashboard';
+
 
 // Wrapper for AdGenerator to provide props
 const AdGeneratorWrapper = () => {
@@ -79,17 +82,7 @@ const pageVariants = {
   transition: { duration: 0.2, ease: "linear" }
 };
 
-const PageTransition = ({ children }) => (
-  <motion.div
-    variants={pageVariants}
-    initial="initial"
-    animate="animate"
-    exit="exit"
-    className="w-full h-full"
-  >
-    {children}
-  </motion.div>
-);
+const PageTransition = ({ children }) => <>{children}</>;
 
 import LoadingFallback from './components/LoadingFallback';
 
@@ -102,8 +95,10 @@ const ProtectedRoute = ({ children }) => {
   // Use state mode or fallback to localStorage for immediate transitions
   const deviceMode = stateMode || localStorage.getItem('kiosk_mode');
 
-  // Show loading state with Framer Motion (Using new Fallback)
+  console.log('🛡️ [ProtectedRoute] Rendering for path:', location.pathname, { deviceMode, currentUser: !!currentUser });
+
   if (isLoading) {
+    console.log('🛡️ [ProtectedRoute] Still loading...');
     return <LoadingFallback message="טוען מערכת..." />;
   }
 
@@ -122,7 +117,11 @@ const ProtectedRoute = ({ children }) => {
   const isSuperAdminPath = location.pathname.startsWith('/super-admin');
 
   // 👑 SUPER ADMIN REDIRECT: If super admin lands on root '/', send them to their portal
-  if (isSuperAdmin && location.pathname === '/' && !currentUser?.is_impersonating) {
+  // BUT: if they explicitly requested POS (/?new=true or /?editOrderId=...), let them through!
+  const searchParams = new URLSearchParams(location.search);
+  const isExplicitPOSRequest = searchParams.get('new') === 'true' || searchParams.has('editOrderId');
+
+  if (isSuperAdmin && location.pathname === '/' && !currentUser?.is_impersonating && !isExplicitPOSRequest) {
     console.log('👑 Super Admin on root - Redirecting to Portal');
     return <Navigate to="/super-admin" replace />;
   }
@@ -138,6 +137,7 @@ const ProtectedRoute = ({ children }) => {
     '/profile-settings',
     '/maya',
     '/owner-settings',
+    '/hotel',
   ];
   const isDeviceModeExempt = DEVICE_MODE_EXEMPT.some(
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
@@ -151,7 +151,17 @@ const ProtectedRoute = ({ children }) => {
   if (!deviceMode) {
     // Super Admin without device mode should go to their portal, not mode selection
     if (isSuperAdmin && !currentUser?.is_impersonating) {
+      // But if they explicitly requested POS, let them through
+      if (isExplicitPOSRequest && location.pathname === '/') {
+        return <PageTransition>{children}</PageTransition>;
+      }
       return <Navigate to="/super-admin" replace />;
+    }
+
+    // Allow explicit POS requests even without a saved device mode
+    // This handles the race condition where setMode() hasn't updated state yet
+    if (isExplicitPOSRequest && location.pathname === '/') {
+      return <PageTransition>{children}</PageTransition>;
     }
 
     // Explicitly check for POS path (/) when no mode is set
@@ -171,10 +181,17 @@ const ProtectedRoute = ({ children }) => {
   // 🛡️ MODE-BASED ROOT REDIRECT: Ensure root path always reflects the active mode.
   // This prevents users who are 'Managers' from seeing the 'Kiosk' just because they are on '/'
   if (location.pathname === '/' && deviceMode && deviceMode !== 'kiosk') {
-    if (deviceMode === 'kds') return <Navigate to="/kds" replace />;
-    if (deviceMode === 'manager') return <Navigate to="/data-manager-interface" replace />;
-    if (deviceMode === 'music') return <Navigate to="/music" replace />;
+    // Check if we explicitly want to create an order or edit an order
+    const searchParams = new URLSearchParams(location.search);
+    const isExplicitPOSRequest = searchParams.get('new') === 'true' || searchParams.has('editOrderId') || searchParams.get('from') === 'kds';
+
+    if (!isExplicitPOSRequest) {
+      if (deviceMode === 'kds') return <Navigate to="/kds" replace />;
+      if (deviceMode === 'manager') return <Navigate to="/data-manager-interface" replace />;
+      if (deviceMode === 'music') return <Navigate to="/music" replace />;
+    }
   }
+
 
   return <PageTransition>{children}</PageTransition>;
 };
@@ -183,8 +200,7 @@ const AppRoutes = () => {
   const location = useLocation();
 
   return (
-
-    <RouterRoutes location={location} key={location.pathname}>
+    <RouterRoutes location={location}>
       {/* Public Routes */}
       <Route path="/login" element={<PageTransition><LoginGateway /></PageTransition>} />
       <Route path="/complete-profile" element={<CompleteProfile />} />
@@ -216,7 +232,9 @@ const AppRoutes = () => {
       {/* Protected Routes */}
       <Route path="/mode-selection" element={
         <ProtectedRoute>
-          <HierarchicalDashboard />
+          <PageTransition>
+            <HierarchicalDashboard />
+          </PageTransition>
         </ProtectedRoute>
       } />
 
@@ -376,9 +394,21 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
 
-      <Route path="*" element={<NotFound />} />
-    </RouterRoutes>
+      {/* Hotel POC Routes */}
+      <Route path="/hotel/staff" element={
+        <ProtectedRoute>
+          <StaffDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/hotel/admin" element={
+        <ProtectedRoute>
+          <HotelDashboard />
+        </ProtectedRoute>
+      } />
 
+      <Route path="*" element={<NotFound />} />
+
+    </RouterRoutes>
   );
 };
 

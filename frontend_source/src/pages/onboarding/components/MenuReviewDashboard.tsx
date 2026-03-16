@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-    Plus, Settings, Trash2, RefreshCw, Wand2, Check,
+    Plus, Settings, Trash2, RefreshCw, Wand2, Check, Coffee,
     Package, Clock, Globe, AlertCircle, Flame, ShoppingBag, HelpCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -19,10 +19,9 @@ import UnifiedHeader from '@/components/UnifiedHeader';
 const MenuReviewDashboard = () => {
     const { currentUser } = useAuth();
     const {
-        items, startLiveGeneration,
+        items,
         addNewItem, geminiApiKey, setGeminiApiKey,
-        error, setError, updateItem, initSession, sessionId, isLoading,
-        businessName
+        error, setError, updateItem, initSession, sessionId, isLoading
     } = useOnboardingStore();
     const navigate = useNavigate();
 
@@ -99,20 +98,34 @@ const MenuReviewDashboard = () => {
 
     if (isLoading) {
         return (
-            <div className="h-full flex flex-col items-center justify-center bg-slate-900 gap-8" dir="rtl">
-                <div className="relative w-24 h-24">
-                    {/* Outer Pulse */}
-                    <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping" />
-                    {/* Middle Pulse */}
-                    <div className="absolute inset-4 bg-indigo-500/40 rounded-full animate-pulse" />
-                    {/* Core Logo/Icon Placeholder */}
-                    <div className="absolute inset-8 bg-indigo-600 rounded-full border-2 border-indigo-400 shadow-[0_0_20px_rgba(79,70,229,0.5)] flex items-center justify-center">
-                        <RefreshCw className="text-white animate-spin duration-[3000ms]" size={20} />
+            <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50 gap-8 px-6 transition-all duration-500" dir="rtl">
+                <div className="relative w-32 h-32 md:w-40 md:h-40">
+                    {/* Outer ripples */}
+                    <div className="absolute inset-0 bg-orange-500/10 rounded-full animate-[ping_3s_infinite]" />
+                    <div className="absolute inset-4 bg-orange-500/20 rounded-full animate-[ping_2s_infinite]" />
+
+                    {/* Main loader core */}
+                    <div className="absolute inset-8 rounded-full border-2 bg-white border-orange-200 shadow-xl flex items-center justify-center overflow-hidden">
+                        <div className="relative z-10">
+                            <Coffee size={32} className="text-orange-500 animate-pulse" />
+                        </div>
+                        {/* Progress sweep overlay */}
+                        <div className="absolute inset-0 border-t-2 border-orange-500 animate-spin duration-[2000ms]" />
                     </div>
                 </div>
-                <div className="text-center space-y-2">
-                    <p className="text-white text-xl font-black tracking-tighter uppercase">מסנכרן נתונים...</p>
-                    <p className="text-indigo-400/60 text-[10px] font-mono animate-pulse uppercase tracking-[0.2em]">iCaffeOS Cloud Sync v5.2</p>
+
+                <div className="text-center space-y-3 max-w-xs scale-90 md:scale-100">
+                    <h2 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900">
+                        טוענים את התפריט...
+                    </h2>
+                    <div className="flex items-center justify-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-bounce [animation-delay:-0.3s]" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-bounce [animation-delay:-0.15s]" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-bounce" />
+                    </div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">
+                        iCaffeOS Cloud Sync v7.0
+                    </p>
                 </div>
             </div>
         );
@@ -292,18 +305,8 @@ const MenuReviewDashboard = () => {
                 )}
             </div>
 
-            {/* Footer Queue */}
-            {stats.pending > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 p-4 border-t border-slate-200 z-[100] bg-white/90 backdrop-blur-md flex items-center justify-center">
-                    <button
-                        onClick={() => startLiveGeneration()}
-                        className="max-w-4xl w-full py-4 bg-slate-900 text-white font-black text-[13px] uppercase rounded-xl shadow-lg flex items-center justify-center gap-3"
-                    >
-                        <Wand2 size={18} className="animate-pulse" />
-                        {`הפעל יצירה (${stats.pending})`}
-                    </button>
-                </div>
-            )}
+            {/* Footer Queue - DISABLED: Use 'regenerateSingleItem' per item instead */}
+            {/* stats.pending > 0 batch generation button removed in v7 */}
 
             {/* Modals */}
             {editItem && <MenuItemEditModal item={editItem} onClose={() => setEditItem(null)} />}

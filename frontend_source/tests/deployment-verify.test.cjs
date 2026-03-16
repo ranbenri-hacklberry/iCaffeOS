@@ -68,8 +68,8 @@ async function main() {
         await wait(3000);
 
         const telSnap = browser(`snapshot -i`);
-        if (telSnap && telSnap.output && telSnap.output.includes('N150')) {
-            log('Telemetry verified: Found N150 in snapshot', 'success');
+        if (telSnap && telSnap.output && (telSnap.output.includes('AGX') || telSnap.output.includes('Studio'))) {
+            log('Telemetry verified: Found AGX/Studio in snapshot', 'success');
         } else {
             log(`Telemetry failed or not visible. Output: ${telSnap ? telSnap.output : 'NULL'}`, 'error');
         }

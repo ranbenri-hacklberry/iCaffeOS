@@ -357,7 +357,12 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                 originalPrice: item.sale_price > 0 ? item.price : null,
                 category: getCategoryId(item.category, item.category_id),
                 image: item.image_url || null,
-                is_hot_drink: item.is_hot_drink,
+                is_hot_drink: !!(
+                    item.is_hot_drink || 
+                    item.modifiers?.is_hot_drink || 
+                    item.modifiers?.config?.is_hot_drink ||
+                    (Array.isArray(item.modifiers) && item.modifiers.some(m => m.is_hot_drink))
+                ),
                 kds_routing_logic: item.kds_routing_logic,
                 db_category: item.category,
                 modifiers: item.modifiers || [],

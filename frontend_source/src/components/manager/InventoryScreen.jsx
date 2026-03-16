@@ -51,19 +51,27 @@ const InventoryScreen = () => {
   const [showItemModal, setShowItemModal] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
   const [newSupplierDays, setNewSupplierDays] = useState([]); // Array of integers 0-6 (Sun-Fri)
-  const [newItemData, setNewItemData] = useState({
+  const EMPTY_NEW_ITEM = {
     name: '',
-    unit: 'יח׳',
+    base_unit: 'גרם',       
     category: 'כללי',
     cost_per_unit: 0,
-    weight_per_unit: 0,
+    weight_per_unit: 0,   
     min_order: 1,
     order_step: 1,
-    count_step: 1,
+    inventory_count_step: 1,
     low_stock_threshold_units: 0,
     initial_stock_units: 0,
-    location: ''
-  });
+    // Dual-view & JSONB fields
+    display_unit: '',        // e.g. "ארגז"
+    conversion_factor: '',   // e.g. 1000 (1 ארגז = 1000 גרם)
+    location: '',
+    notes: '',
+    // Manufacturing
+    manufacturer_name: '',
+    supplier_id: ''
+  };
+  const [newItemData, setNewItemData] = useState(EMPTY_NEW_ITEM);
 
   // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState({
@@ -80,6 +88,10 @@ const InventoryScreen = () => {
   const [receivingSession, setReceivingSession] = useState(null);
   // receivingSession = { items: [{name, invoicedQty, actualQty, unitPrice, countStep, isNew}], orderId, supplierId }
   const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
+
+  // Catalog Item Selection Alert
+  const [catalogAlert, setCatalogAlert] = useState({ isOpen: false, itemName: '', category: '' });
+
 
 
   const fetchData = useCallback(async () => {
@@ -148,7 +160,7 @@ const InventoryScreen = () => {
         }).map(item => ({
           id: `prep-${item.id}`, // Virtual ID to distinguish
           name: item.name,
-          unit: (Array.isArray(item.prepared_items_inventory) ? item.prepared_items_inventory[0]?.unit : item.prepared_items_inventory?.unit) ?? 'יח׳',
+          base_unit: (Array.isArray(item.prepared_items_inventory) ? item.prepared_items_inventory[0]?.unit : item.prepared_items_inventory?.unit) ?? 'יח׳',
           current_stock: (Array.isArray(item.prepared_items_inventory) ? item.prepared_items_inventory[0]?.current_stock : item.prepared_items_inventory?.current_stock) ?? 0,
           supplier_id: 'uncategorized', // Or a new virtual 'prepared' group
           category: item.category,
@@ -307,7 +319,7 @@ const InventoryScreen = () => {
           qty: normalizedQty,
           item: item || (next[itemId] ? next[itemId].item : null),
           itemName: item?.name || next[itemId]?.itemName,
-          unit: item?.unit || next[itemId]?.unit,
+          unit: item?.display_unit || item?.base_unit || next[itemId]?.unit,
           supplierId: item?.supplier_id || next[itemId]?.supplierId,
           supplierName: item?.supplier?.name || next[itemId]?.supplierName
         };
@@ -436,9 +448,10 @@ const InventoryScreen = () => {
         p_item_id: itemId,
         p_updates: {
           name: updateData.name,
-          unit: updateData.unit,
+          base_unit: updateData.base_unit,
+          display_unit: updateData.display_unit,
           cost_per_unit: updateData.cost_per_unit,
-          count_step: updateData.count_step,
+          inventory_count_step: updateData.inventory_count_step,
           weight_per_unit: updateData.weight_per_unit,
           min_order: updateData.min_order,
           order_step: updateData.order_step,
@@ -597,11 +610,11 @@ const InventoryScreen = () => {
       return {
         id: ocrItem.id || `temp-${Date.now()}-${Math.random()}`,
         name: matchedItem?.name || name, // Use catalog name if matched
-        unit: ocrItem.unit || matchedItem?.unit || 'יח׳',
+        unit: ocrItem.unit || matchedItem?.display_unit || matchedItem?.base_unit || 'יח׳',
         invoicedQty,
         actualQty: invoicedQty, // Default to invoiced
         unitPrice,
-        countStep: matchedItem?.count_step || 1,
+        countStep: matchedItem?.inventory_count_step || 1,
         inventoryItemId: matchedItem?.id || null,
         catalogItemId: matchedItem?.catalog_item_id || null,
         isNew: !matchedItem,
@@ -740,12 +753,12 @@ const InventoryScreen = () => {
       return {
         id: orderItem.id || `order-item-${idx}-${Date.now()}`,
         name: orderItem.name || 'פריט ללא שם',
-        unit: orderItem.unit || matchedItem?.unit || 'יח׳',
+        unit: orderItem.unit || matchedItem?.display_unit || matchedItem?.base_unit || 'יח׳',
         invoicedQty: orderItem.qty || 0,
         orderedQty: orderItem.qty || 0,
         actualQty: orderItem.qty || 0,
         unitPrice: orderItem.price || matchedItem?.cost_per_unit || 0,
-        countStep: matchedItem?.count_step || (matchedItem?.unit === 'יח׳' ? 1 : 1),
+        countStep: matchedItem?.inventory_count_step || 1,
         orderStep: calculatedOrderStep,
         inventoryItemId: matchedItem?.id || null,
         catalogItemId: matchedItem?.catalog_item_id || null,
@@ -840,45 +853,57 @@ const InventoryScreen = () => {
   const handleAddItem = async () => {
     if (!newItemData.name.trim()) return;
     try {
+      // Resolve the conversion factor:
+      //   1. Use the explicit display_unit conversion_factor if provided
+      //   2. Fall back to the legacy weight_per_unit column
+      //   3. Default to 1 (no conversion)
+      const cf = parseFloat(newItemData.conversion_factor) || parseFloat(newItemData.weight_per_unit) || 1;
       const wpu = parseFloat(newItemData.weight_per_unit) || 0;
-      // Map frontend data to DB columns
+
+      // current_stock is ALWAYS stored in BASE units (grams / ml / pieces)
+      // initial_stock_units the manager enters is in display_units → multiply by cf
+      const initialStockBase = Math.round((parseFloat(newItemData.initial_stock_units) || 0) * cf * 100) / 100;
+
+      // Build the settings JSONB
+      const settings = {
+        ...(newItemData.display_unit ? { display_unit: newItemData.display_unit } : {}),
+        ...(cf > 1 ? { conversion_factor: cf } : {}),
+        ...(newItemData.location ? { location: newItemData.location } : {}),
+        ...(newItemData.notes ? { notes: newItemData.notes } : {}),
+      };
+
+      const finalSupplierId = newItemData.supplier_id 
+        ? newItemData.supplier_id 
+        : (selectedSupplier === 'uncategorized' ? null : selectedSupplier);
+
       const dbItem = {
         business_id: currentUser.business_id,
-        supplier_id: selectedSupplier === 'uncategorized' ? null : selectedSupplier,
+        supplier_id: finalSupplierId,
         name: newItemData.name,
-        unit: newItemData.unit,
+        manufacturer_name: newItemData.manufacturer_name || null,
+        base_unit: newItemData.base_unit,
+        display_unit: newItemData.display_unit || null,
         category: newItemData.category,
         cost_per_unit: newItemData.cost_per_unit,
-        location: newItemData.location,
+        location: newItemData.location,  // keep legacy column populated
         low_stock_threshold_units: newItemData.low_stock_threshold_units,
-        current_stock: Math.round((parseFloat(newItemData.initial_stock_units) || 0) * (wpu || 1) * 100) / 100,
-        count_step: newItemData.count_step,
-        weight_per_unit: wpu,
+        current_stock: initialStockBase,
+        inventory_count_step: newItemData.inventory_count_step,
+        weight_per_unit: wpu,             // keep legacy column
         case_quantity: newItemData.case_quantity || 1,
         min_order: newItemData.min_order,
-        order_step: newItemData.order_step
+        order_step: newItemData.order_step,
+        settings: Object.keys(settings).length > 0 ? settings : null,
       };
 
       const { error } = await supabase.from('inventory_items').insert([dbItem]);
 
       if (error) {
-        console.error("Error inserting new item:", error);
+        console.error('Error inserting new item:', error);
         alert('שגיאה ביצירת פריט: ' + error.message);
       } else {
         setShowItemModal(false);
-        setNewItemData({
-          name: '',
-          unit: 'יח׳',
-          category: '',
-          cost_per_unit: 0,
-          weight_per_unit: 0,
-          min_order: 1,
-          order_step: 1,
-          count_step: 1,
-          low_stock_threshold_units: 0,
-          initial_stock_units: 0,
-          location: ''
-        });
+        setNewItemData(EMPTY_NEW_ITEM);
         fetchData();
       }
     } catch (e) { console.error(e); alert('שגיאה ביצירת פריט'); }
@@ -1295,68 +1320,134 @@ const InventoryScreen = () => {
               </div>
 
               {/* Scrollable Form Content */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">שם הפריט</label>
-                    <input type="text" value={newItemData.name} onChange={e => setNewItemData({ ...newItemData, name: e.target.value })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
-                  </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
+                {/* ── CORE DETAILS & CATALOG Datalist ─────────────── */}
+                <datalist id="catalog-list">
+                  {globalCatalog.map(c => (
+                    <option key={c.id} value={c.name}>{c.category}</option>
+                  ))}
+                </datalist>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">שם הפריט (בחר מהקטלוג או הקלד)</label>
+                    <input 
+                      type="text" 
+                      list="catalog-list"
+                      value={newItemData.name} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        const match = globalCatalog.find(c => c.name === val);
+                        if (match) {
+                          setNewItemData({ 
+                            ...newItemData, 
+                            name: match.name, 
+                            category: match.category || newItemData.category,
+                            base_unit: match.unit || newItemData.base_unit,
+                            weight_per_unit: match.weight_per_unit || newItemData.weight_per_unit
+                          });
+                          // Trigger alert
+                          setCatalogAlert({ isOpen: true, itemName: match.name, category: match.category });
+                        } else {
+                          setNewItemData({ ...newItemData, name: val });
+                        }
+
+                      }} 
+                      placeholder="חפש בקטלוג הגלובלי..."
+                      className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" 
+                    />
+                  </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">יחידת מידה</label>
-                    <select value={newItemData.unit} onChange={e => setNewItemData({ ...newItemData, unit: e.target.value })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm appearance-none">
-                      <option value="יח׳">יחידות (יח׳)</option>
-                      <option value="ק״ג">קילוגרם (ק״ג)</option>
-                      <option value="גרם">גרם (גרם)</option>
-                      <option value="ליטר">ליטר (ל׳)</option>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">יצרן / מותג מקומי</label>
+                    <input type="text" placeholder="למשל: אסם, קנור..." value={newItemData.manufacturer_name || ''} onChange={e => setNewItemData({ ...newItemData, manufacturer_name: e.target.value })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">ספק נבחר</label>
+                    <select 
+                      value={newItemData.supplier_id || (selectedSupplier === 'uncategorized' ? '' : selectedSupplier)}
+                      onChange={e => setNewItemData({ ...newItemData, supplier_id: e.target.value })}
+                      className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm appearance-none"
+                    >
+                      <option value="">ללא ספק משויך</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
                     </select>
                   </div>
-
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">יחידת בסיס</label>
+                    <select value={newItemData.base_unit} onChange={e => setNewItemData({ ...newItemData, base_unit: e.target.value })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm appearance-none">
+                      <option value="גרם">גרם</option>
+                      <option value="מ״ל">מ״ל</option>
+                      <option value="יח׳">יחידות (יח׳)</option>
+                      <option value="ק״ג">ק״ג</option>
+                      <option value="ליטר">ליטר</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">קטגוריה</label>
                     <input type="text" value={newItemData.category} onChange={e => setNewItemData({ ...newItemData, category: e.target.value })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
                   </div>
-
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">עלות ליחידה (₪)</label>
-                    <input type="number" inputMode="decimal" value={newItemData.cost_per_unit} onChange={e => setNewItemData({ ...newItemData, cost_per_unit: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">עלות ליחידת בסיס (₪)</label>
+                    <input type="number" inputMode="decimal" value={newItemData.cost_per_unit} onChange={e => setNewItemData({ ...newItemData, cost_per_unit: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm [appearance:textfield]" />
                   </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">משקל ליחידה (גרם)</label>
-                    <input type="number" inputMode="numeric" value={newItemData.weight_per_unit} onChange={e => setNewItemData({ ...newItemData, weight_per_unit: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
-                  </div>
-
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">מינימום להזמנה</label>
-                    <input type="number" value={newItemData.min_order} onChange={e => setNewItemData({ ...newItemData, min_order: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
+                    <input type="number" value={newItemData.min_order} onChange={e => setNewItemData({ ...newItemData, min_order: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm [appearance:textfield]" />
                   </div>
-
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">קפיצת הזמנה</label>
-                    <input type="number" value={newItemData.order_step} onChange={e => setNewItemData({ ...newItemData, order_step: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
+                    <input type="number" value={newItemData.order_step} onChange={e => setNewItemData({ ...newItemData, order_step: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm [appearance:textfield]" />
                   </div>
-
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">קפיצת ספירה</label>
-                    <input type="number" step="0.1" value={newItemData.count_step} onChange={e => setNewItemData({ ...newItemData, count_step: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
+                    <input type="number" step="0.1" value={newItemData.count_step} onChange={e => setNewItemData({ ...newItemData, count_step: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm [appearance:textfield]" />
                   </div>
-
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">התראת מלאי נמוך (יח׳)</label>
-                    <input type="number" value={newItemData.low_stock_threshold_units} onChange={e => setNewItemData({ ...newItemData, low_stock_threshold_units: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 text-blue-600">מלאי התחלתי (יח׳)</label>
-                    <input type="number" value={newItemData.initial_stock_units} onChange={e => setNewItemData({ ...newItemData, initial_stock_units: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-blue-50/50 border border-blue-100 rounded-xl font-black text-blue-700 focus:outline-none focus:border-blue-400 text-sm" />
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">מיקום במחסן / תצוגה</label>
-                    <input type="text" value={newItemData.location} onChange={e => setNewItemData({ ...newItemData, location: e.target.value })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm" />
+                    <input type="number" value={newItemData.low_stock_threshold_units} onChange={e => setNewItemData({ ...newItemData, low_stock_threshold_units: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-xl font-black text-slate-700 focus:outline-none focus:border-blue-400 text-sm [appearance:textfield]" />
                   </div>
                 </div>
+
+                {/* ── Dual-View Section ─────────── */}
+                <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 space-y-3">
+                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">יחידת תצוגה לצוות (Dual-View)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">שם יחידת תצוגה</label>
+                      <input type="text" placeholder="ארגז, שק, בקבוק..." value={newItemData.display_unit} onChange={e => setNewItemData({ ...newItemData, display_unit: e.target.value })} className="w-full h-10 px-4 bg-white border border-indigo-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">מקדם המרה (1 יחידה = ?)</label>
+                      <input type="number" inputMode="decimal" placeholder="למשל 1000" value={newItemData.conversion_factor} onChange={e => setNewItemData({ ...newItemData, conversion_factor: e.target.value })} className="w-full h-10 px-4 bg-white border border-indigo-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-indigo-400 text-sm [appearance:textfield]" />
+                    </div>
+                  </div>
+                  {newItemData.display_unit && parseFloat(newItemData.conversion_factor) > 1 && (
+                    <p className="text-[10px] text-indigo-700 bg-white border border-indigo-100 rounded-xl px-3 py-2">
+                      ✅ 1 {newItemData.display_unit} = {parseFloat(newItemData.conversion_factor)} {newItemData.base_unit} · המלאי ההתחלתי יחושב אוטומטית
+                    </p>
+                  )}
+                  <div>
+                    <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1">מלאי התחלתי (ביחידות תצוגה)</label>
+                    <input type="number" value={newItemData.initial_stock_units} onChange={e => setNewItemData({ ...newItemData, initial_stock_units: parseFloat(e.target.value) || 0 })} className="w-full h-10 px-4 bg-blue-50/50 border border-blue-100 rounded-xl font-black text-blue-700 focus:outline-none focus:border-blue-400 text-sm [appearance:textfield]" />
+                  </div>
+                </div>
+
+                {/* ── Location / Notes (JSONB) ─── */}
+                <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 space-y-3">
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-wider">מידע לוגיסטי</p>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">מיקום במחסן / תצוגה</label>
+                    <input type="text" value={newItemData.location} onChange={e => setNewItemData({ ...newItemData, location: e.target.value })} className="w-full h-10 px-4 bg-white border border-amber-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-amber-400 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">הערות</label>
+                    <textarea rows={2} placeholder="הערות פנימיות..." value={newItemData.notes} onChange={e => setNewItemData({ ...newItemData, notes: e.target.value })} className="w-full px-4 py-2 bg-white border border-amber-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:border-amber-400 text-sm resize-none" />
+                  </div>
+                </div>
+
               </div>
 
               {/* Fixed Footer Action */}
@@ -1426,7 +1517,56 @@ const InventoryScreen = () => {
         confirmText={confirmModal.confirmText}
         cancelText={confirmModal.cancelText}
       />
+
+      {/* Catalog Item Welcome Alert */}
+      <AnimatePresence>
+        {catalogAlert.isOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 0.4 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setCatalogAlert({ ...catalogAlert, isOpen: false })}
+              className="fixed inset-0 bg-black z-[100]" 
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm bg-white rounded-[2.5rem] p-8 z-[101] shadow-2xl border border-blue-100 text-center font-heebo"
+              dir="rtl"
+            >
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-200 rotate-3">
+                <Package size={40} className="text-white" />
+              </div>
+              
+              <h4 className="text-2xl font-black text-slate-800 mb-2">מצאנו את הפריט! 🚀</h4>
+              <p className="text-lg font-bold text-slate-600 mb-6">
+                הפריט <span className="text-blue-600">"{catalogAlert.itemName}"</span> קיים בקטלוג הגלובלי.
+              </p>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8">
+                <div className="flex items-center gap-2 justify-center mb-1">
+                  <AlertTriangle size={16} className="text-amber-600" />
+                  <span className="text-sm font-black text-amber-700">שימו לב</span>
+                </div>
+                <p className="text-sm text-amber-600 font-bold leading-relaxed">
+                  ניתן לערוך את המחיר, המלאי הראשוני והיחידות במסך זה לפני השמירה.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setCatalogAlert({ ...catalogAlert, isOpen: false })}
+                className="w-full h-14 bg-slate-900 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-transform"
+              >
+                הבנתי, תודה!
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
+
   );
 };
 

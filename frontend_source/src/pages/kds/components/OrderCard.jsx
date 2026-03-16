@@ -87,7 +87,10 @@ const OrderCard = memo(({
   onPaymentCollected,
   onFireItems,
   onReadyItems,
+  onDeliverItems,
+  onToggleEarlyDelivered,
   onEditOrder,
+  onCancelOrder,
   onRefresh
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -192,20 +195,27 @@ const OrderCard = memo(({
 
   const totalItems = order.items?.length || 0;
   const isPartiallyPacked = !isHistory && !isReady && totalItems > 0 && packedCount > 0;
-
   const orderStatusLower = (order.orderStatus || '').toLowerCase();
   const isPending = orderStatusLower === 'pending';
+  const isHeld = orderStatusLower === 'held';
+  const isReadyStatus = ['ready', 'completed', 'shipped'].includes(orderStatusLower);
+  const isNew = orderStatusLower === 'new';
+
   const nextStatusLabel = isPending
     ? 'ראיתי'
-    : (orderStatusLower === 'new'
-      ? 'התחל הכנה'
-      : (orderStatusLower === 'in_progress' ? 'מוכן להגשה' : (isReady ? 'נמסר' : 'מוכן להגשה')));
+    : (isHeld 
+      ? (order.isFired ? 'מוכן להגשה' : 'הכן עכשיו!')
+      : (isNew 
+        ? 'התחל הכנה'
+        : (orderStatusLower === 'in_progress' ? 'מוכן להגשה' : 'נמסר')));
 
-  const actionBtnColor = isReady
+  const actionBtnColor = isReadyStatus
     ? 'bg-slate-900 text-white hover:bg-slate-800'
-    : (isPending
-      ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200'
-      : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200');
+    : (isHeld
+      ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-orange-200'
+      : (isNew 
+        ? 'bg-green-500 text-white hover:bg-green-600 shadow-green-200'
+        : 'bg-green-600 text-white hover:bg-green-700 shadow-green-200'));
 
   const cardWidthClass = isHistory
     ? (isLargeOrder ? 'w-[294px]' : 'w-[200px]')
@@ -258,6 +268,13 @@ const OrderCard = memo(({
             </span>
 
             <div className="flex-1 pt-0.5 min-w-0 pr-0">
+              {item.course_stage === 2 && (
+                <div className="flex mb-1">
+                  <span className="px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[9px] font-black rounded-md border border-violet-200">
+                    מנה שנייה (COURSE 2) 🕒
+                  </span>
+                </div>
+              )}
               {(() => {
                 if (!item.modifiers || item.modifiers.length === 0) {
                   return (
@@ -319,7 +336,7 @@ const OrderCard = memo(({
   }, [order.items?.length]);
 
   return (
-    <div className={`kds-card ${cardWidthClass} flex-shrink-0 rounded-2xl px-[5px] pt-1.5 pb-2.5 ${isHistory ? 'mx-[2px]' : 'mx-2'} flex flex-col h-full font-heebo ${(order.type === 'delayed' || orderStatusLower === 'new') ? 'bg-gray-100' : 'bg-white'} ${statusStyles} ${agingClass} ${glowClass} ${shouldFlash && !isLiteMode ? 'animate-pulse ring-4 ring-black z-20' : ''} relative overflow-hidden`}>
+    <div className={`kds-card ${cardWidthClass} flex-shrink-0 rounded-2xl px-[5px] pt-1.5 pb-2.5 ${isHistory ? 'mx-[2px]' : 'mx-2'} flex flex-col h-full font-heebo ${isHeld ? 'bg-amber-50/50 border-2 border-dashed border-amber-300' : (orderStatusLower === 'new' ? 'bg-gray-100' : 'bg-white')} ${statusStyles} ${agingClass} ${glowClass} ${shouldFlash && !isLiteMode ? 'animate-pulse ring-4 ring-black z-20' : ''} relative overflow-hidden`}>
 
       {/* Header */}
       <div className="z-0 flex justify-between items-start mb-0.5 border-b border-gray-50 pb-0.5">
@@ -387,15 +404,14 @@ const OrderCard = memo(({
       </div>
 
       <div className={`mt-auto flex flex-col gap-2 relative ${orderStatusLower === 'new' ? 'z-[10]' : 'z-0'}`}>
-        {order.type === 'delayed' ? (
+        {isHeld ? (
           <button
             disabled={isUpdating}
             onClick={async (e) => {
               e.stopPropagation(); setIsUpdating(true);
               try {
                 const flatIds = order.items.flatMap(i => i.ids || [i.id]);
-                const itemsPayload = flatIds.map(id => ({ id }));
-                if (onFireItems) await onFireItems(order.id || order.originalOrderId, itemsPayload);
+                if (onFireItems) await onFireItems(order.originalOrderId || order.id, flatIds);
               } finally { setIsUpdating(false); }
             }}
             className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl font-black text-lg shadow-lg active:translate-y-1 transition-all flex items-center justify-center gap-2"
@@ -421,24 +437,16 @@ const OrderCard = memo(({
               <div className="mt-auto pt-2 border-t border-gray-100/50">
                 <div className="flex flex-col gap-1.5">
                   <div className={`flex items-center gap-2 p-1 border rounded-xl transition-colors ${order.isPaid ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-                    <div className={`flex-1 flex items-center justify-between text-xs ${order.isPaid ? 'text-gray-500 bg-gray-50/80 border-gray-100' : 'text-amber-700 bg-amber-50 border-amber-200 shadow-sm -translate-y-0.5 cursor-pointer hover:bg-amber-100 transition-colors'} p-1.5 rounded-lg border`}>
+                    <div className={`flex-1 flex items-center justify-between text-xs ${order.isPaid ? 'text-gray-500 bg-gray-50/80 border-gray-100' : 'text-orange-600 bg-white border-orange-600 shadow-sm -translate-y-0.5 cursor-pointer hover:bg-orange-50 transition-colors'} p-1.5 rounded-lg border`}>
 
                       {!order.isPaid ? (
-                        <div
-                          className="flex items-center justify-between w-full"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onPaymentCollected) onPaymentCollected(order);
-                          }}
-                        >
+                        <div className="flex items-center justify-between w-full" onClick={(e) => { e.stopPropagation(); if (onPaymentCollected) onPaymentCollected(order); }}>
                           <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm border border-amber-100">
-                              <img
-                                src="https://gxzsxvbercpkgxraiaex.supabase.co/storage/v1/object/public/Photos/cashregister.jpg"
-                                alt="קופה"
-                                className="w-3.5 h-3.5 object-contain"
-                              />
-                            </div>
+                            <img
+                              src="https://gxzsxvbercpkgxraiaex.supabase.co/storage/v1/object/public/Photos/cashregister.jpg"
+                              alt="קופה"
+                              className="w-6 h-6 object-contain"
+                            />
                             <span className="font-bold">לתשלום</span>
                           </div>
                           <div className="flex items-center gap-1 shrink-0 px-1">
@@ -448,11 +456,11 @@ const OrderCard = memo(({
                           </div>
                         </div>
                       ) : (
-                        <>
+                        <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <CheckCircle size={14} className="text-green-500 shrink-0" />
                             <div className="flex flex-col">
-                              <span className="truncate font-bold">
+                              <span className="truncate font-bold text-xs">
                                 {PAYMENT_LABELS[order.payment_method] || order.payment_method || 'שולם'}
                               </span>
                             </div>
@@ -462,7 +470,7 @@ const OrderCard = memo(({
                               ₪{(order.totalOriginalAmount || order.fullTotalAmount || order.totalAmount)?.toLocaleString()}
                             </span>
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -487,61 +495,99 @@ const OrderCard = memo(({
             {!isHistory && (
               <div className="flex items-stretch gap-2 mt-auto h-11 w-full text-sm relative">
 
-                {/* Kanban Packing Status */}
-                {isKanban && isPartiallyPacked && (
-                  <div className="absolute left-0 bottom-0 top-0 flex items-center justify-center bg-green-100 text-green-800 text-xs font-bold px-3 rounded-xl border border-green-200 shadow-sm z-10 transition-all">
-                    <Box size={14} className="ml-1 text-green-600" />
-                    <span>{packedCount}/{totalItems} ארוז</span>
-                  </div>
-                )}
-
-                {isReady && !isKanban && (
-                  <button
-                    disabled={isUpdating}
-                    onClick={async (e) => {
-                      e.stopPropagation(); setIsUpdating(true);
-                      try { await onOrderStatusUpdate(order.id, 'undo_ready'); }
-                      finally { setIsUpdating(false); }
-                    }}
-                    className="w-11 h-11 bg-gray-200 border-2 border-gray-300 rounded-xl shadow-sm flex items-center justify-center text-gray-700 shrink-0 active:scale-95 transition-all outline-none"
-                  >
-                    <RotateCcw size={20} />
-                  </button>
-                )}
-
-                <button
-                  disabled={isUpdating}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setIsUpdating(true);
-                    try { await onOrderStatusUpdate(order.id, order.orderStatus); }
-                    finally { setIsUpdating(false); }
-                  }}
-                  className={`flex-1 rounded-xl font-black text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center ${actionBtnColor} ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''} outline-none`}
-                >
-                  {isUpdating ? 'מעדכן...' : nextStatusLabel}
-                </button>
-
-                {!order.isPaid && (
+                {/* --- 💰 UNPAID & COMPLETED (DELIVERED) MODE --- */}
+                {(!order.isPaid && (orderStatusLower === 'completed' || orderStatusLower === 'shipped')) ? (
                   <button
                     disabled={isUpdating}
                     onClick={async (e) => {
                       e.stopPropagation();
                       if (onPaymentCollected) {
-                        setIsUpdating(true); await onPaymentCollected(order); setIsUpdating(false);
+                        setIsUpdating(true);
+                        await onPaymentCollected(order);
+                        setIsUpdating(false);
                       }
                     }}
-                    className="w-11 h-11 bg-white border-2 border-amber-400 rounded-xl shadow-sm flex items-center justify-center hover:bg-amber-50 shrink-0 relative active:scale-95 transition-all outline-none"
+                    className="flex-1 bg-white border-2 border-orange-600 hover:bg-orange-50 text-orange-600 rounded-xl font-black text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 outline-none"
                   >
                     <img
-                      src="https://gxzsxvbercpkgxraiaex.supabase.co/storage/v1/object/public/Photos/cashregister.jpg"
+                      src="http://127.0.0.1:54321/storage/v1/object/public/Photos/cashregister.jpg"
                       alt="קופה"
-                      className="w-7 h-7 object-contain"
+                      className="w-8 h-8 object-contain"
                     />
-                    <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md ring-1 ring-white">
-                      ₪{order.totalAmount?.toFixed(0)}
-                    </span>
+                    <span>גביית תשלום: ₪{order.totalAmount?.toLocaleString()}</span>
                   </button>
+                ) : (
+                  <>
+                    {/* Kanban Packing Status */}
+                    {isKanban && isPartiallyPacked && (
+                      <div className="absolute left-0 bottom-0 top-0 flex items-center justify-center bg-green-100 text-green-800 text-xs font-bold px-3 rounded-xl border border-green-200 shadow-sm z-10 transition-all">
+                        <Box size={14} className="ml-1 text-green-600" />
+                        <span>{packedCount}/{totalItems} ארוז</span>
+                      </div>
+                    )}
+
+                    {isReady && !isKanban && (
+                      <button
+                        disabled={isUpdating}
+                        onClick={async (e) => {
+                          e.stopPropagation(); setIsUpdating(true);
+                          try { await onOrderStatusUpdate(order.originalOrderId || order.id, 'undo_ready'); }
+                          finally { setIsUpdating(false); }
+                        }}
+                        className="w-11 h-11 bg-gray-200 border-2 border-gray-300 rounded-xl shadow-sm flex items-center justify-center text-gray-700 shrink-0 active:scale-95 transition-all outline-none"
+                      >
+                        <RotateCcw size={20} />
+                      </button>
+                    )}
+
+                    <button
+                      disabled={isUpdating}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setIsUpdating(true);
+                        try {
+                          const orderId = order.originalOrderId || order.id;
+                          const flatIds = order.items.flatMap(i => i.ids || [i.id]);
+
+                          if (isHeld) {
+                             if (onFireItems) await onFireItems(orderId, flatIds);
+                          } else if (orderStatusLower === 'in_progress' && onReadyItems) {
+                             await onReadyItems(orderId, flatIds);
+                          } else if (isReadyStatus && onDeliverItems) {
+                             await onDeliverItems(orderId, flatIds);
+                          } else {
+                             await onOrderStatusUpdate(orderId, order.orderStatus);
+                          }
+                        }
+                        finally { setIsUpdating(false); }
+                      }}
+                      className={`flex-1 rounded-xl font-black text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center ${actionBtnColor} ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''} outline-none`}
+                    >
+                      {isUpdating ? 'מעדכן...' : nextStatusLabel}
+                    </button>
+
+                    {!order.isPaid && (
+                      <button
+                        disabled={isUpdating}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (onPaymentCollected) {
+                            setIsUpdating(true); await onPaymentCollected(order); setIsUpdating(false);
+                          }
+                        }}
+                        className="w-11 h-11 bg-white border-2 border-orange-600 rounded-xl shadow-sm flex items-center justify-center hover:bg-orange-50 shrink-0 relative active:scale-95 transition-all outline-none"
+                      >
+                        <img
+                          src="http://127.0.0.1:54321/storage/v1/object/public/Photos/cashregister.jpg"
+                          alt="קופה"
+                          className="w-9 h-9 object-contain"
+                        />
+                        <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md ring-1 ring-white">
+                          ₪{order.totalAmount?.toFixed(0)}
+                        </span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}

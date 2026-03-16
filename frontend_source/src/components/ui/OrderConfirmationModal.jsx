@@ -7,7 +7,7 @@ const OrderConfirmationModal = ({ isOpen, orderDetails, onStartNewOrder }) => {
 
     const timer = setTimeout(() => {
       onStartNewOrder?.();
-    }, 2500);
+    }, 1000); // 🆕 Reduced to 1s as requested
 
     return () => {
       clearTimeout(timer);
@@ -28,8 +28,16 @@ const OrderConfirmationModal = ({ isOpen, orderDetails, onStartNewOrder }) => {
     isPaid,
     isRefund,
     refundAmount,
-    isEdit
+    isEdit,
+    paymentMethod, // 🆕
+    businessId // 🆕
   } = orderDetails;
+
+  const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
+  const isNursery = businessId === NURSERY_BIZ_ID;
+
+  const isOTH = paymentMethod === 'oth'; // 🆕 Force 0 for OTH
+  const finalDisplayTotal = isOTH ? 0 : total;
 
   const formatPrice = (price) => {
     const num = Number(price);
@@ -43,7 +51,7 @@ const OrderConfirmationModal = ({ isOpen, orderDetails, onStartNewOrder }) => {
   };
 
   const hasDiscounts = soldierDiscountAmount > 0 || loyaltyDiscount > 0;
-  const formattedTotal = formatPrice(total);
+  const formattedTotal = formatPrice(finalDisplayTotal);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" dir="rtl">
@@ -113,13 +121,18 @@ const OrderConfirmationModal = ({ isOpen, orderDetails, onStartNewOrder }) => {
               </div>
             )}
 
-            <div className="flex justify-between items-center pt-1">
-              <span className="text-slate-500 font-bold">
-                {isRefund ? 'סכום לזיכוי' : (isPaid ? 'סה"כ שולם' : 'סה"כ לתשלום')}
-              </span>
-              <span className={`text-3xl font-black ${isRefund ? 'text-red-600' : (isPaid ? 'text-green-600' : 'text-blue-600')}`}>
-                {isRefund ? `${formatPrice(refundAmount)}-` : formattedTotal}
-              </span>
+            <div className="flex flex-col items-center pt-1">
+              {!isPaid && !isRefund && (
+                <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1.5 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">יתרה לתשלום</span>
+              )}
+              <div className="flex justify-between items-center w-full">
+                <span className="text-slate-500 font-bold">
+                  {isRefund ? 'סכום לזיכוי' : (isPaid ? 'סה"כ שולם' : 'סה"כ')}
+                </span>
+                <span className={`text-3xl font-black ${isRefund ? 'text-red-600' : (isPaid ? 'text-green-600' : 'text-blue-600')}`}>
+                  {isRefund ? `${formatPrice(refundAmount)}-` : formattedTotal}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -132,6 +145,21 @@ const OrderConfirmationModal = ({ isOpen, orderDetails, onStartNewOrder }) => {
                 <p className="text-blue-700 text-xs font-bold leading-relaxed">
                   ניתן לחזור להזמנה בכל זמן כדי לסיים את התשלום דרך <span className="underline decoration-2 underline-offset-2">מסך השירות</span>.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Nursery Payment Instructions */}
+          {isNursery && !isRefund && (
+            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col items-center gap-2 text-center shadow-sm">
+              <span className="text-3xl">📱</span>
+              <div className="space-y-1">
+                <p className="text-emerald-900 font-black text-lg">פרטי תשלום</p>
+                <p className="text-emerald-800 font-bold text-sm">נא להעביר תשלום בביט או פייבוקס</p>
+                <div className="bg-white px-4 py-2 rounded-xl border border-emerald-100 mt-2">
+                  <p className="text-emerald-900 font-black text-xl tracking-wider">055-6822072</p>
+                  <p className="text-emerald-600 text-xs font-bold uppercase tracking-widest mt-0.5">נתנאל - שפת המדבר</p>
+                </div>
               </div>
             </div>
           )}

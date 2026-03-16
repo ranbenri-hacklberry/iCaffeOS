@@ -129,15 +129,16 @@ const PreparedItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId: 
     const [isSaving, setIsSaving] = useState(false);
     const [lastCountedDate, setLastCountedDate] = useState(item.last_counted_at);
 
+    const step = Number(item.inventory_count_step) || 1;
+    const displayStock = Math.floor((localStock + 0.00001) / step) * step;
+
     const handleIncrement = () => {
-        const step = Number(item.count_step) || 1;
         const next = localStock + step;
         setLocalStock(next);
         setIsDirty(true);
     };
 
     const handleDecrement = () => {
-        const step = Number(item.count_step) || 1;
         const next = Math.max(0, localStock - step);
         setLocalStock(next);
         setIsDirty(true);
@@ -194,9 +195,9 @@ const PreparedItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId: 
                 </button>
                 <div className="w-12 text-center flex flex-col justify-center leading-none">
                     <span className={`text-sm font-black ${isDirty ? 'text-indigo-600' : 'text-slate-600'} tabular-nums`}>
-                        {localStock % 1 === 0 ? localStock : localStock.toFixed(2)}
+                        {displayStock % 1 === 0 ? displayStock : displayStock.toFixed(2)}
                     </span>
-                    <span className="text-[9px] text-slate-400 font-bold">{item.unit || 'יח\''}</span>
+                    <span className="text-[9px] text-slate-400 font-bold">{item.base_unit || 'יח\''}</span>
                 </div>
                 <button
                     onClick={handleDecrement}
