@@ -139,7 +139,7 @@ const OrderEditModal = ({
                         <h2 className="text-xl font-bold text-slate-800 leading-tight">פרטי הזמנה #{orderData?.order_number}</h2>
                         {!isHistoryMode && (
                             <button
-                                onClick={() => navigate(`/?editOrderId=${orderData.id}&from=kds`, { replace: true })}
+                                onClick={() => navigate(`/?editOrderId=${orderData.id}&from=kds`)}
                                 className="text-blue-600 font-bold text-xs flex items-center gap-1 mt-0.5 hover:text-blue-700 transition-colors"
                             >
                                 <Edit3 size={12} />

@@ -48,9 +48,11 @@ export const useOrderPush = () => {
                         p_items: items.map(i => ({
                             menu_item_id: i.menu_item_id,
                             quantity: i.quantity || 1,
-                            mods: (i.mods || []).map(m => typeof m === 'object' ? (m.valueId || m.text || JSON.stringify(m)) : m),
-                            name: i.name, // Extra info if RPC supports it
-                            price: i.price
+                            mods: i.mods || [], 
+                            name: i.name,
+                            price: i.price,
+                            item_status: i.item_status || 'in_progress',
+                            course_stage: i.course_stage || 1
                         })),
                         // Pass status if RPC supports p_status? 
                         // Usually submit_order_v3 defaults. We can try to update 'order_status' after creation if needed.

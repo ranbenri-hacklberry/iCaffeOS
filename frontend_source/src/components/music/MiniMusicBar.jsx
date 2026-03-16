@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Pause, SkipForward, ThumbsUp, ThumbsDown, Music } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -130,9 +131,11 @@ const MiniMusicBar = ({ className = '' }) => {
         };
     };
 
-    // Open RanTunes in new tab
+    const navigate = useNavigate();
+
+    // Open RanTunes internal page
     const openRanTunes = () => {
-        window.open('https://music.hacklberryfinn.com', '_blank');
+        navigate('/music');
     };
 
     // Don't render if user not logged in or no playback

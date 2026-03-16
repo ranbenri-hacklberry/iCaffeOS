@@ -83,7 +83,7 @@ export const useInventoryData = (businessId?: string) => {
             const trackedMenuItemIds = new Set(trackedMenuItems.map((item: any) => item.id));
 
             // 5. Update existing inventory items to mark them as 'prep' if their menu item is tracked
-            const updatedInventoryItems = (itemsData || []).map(item => {
+            const updatedInventoryItems = (itemsData || []).map((item: InventoryItem) => {
                 // If this inventory item is linked to a tracked menu item, ensure it has prep category
                 if (item.catalog_item_id && trackedMenuItemIds.has(item.catalog_item_id)) {
                     const currentCategory = item.category || '';
@@ -103,7 +103,7 @@ export const useInventoryData = (businessId?: string) => {
             trackedMenuItems.forEach((menuItem: any) => {
                 // Check if this menu item already has an inventory record
                 const existingInvItem = updatedInventoryItems.find(
-                    inv => inv.catalog_item_id === menuItem.id || inv.id === menuItem.id
+                    (inv: InventoryItem) => inv.catalog_item_id === menuItem.id || inv.id === menuItem.id
                 );
 
                 if (!existingInvItem) {
@@ -111,13 +111,14 @@ export const useInventoryData = (businessId?: string) => {
                     virtualItems.push({
                         id: menuItem.id,
                         name: menuItem.name,
-                        unit: menuItem.unit || 'יחידה',
+                        base_unit: menuItem.unit || 'יחידה',
+                        display_unit: menuItem.unit || 'יחידה',
                         current_stock: 0,
                         low_stock_threshold_units: 0,
                         supplier_id: null,
                         category: 'prep', // Mark as prep category so it shows in prepared items
                         catalog_item_id: menuItem.id,
-                        count_step: 1,
+                        inventory_count_step: 1,
                         last_counted_at: undefined,
                     });
                 }

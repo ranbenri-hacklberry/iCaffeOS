@@ -130,15 +130,17 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
 
   // Handle PIN verification success
   const handlePINSuccess = async (employee: any, similarity: number) => {
-    const isAdmin = employee.isSuperAdmin || employee.is_super_admin ||
-      employee.accessLevel === 'super-admin' || employee.access_level === 'super-admin' ||
-      employee.accessLevel === 'owner' || employee.access_level === 'owner';
+    // 👑 Only real super admins get isSuperAdmin=true. Owners are NOT super admins.
+    const isSuperAdmin = employee.isSuperAdmin || employee.is_super_admin ||
+      employee.accessLevel === 'super-admin' || employee.access_level === 'super-admin';
     const employeeData = {
       id: employee.id,
       name: employee.name,
       accessLevel: employee.accessLevel || employee.access_level,
-      isSuperAdmin: isAdmin,
-      businessId: employee.businessId || employee.business_id
+      isSuperAdmin: isSuperAdmin,
+      businessId: employee.businessId || employee.business_id,
+      business_id: employee.business_id || employee.businessId,
+      business_name: employee.business_name || employee.businessName,
     };
 
     mayaAuth.setEmployee(employeeData, similarity);

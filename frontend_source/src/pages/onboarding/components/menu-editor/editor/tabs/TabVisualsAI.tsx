@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wand2, Package, RefreshCw, Check, AlertCircle, X, Plus, Trash2, Upload, Copy, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Wand2, Package, RefreshCw, Check, AlertCircle, X, Plus, Trash2, Upload, Copy, Settings, ChevronDown, ChevronUp, Coffee } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { OnboardingItem, AtmosphereSeed } from '@/pages/onboarding/types/onboardingTypes';
 import { compressImageToBlob } from '@/pages/onboarding/logic/onboardingLogic';
@@ -70,24 +70,44 @@ const TabVisualsAI = ({
     return (
         <div className="space-y-4 h-full flex flex-col pt-2" dir="rtl">
 
-            {/* Simple Progress Overlay */}
+            {/* Premium Progress Overlay (v7.0) */}
             {(localItem.status === 'generating' || localItem.status === 'preparing') && !isOverlayDismissed && (
-                <div className="fixed inset-0 z-[500] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center text-slate-800 p-8 text-center animate-in fade-in duration-300">
-                    <button onClick={() => setIsOverlayDismissed(true)} className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors text-slate-500">
-                        <X size={20} />
+                <div className="fixed inset-0 z-[1000] bg-white flex flex-col items-center justify-center gap-6 animate-in fade-in duration-500">
+                    <button 
+                        onClick={() => setIsOverlayDismissed(true)} 
+                        className="absolute top-6 right-6 p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all text-slate-400 hover:text-slate-600 z-[1001]"
+                    >
+                        <X size={24} />
                     </button>
 
-                    <div className="relative w-48 h-48 mb-6">
-                        <div className="absolute inset-0 bg-indigo-50 rounded-full animate-pulse" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <RefreshCw size={40} className="animate-spin text-indigo-500" />
+                    <motion.div 
+                        animate={{ 
+                            rotate: [0, 10, -10, 0],
+                            scale: [1, 1.1, 1],
+                        }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="w-28 h-28 bg-orange-50 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-100 border-2 border-orange-100"
+                    >
+                        <Coffee size={56} className="text-orange-500" />
+                    </motion.div>
+                    
+                    <div className="flex flex-col items-center gap-3 text-center">
+                        <h2 className="text-2xl font-black text-slate-800 tracking-tight">אנחנו מייצרים את התמונה...</h2>
+                        <div className="flex flex-col items-center gap-2">
+                            <p className="text-[11px] font-mono text-orange-500 font-bold bg-orange-50 px-4 py-1.5 rounded-full border border-orange-100 opacity-80 animate-pulse">
+                                {TECHNICAL_LOADING_PHRASES[loadingIndex]}
+                            </p>
+                            <div className="flex items-center gap-2 px-4 py-1 bg-slate-50 rounded-full border border-slate-100 mt-2">
+                                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Version 7.0 AI Core</span>
+                            </div>
                         </div>
                     </div>
-                    <h3 className="text-xl font-black mb-1">מג׳נרט תמונה...</h3>
-                    <p className="text-[10px] font-mono text-indigo-400 opacity-80 min-h-[1.5em] px-4 py-1.5 bg-slate-50 rounded-full">
-                        {TECHNICAL_LOADING_PHRASES[loadingIndex]}
-                    </p>
-                    <button onClick={() => setIsOverlayDismissed(true)} className="mt-8 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-600 transition-colors">
+
+                    <button 
+                        onClick={() => setIsOverlayDismissed(true)} 
+                        className="mt-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 hover:text-orange-500 transition-colors py-2 px-6 border border-slate-100 rounded-xl hover:border-orange-100 hover:bg-orange-50/30"
+                    >
                         המשך לערוך בזמן הג׳ינרוט
                     </button>
                 </div>

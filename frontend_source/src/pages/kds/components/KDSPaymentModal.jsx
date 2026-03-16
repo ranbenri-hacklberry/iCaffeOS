@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, CreditCard, Banknote, Gift, Star, Clock, History } from 'lucide-react';
+import { X, Check, CreditCard, Banknote, Gift, Star, Clock, History, Trophy, PartyPopper } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import db from '@/db/database';
 
 /**
  * KDS Payment Modal - Used to collect payment for orders from KDS
@@ -14,9 +16,29 @@ const KDSPaymentModal = ({
     onRejectPayment, // 🆕
     isFromHistory = false
 }) => {
-    const [step, setStep] = useState('selection'); // 'selection' | 'instruction' | 'verification'
+    const [step, setStep] = useState('selection'); // 'selection' | 'instruction' | 'verification' | 'success'
     const [selectedMethod, setSelectedMethod] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // 🏆 LOYALTY INTEGRATION: Get customer points
+    const customerId = order?.customer_id || order?.customerId;
+    const customerPhone = order?.customer_phone || order?.customerPhone || order?.phone;
+
+    const loyaltyInfo = useLiveQuery(async () => {
+        if (!customerId && !customerPhone) return null;
+
+        // Try lookup by ID first, then phone
+        let card = null;
+        if (customerId) {
+            card = await db.loyalty_cards.where('customer_id').equals(customerId).first();
+        }
+
+        if (!card && customerPhone) {
+            card = await db.loyalty_cards.where('customer_phone').equals(customerPhone).first();
+        }
+
+        return card;
+    }, [customerId, customerPhone]);
 
     useEffect(() => {
         if (isOpen) {
@@ -30,6 +52,16 @@ const KDSPaymentModal = ({
             setIsProcessing(false);
         }
     }, [isOpen, order]);
+
+    // 🕒 AUTO-CLOSE SUCCESS SCREEN
+    useEffect(() => {
+        if (step === 'success') {
+            const timer = setTimeout(() => {
+                onClose();
+            }, 1500); // Wait 1.5 seconds so employee can read (updated per user request)
+            return () => clearTimeout(timer);
+        }
+    }, [step, onClose]);
 
     if (!isOpen || !order) return null;
 
@@ -153,8 +185,11 @@ const KDSPaymentModal = ({
         if (!onConfirmPayment || !selectedMethod) return;
         setIsProcessing(true);
         try {
-            await onConfirmPayment(order.originalOrderId || order.id, selectedMethod);
-            onClose();
+            // Log for debugging
+            console.log('💳 [Modal] Confirming payment for ID:', order.originalId || order.id);
+            await onConfirmPayment(order.originalId || order.id, selectedMethod);
+            // 🎯 ALWAYS show success screen now for consistent premium feel
+            setStep('success');
         } catch (err) {
             alert('שגיאה באישור התשלום: ' + (err?.message || err));
         } finally { setIsProcessing(false); }
@@ -164,7 +199,8 @@ const KDSPaymentModal = ({
         if (!onMoveToHistory) { onClose(); return; }
         setIsProcessing(true);
         try {
-            await onMoveToHistory(order.originalOrderId || order.id);
+            const targetId = order.originalOrderId || order.originalId || order.id;
+            await onMoveToHistory(targetId);
             onClose({ showHistoryInfo: !order.isPaid, orderNumber: order.orderNumber });
         } catch (err) {
             alert('שגיאה בהעברה להיסטוריה: ' + (err?.message || err));
@@ -179,37 +215,41 @@ const KDSPaymentModal = ({
         return (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10001] flex items-center justify-center p-4" dir="rtl" onClick={onClose}>
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b bg-orange-50 flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center hover:scale-110 cursor-pointer transition-transform"
-                            onClick={() => window.open(order.payment_screenshot_url, '_blank')}
-                        >
-                            <Star size={20} />
+                    <div className="p-4 border-b bg-orange-50 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center hover:scale-110 cursor-pointer transition-transform"
+                                onClick={() => window.open(order.payment_screenshot_url, '_blank')}
+                            >
+                                <Star size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800">אימות תשלום ({methodLabel})</h2>
+                                <p className="text-xs text-slate-500 font-bold">יש לאמת את האסמכתא לפני אישור</p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-black text-slate-800">אימות תשלום ({methodLabel})</h2>
-                            <p className="text-xs text-slate-500">יש לאמת את האסמכתא לפני אישור</p>
-                        </div>
+                        <button onClick={onClose} className="p-1.5 rounded-full hover:bg-orange-100 text-orange-400 hover:text-orange-600 transition-colors">
+                            <X size={20} />
+                        </button>
                     </div>
-                    <div className="p-4 overflow-y-auto">
-                        <div className="bg-slate-100 rounded-xl overflow-hidden mb-4 border border-slate-200">
-                            {/* Make image clickable to zoom */}
-                            <a href={order.payment_screenshot_url} target="_blank" rel="noreferrer" className="block relative group">
-                                <img src={order.payment_screenshot_url} alt="Proof" className="w-full h-auto object-contain max-h-[40vh]" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                    <div className="p-4 overflow-y-auto bg-slate-50/50">
+                        <div className="bg-white rounded-xl overflow-hidden mb-4 border border-slate-200 shadow-sm flex items-center justify-center p-1">
+                            <a href={order.payment_screenshot_url} target="_blank" rel="noreferrer" className="block relative group w-full">
+                                <img src={order.payment_screenshot_url} alt="Proof" className="w-full h-auto object-contain max-h-[40vh] rounded-lg" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
                                     <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-bold pointer-events-none">לחץ להגדלה</span>
                                 </div>
                             </a>
                         </div>
                         <div className="text-center mb-2">
-                            <p className="font-bold text-lg text-slate-800">סכום לתשלום: {formatPrice(orderAmount)}</p>
+                            <p className="font-bold text-lg text-slate-800">סכום לאימות: {formatPrice(orderAmount)}</p>
                         </div>
                     </div>
                     <div className="p-4 border-t flex gap-3 bg-white">
                         <button onClick={handleVerifyReject} disabled={isProcessing} className="flex-1 py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold hover:bg-red-100 transition-colors">
-                            {isProcessing ? 'מעבד...' : 'דחה ושלח ללקוח'}
+                            {isProcessing ? 'מעבד...' : 'דחה תשלום'}
                         </button>
-                        <button onClick={handleVerifyApprove} disabled={isProcessing} className="flex-[2] py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-colors">
-                            {isProcessing ? 'מאשר...' : '👍 אישור תשלום'}
+                        <button onClick={handleVerifyApprove} disabled={isProcessing} className="flex-[2] py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-100 hover:bg-green-700 transition-colors">
+                            {isProcessing ? 'מאשר...' : '👍 אשר תשלום'}
                         </button>
                     </div>
                 </div>
@@ -223,14 +263,22 @@ const KDSPaymentModal = ({
         return (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10001] flex items-center justify-center p-4" dir="rtl" onClick={onClose}>
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-                        <div className={`w-10 h-10 ${config?.iconBg} rounded-full flex items-center justify-center ${config?.iconColor}`}><IconComponent size={20} /></div>
-                        <div><h2 className="text-xl font-black text-slate-800">{config?.title}</h2><p className="text-xs text-slate-400">{config?.subtitle}</p></div>
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 ${config?.iconBg} rounded-full flex items-center justify-center ${config?.iconColor}`}><IconComponent size={20} /></div>
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800">{config?.title}</h2>
+                                <p className="text-xs font-bold text-slate-400">{config?.subtitle}</p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                            <X size={20} />
+                        </button>
                     </div>
                     <div className="p-6 flex flex-col items-center space-y-4">
-                        <div className={`w-full ${config?.amountBg} border-2 rounded-2xl p-6 text-center`}>
-                            <p className="text-sm font-bold mb-2 text-slate-600">סכום לתשלום:</p>
-                            <p className={`text-5xl font-black ${config?.amountColor}`}>{formatPrice(orderAmount)}</p>
+                        <div className={`w-full ${config?.amountBg} border-2 rounded-2xl p-4 text-center`}>
+                            <p className="text-sm font-bold mb-1 text-slate-600">סכום לגבייה:</p>
+                            <p className={`text-4xl font-black ${config?.amountColor}`}>{selectedMethod === 'oth' ? formatPrice(0) : formatPrice(orderAmount)}</p>
                         </div>
                         <div className="w-full bg-slate-50 rounded-2xl p-4 space-y-2">
                             {config?.instructions.map((ins, idx) => (
@@ -250,37 +298,147 @@ const KDSPaymentModal = ({
         );
     }
 
+    // SUCCESS SCREEN (Redesigned to match POS exactly)
+    if (step === 'success') {
+        const isOTH = selectedMethod === 'oth';
+        return (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10001] flex items-center justify-center p-4 shadow-2xl" dir="rtl">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+                    <div className="p-8 pb-4 flex flex-col items-center text-center space-y-4 bg-gradient-to-b from-green-50 to-white">
+                        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center relative shadow-sm">
+                            <PartyPopper size={40} strokeWidth={2.5} className="mt-[-2px]" />
+                        </div>
+                        <div className="space-y-1">
+                            <h2 className="text-2xl font-black text-slate-800 flex items-center justify-center gap-2">מעולה! <span className="text-xl">🎉</span></h2>
+                            <p className="text-sm text-slate-500 font-bold">ההזמנה שולמה בהצלחה</p>
+                        </div>
+                    </div>
+
+                    <div className="px-6 pb-8 space-y-6">
+                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-slate-500">מספר הזמנה</span>
+                                <span className="text-xl font-black text-slate-800">#{order.orderNumber}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-t border-slate-200 pt-3">
+                                <span className="text-sm font-bold text-slate-500">סה"כ שולם</span>
+                                <span className="text-xl font-black text-green-600">
+                                    {isOTH ? '₪ 0' : formatPrice(orderAmount)}
+                                </span>
+                            </div>
+
+                            {/* Loyalty Points Section */}
+                            {loyaltyInfo && (
+                                <div className="flex items-center justify-between pt-3 border-t border-slate-200 animate-in slide-in-from-bottom-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="bg-orange-100 p-1.5 rounded-lg text-orange-600">
+                                            <Trophy size={16} />
+                                        </div>
+                                        <span className="text-xs font-black text-slate-800">יתרת נקודות חבר</span>
+                                    </div>
+                                    <span className="text-xl font-black text-orange-600">{loyaltyInfo.points_balance || 0}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 📱 🟩 Green SMS Message (Only if phone exists) */}
+                        {customerPhone && customerPhone.trim() !== '' && (
+                            <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center justify-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 shrink-0">
+                                    <Check size={16} strokeWidth={3} />
+                                </div>
+                                <span className="text-sm font-black text-green-700">הודעת SMS נשלחה בהצלחה ללקוח!</span>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={onClose}
+                            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-slate-800 transition shadow-lg active:scale-[0.98]"
+                        >
+                            חזרה למסך שירות
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10001] flex items-center justify-center p-4" dir="rtl" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="p-4 border-b flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center"><CreditCard size={20} /></div>
-                        <div><h2 className="text-xl font-black text-slate-800">{customerName}</h2><p className="text-xs text-slate-400 font-medium">קבלת תשלום</p></div>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col transition-colors duration-300" style={{ maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
+                {/* Header - Matches POS perfectly */}
+                <div className="p-4 border-b flex-shrink-0 border-slate-100">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center border bg-blue-50 text-blue-600 border-blue-100">
+                                <CreditCard size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800">גביית תשלום</h2>
+                                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                                    <span>#{order.orderNumber}</span>
+                                    <span>•</span>
+                                    <span>{customerName}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                            <X size={20} />
+                        </button>
                     </div>
-                    <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-full"><X size={24} /></button>
                 </div>
-                <div className="p-4 space-y-4">
-                    <div className="w-full bg-slate-50 border-2 rounded-2xl p-4 text-center flex justify-between items-center">
-                        <span className="text-lg font-bold">סה״כ לתשלום</span><span className="text-3xl font-black">{formatPrice(orderAmount)}</span>
+
+                {/* Main Content */}
+                <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                    {/* Totals Summary - White/Gray style from POS */}
+                    <div className="border-2 rounded-2xl p-4 bg-slate-50 border-slate-200">
+                        <div className="flex justify-between items-center">
+                            <span className="text-lg font-bold text-slate-800">סה״כ לתשלום</span>
+                            <span className="text-3xl font-black text-slate-800">
+                                {formatPrice(orderAmount)}
+                            </span>
+                        </div>
                     </div>
-                    <div><h3 className="text-base font-bold mb-2">אמצעי תשלום</h3>
+
+                    {/* Payment Methods Grid */}
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-base font-bold text-slate-800">אמצעי תשלום</h3>
+                        </div>
+
                         <div className="grid grid-cols-4 gap-2">
-                            {PAYMENT_METHODS.map(m => (
-                                <button key={m.id} onClick={() => handleMethodSelect(m.id)} className={`flex flex-col items-center justify-center rounded-xl transition-all ${m.color} ${['cash', 'credit_card'].includes(m.id) ? 'col-span-2 h-32' : 'col-span-1 h-20'}`}>
-                                    <m.icon size={20} /><span className="font-bold text-sm">{m.label}</span>
+                            {PAYMENT_METHODS.map((m) => (
+                                <button
+                                    key={m.id}
+                                    onClick={() => handleMethodSelect(m.id)}
+                                    className={`flex flex-col items-center justify-center gap-1.5 rounded-xl transition-all border-2 border-transparent hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md ${['cash', 'credit_card'].includes(m.id) ? 'col-span-2 h-32 p-4' : 'col-span-1 h-20 p-2'} ${m.color}`}
+                                >
+                                    <m.icon size={24} />
+                                    <span className="font-bold text-sm truncate w-full text-center">{m.label}</span>
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
-                <div className="p-4 border-t bg-slate-50 flex gap-3">
-                    <button onClick={onClose} disabled={isProcessing} className="flex-1 py-3 bg-white border rounded-xl font-bold text-slate-600">ביטול</button>
-                    {!isFromHistory && (
-                        <button onClick={handleMoveToHistory} disabled={isProcessing} className="flex-[2] py-3 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2">
-                            <History size={18} /><span>{isProcessing ? 'מעביר...' : 'העבר להיסטוריה'}</span>
-                        </button>
-                    )}
+
+                {/* Footer - Optimized for KDS actions but POS style */}
+                <div className="p-4 border-t bg-slate-50 border-slate-100">
+                    <div className="flex flex-col gap-2">
+                        {!isFromHistory && (
+                            <button
+                                onClick={handleMoveToHistory}
+                                disabled={isProcessing}
+                                className="w-full py-3 border-2 rounded-xl font-bold text-lg transition shadow-sm flex flex-col items-center justify-center gap-0.5 bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <History size={20} />
+                                    <span>העבר להיסטוריה ללא תשלום</span>
+                                </div>
+                                <span className="text-[10px] font-medium opacity-60">ההזמנה תישמר כלא שולמה</span>
+                            </button>
+                        )}
+                        <button onClick={onClose} className="w-full py-2 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors">סגור</button>
+                    </div>
                 </div>
             </div>
         </div>

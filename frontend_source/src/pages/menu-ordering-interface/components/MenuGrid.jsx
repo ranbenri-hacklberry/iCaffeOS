@@ -1,28 +1,38 @@
 import React from 'react';
 import MenuItemCard from '@/pages/menu-ordering-interface/components/MenuItemCard';
+import { motion } from 'framer-motion';
 import Icon from '@/components/AppIcon';
 import { useTheme } from '@/context/ThemeContext';
 
-const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = null }) => {
+const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = null, categories = [] }) => {
   const { isDarkMode } = useTheme();
+
+  // 🚩 TRACE: MenuGrid Render Log
+  console.log('📋 [MenuGrid Render]:', categories.length, 'categories');
+
   if (isLoading) {
     return (
       <div className="p-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 responsive-menu-grid">
-          {Array.from({ length: 8 })?.map((_, index) => (
-            <div key={`skeleton-${index}`} className={`rounded-xl overflow-hidden animate-pulse shadow-xl ${isDarkMode ? 'bg-slate-800/50 border border-slate-700' : 'bg-white border border-gray-100'
-              }`}>
-              <div className={`h-48 ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}></div>
-              <div className="p-4 space-y-3">
-                <div className={`h-4 rounded w-3/4 ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}></div>
-                <div className={`h-3 rounded w-full ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}></div>
-                <div className={`h-3 rounded w-2/3 ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}></div>
-                <div className="flex justify-between items-center pt-2">
-                  <div className={`h-6 rounded w-16 ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}></div>
-                  <div className={`h-8 rounded w-20 ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-100'}`}></div>
+          {Array.from({ length: 10 })?.map((_, index) => (
+            <motion.div
+              key={`skeleton-${index}`}
+              initial={{ opacity: 0.5 }}
+              animate={{ opacity: [0.5, 0.8, 0.5] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+              className={`rounded-3xl overflow-hidden aspect-square border shadow-xl ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'
+                }`}
+            >
+              <div className={`h-full w-full relative ${isDarkMode ? 'bg-slate-700/30' : 'bg-gray-100/50'}`}>
+                <div className="absolute bottom-0 left-0 right-0 p-4 space-y-2">
+                  <div className={`h-4 rounded-full w-3/4 ${isDarkMode ? 'bg-slate-600/50' : 'bg-gray-200'}`}></div>
+                  <div className="flex justify-between items-center">
+                    <div className={`h-6 rounded-lg w-16 ${isDarkMode ? 'bg-slate-600/50' : 'bg-gray-200'}`}></div>
+                    <div className={`h-8 rounded-full w-8 ${isDarkMode ? 'bg-slate-600/50' : 'bg-gray-200'}`}></div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

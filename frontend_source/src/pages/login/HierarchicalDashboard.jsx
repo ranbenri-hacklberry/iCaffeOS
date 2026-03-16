@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 import {
     Coffee, Monitor, ChefHat, Package, BarChart3, Palette,
     Lock, ShieldAlert, Settings, LogOut, AlertTriangle, UserCircle,
-    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database, Brain
+    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database, Brain, Hotel, Building
 } from 'lucide-react';
 import HeroCard from '../../components/HeroCard';
 import { PosWireframe, KdsWireframe } from '../../components/DashboardWireframes';
@@ -123,8 +123,27 @@ const HierarchicalDashboard = () => {
 
                 {/* ========== TIER 1: HERO CARDS ========== */}
                 <div className={`grid gap-4 sm:gap-8 mb-4 sm:mb-8 grid-cols-1 md:grid-cols-3`}>
-                    {/* POS - Hero Card */}
-                    {isAppVisible('kiosk') && (
+                    {/* Manager Cockpit - FIRST ON MOBILE */}
+                    {isMobile && isAppVisible('manager') && (
+                        <HeroCard
+                            title="הקוקפיט"
+                            subtitle="ניהול מלא מהנייד 🚀"
+                            icon={Layout}
+                            Pattern={() => (
+                                <div className="absolute inset-0 flex items-center justify-center opacity-10">
+                                    <Monitor size={120} />
+                                </div>
+                            )}
+                            gradient="bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600"
+                            stats="Online"
+                            delay={0.05}
+                            onClick={() => handleNavigation('/data-manager-interface', 'manager')}
+                            compact={isMobile}
+                        />
+                    )}
+
+                    {/* POS - Hero Card (HIDDEN ON MOBILE per user request) */}
+                    {!isMobile && isAppVisible('kiosk') && (
                         <HeroCard
                             title="POS"
                             subtitle="מערכת הזמנות ותשלום"
@@ -133,9 +152,10 @@ const HierarchicalDashboard = () => {
                             gradient="bg-gradient-to-br from-orange-400 via-red-500 to-pink-600"
                             stats="Online"
                             delay={0.1}
-                            onClick={() => handleNavigation('/', 'kiosk')}
+                            onClick={() => handleNavigation('/?new=true', 'kiosk')}
                         />
                     )}
+
 
                     {/* KDS/Service - Hero Card with Live Data */}
                     {/* On mobile → navigate to /mobile-kds, on tablet/desktop → /kds */}
@@ -156,6 +176,7 @@ const HierarchicalDashboard = () => {
                                     handleNavigation('/kds', 'kds');
                                 }
                             }}
+                            compact={isMobile}
                         />
                     )}
 
@@ -174,9 +195,11 @@ const HierarchicalDashboard = () => {
                             stats="Active"
                             delay={0.3}
                             onClick={() => handleNavigation('/music', 'music')}
+                            compact={isMobile}
                         />
                     )}
                 </div>
+
 
                 {/* ========== TIER 2: ACTION CARDS ========== */}
                 <div className={`grid gap-3 sm:gap-4 mb-4 sm:mb-6 ${[isAppVisible('manager'), isAppVisible('prep'), isAppVisible('inventory'), isAppVisible('advanced'), isAppVisible('menu-editor')].filter(Boolean).length === 1
@@ -184,33 +207,9 @@ const HierarchicalDashboard = () => {
                     : 'grid-cols-2 md:grid-cols-4'
                     }`}>
 
-                    {/* Manager Cockpit - ONLY ON MOBILE */}
-                    {isMobile && isAppVisible('manager') && (
-                        <motion.button
-                            onClick={() => handleNavigation('/data-manager-interface', 'manager')}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.25, duration: 0.5 }}
-                            whileHover={{ scale: 1.04, y: -5 }}
-                            whileTap={{ scale: 0.96 }}
-                            className="relative bg-gradient-to-br from-amber-50 via-white to-orange-50 rounded-3xl p-5 shadow-md overflow-hidden select-none touch-none border border-amber-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-amber-200/30"
-                        >
-                            {/* Playful bubbles */}
-                            <div className="absolute -top-3 -right-3 w-14 h-14 bg-amber-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
-                            <div className="absolute bottom-2 left-2 w-8 h-8 bg-orange-200/30 rounded-full group-hover:translate-y-[-4px] transition-transform duration-700" />
 
-                            <div className="relative z-10" dir="rtl">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-400/30 group-hover:rotate-[-6deg] transition-transform duration-300">
-                                        <Layout size={24} className="text-white" />
-                                    </div>
-                                    <div className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-full border border-amber-200">חי</div>
-                                </div>
-                                <h3 className="text-lg font-black text-slate-800">הקוקפיט</h3>
-                                <p className="text-xs text-orange-600 font-bold mt-1">ניהול מלא מהנייד 🚀</p>
-                            </div>
-                        </motion.button>
-                    )}
+
+
 
                     {/* Preps/Tasks with Live Data */}
                     {isAppVisible('prep') && (
@@ -221,8 +220,9 @@ const HierarchicalDashboard = () => {
                             transition={{ delay: 0.3, duration: 0.5 }}
                             whileHover={{ scale: 1.04, y: -5 }}
                             whileTap={{ scale: 0.96 }}
-                            className="relative bg-gradient-to-br from-violet-50 via-white to-indigo-50 rounded-3xl p-5 shadow-md overflow-hidden select-none touch-none border border-violet-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-violet-200/30"
+                            className={`relative bg-gradient-to-br from-violet-50 via-white to-indigo-50 rounded-3xl ${isMobile ? 'p-4 min-h-[90px]' : 'p-5 min-h-[140px]'} shadow-md overflow-hidden border border-violet-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-violet-200/30`}
                         >
+
                             {/* Playful bubbles */}
                             <div className="absolute -top-3 -right-3 w-14 h-14 bg-violet-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
                             <div className="absolute bottom-2 left-2 w-8 h-8 bg-indigo-200/30 rounded-full group-hover:translate-y-[-4px] transition-transform duration-700" />
@@ -246,7 +246,7 @@ const HierarchicalDashboard = () => {
                                         </motion.div>
                                     )}
                                 </div>
-                                <h3 className="text-lg font-black text-slate-800">הכנות/משימות</h3>
+                                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-black text-slate-800`}>הכנות/משימות</h3>
 
                                 {/* Breakdown tags */}
                                 {!liveData.loading && liveData.tasks.openTasks > 0 && (
@@ -262,6 +262,7 @@ const HierarchicalDashboard = () => {
                                         )}
                                     </div>
                                 )}
+
                             </div>
                         </motion.button>
                     )}
@@ -275,8 +276,9 @@ const HierarchicalDashboard = () => {
                             transition={{ delay: 0.4, duration: 0.5 }}
                             whileHover={{ scale: 1.04, y: -5 }}
                             whileTap={{ scale: 0.96 }}
-                            className="relative bg-gradient-to-br from-sky-50 via-white to-blue-50 rounded-3xl p-5 shadow-md overflow-hidden select-none touch-none border border-sky-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-sky-200/30"
+                            className={`relative bg-gradient-to-br from-sky-50 via-white to-blue-50 rounded-3xl ${isMobile ? 'p-4 min-h-[90px]' : 'p-5 min-h-[140px]'} shadow-md overflow-hidden border border-sky-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-sky-200/30`}
                         >
+
                             {/* Playful bubbles */}
                             <div className="absolute -top-3 -right-3 w-14 h-14 bg-sky-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
                             <div className="absolute bottom-2 left-2 w-8 h-8 bg-blue-200/30 rounded-full group-hover:translate-y-[-4px] transition-transform duration-700" />
@@ -298,17 +300,17 @@ const HierarchicalDashboard = () => {
 
                             <div className="relative z-10" dir="rtl">
                                 <div className="flex items-center justify-between mb-3">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-400/30 group-hover:rotate-[-6deg] transition-transform duration-300">
+                                    <div className={`w-12 h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-400/30 group-hover:rotate-[-6deg] transition-transform duration-300`}>
                                         <Package size={24} className="text-white" />
                                     </div>
                                 </div>
-                                <h3 className="text-lg font-black text-slate-800">ניהול מלאי</h3>
+                                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-black text-slate-800`}>ניהול מלאי</h3>
                                 {!liveData.loading && liveData.inventory.hasAlert ? (
-                                    <p className="text-xs font-bold text-red-500 mt-1">{liveData.inventory.lowStockCount} מתחת למינימום ⚠️</p>
+                                    <p className="text-[10px] font-bold text-red-500 mt-1">{liveData.inventory.lowStockCount} מתחת למינימום ⚠️</p>
                                 ) : (
                                     <div className="flex items-center gap-1.5 mt-1">
-                                        <CheckCircle size={13} className="text-emerald-500" />
-                                        <p className="text-xs text-emerald-600 font-bold">מלאי תקין 👍</p>
+                                        <CheckCircle size={10} className="text-emerald-500" />
+                                        <p className="text-[10px] text-emerald-600 font-bold">מלאי תקין 👍</p>
                                     </div>
                                 )}
                             </div>
@@ -324,8 +326,9 @@ const HierarchicalDashboard = () => {
                             transition={{ delay: 0.5, duration: 0.5 }}
                             whileHover={{ scale: 1.04, y: -5 }}
                             whileTap={{ scale: 0.96 }}
-                            className="relative bg-gradient-to-br from-teal-50 via-white to-cyan-50 rounded-3xl p-5 shadow-md overflow-hidden select-none touch-none border border-teal-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-teal-200/30"
+                            className={`relative bg-gradient-to-br from-teal-50 via-white to-cyan-50 rounded-3xl ${isMobile ? 'p-4 min-h-[90px]' : 'p-5 min-h-[140px]'} shadow-md overflow-hidden border border-teal-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-teal-200/30`}
                         >
+
                             {/* Playful bubbles */}
                             <div className="absolute -top-3 -right-3 w-14 h-14 bg-teal-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
                             <div className="absolute bottom-2 left-2 w-8 h-8 bg-cyan-200/30 rounded-full group-hover:translate-y-[-4px] transition-transform duration-700" />
@@ -337,8 +340,9 @@ const HierarchicalDashboard = () => {
                                         <BarChart3 size={24} className="text-white" />
                                     </div>
                                 </div>
-                                <h3 className="text-lg font-black text-slate-800">מידע מתקדם</h3>
-                                <p className="text-xs text-slate-400 font-bold mt-1">דוחות וסטטיסטיקות 📊</p>
+                                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-black text-slate-800`}>מידע מתקדם</h3>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">דוחות וסטטיסטיקות 📊</p>
+
                             </div>
                         </motion.button>
                     )}
@@ -352,8 +356,9 @@ const HierarchicalDashboard = () => {
                             transition={{ delay: 0.6, duration: 0.5 }}
                             whileHover={{ scale: 1.04, y: -5 }}
                             whileTap={{ scale: 0.96 }}
-                            className="relative bg-gradient-to-br from-rose-50 via-white to-pink-50 rounded-3xl p-5 shadow-md overflow-hidden select-none touch-none border border-rose-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-rose-200/30"
+                            className={`relative bg-gradient-to-br from-rose-50 via-white to-pink-50 rounded-3xl ${isMobile ? 'p-4 min-h-[90px]' : 'p-5 min-h-[140px]'} shadow-md overflow-hidden border border-rose-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-rose-200/30`}
                         >
+
                             {/* Playful bubbles */}
                             <div className="absolute -top-3 -right-3 w-14 h-14 bg-rose-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
                             <div className="absolute bottom-2 left-2 w-8 h-8 bg-pink-200/30 rounded-full group-hover:translate-y-[-4px] transition-transform duration-700" />
@@ -374,8 +379,9 @@ const HierarchicalDashboard = () => {
                                         <Palette size={24} className="text-white" />
                                     </div>
                                 </div>
-                                <h3 className="text-lg font-black text-slate-800">עריכת תפריט</h3>
-                                <p className="text-xs text-slate-400 font-bold mt-1">פריטים וקטגוריות 🎨</p>
+                                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-black text-slate-800`}>עריכת תפריט</h3>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">פריטים וקטגוריות 🎨</p>
+
                             </div>
                         </motion.button>
                     )}
@@ -389,7 +395,7 @@ const HierarchicalDashboard = () => {
                     <motion.button
                         onClick={() => navigate('/profile-settings')}
                         whileTap={{ scale: 0.95 }}
-                        className="w-12 h-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center select-none touch-none"
+                        className="w-12 h-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center"
                         title="הגדרות פרופיל"
                     >
                         <UserCircle size={20} className="text-white" />
@@ -400,7 +406,7 @@ const HierarchicalDashboard = () => {
                         <motion.button
                             onClick={() => navigate('/super-admin')}
                             whileTap={{ scale: 0.95 }}
-                            className="w-12 h-12 bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl flex items-center justify-center select-none touch-none"
+                            className="w-12 h-12 bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl flex items-center justify-center"
                             title="Super Admin"
                         >
                             <ShieldAlert size={20} className="text-red-400" />
@@ -412,7 +418,7 @@ const HierarchicalDashboard = () => {
                         <motion.button
                             onClick={() => navigate('/super-admin/db')}
                             whileTap={{ scale: 0.95 }}
-                            className="w-12 h-12 bg-cyan-500/20 backdrop-blur-sm border border-cyan-400/30 rounded-xl flex items-center justify-center select-none touch-none"
+                            className="w-12 h-12 bg-cyan-500/20 backdrop-blur-sm border border-cyan-400/30 rounded-xl flex items-center justify-center"
                             title="סנכרון מסד נתונים"
                         >
                             <Database size={20} className="text-cyan-400" />
@@ -423,17 +429,39 @@ const HierarchicalDashboard = () => {
                     <motion.button
                         onClick={() => navigate('/cortex')}
                         whileTap={{ scale: 0.95 }}
-                        className="w-12 h-12 bg-indigo-500/20 backdrop-blur-sm border border-indigo-400/30 rounded-xl flex items-center justify-center select-none touch-none"
+                        className="w-12 h-12 bg-indigo-500/20 backdrop-blur-sm border border-indigo-400/30 rounded-xl flex items-center justify-center"
                         title="Cortex AI"
                     >
                         <Brain size={20} className="text-indigo-400" />
                     </motion.button>
 
+                    {/* Hotel Staff Dashboard */}
+                    <motion.button
+                        onClick={() => navigate('/hotel/staff')}
+                        whileTap={{ scale: 0.95 }}
+                        className="w-12 h-12 bg-emerald-500/20 backdrop-blur-sm border border-emerald-400/30 rounded-xl flex items-center justify-center transition-all hover:bg-emerald-500/30 active:scale-95"
+                        title="לוח בקרה למלון"
+                    >
+                        <Hotel size={20} className="text-emerald-400" />
+                    </motion.button>
+
+                    {/* Hotel Management Dashboard (Admin Only) */}
+                    {isAdmin && (
+                        <motion.button
+                            onClick={() => navigate('/hotel/admin')}
+                            whileTap={{ scale: 0.95 }}
+                            className="w-12 h-12 bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-xl flex items-center justify-center transition-all hover:bg-blue-500/30 active:scale-95"
+                            title="ניהול מלון (מנהלים)"
+                        >
+                            <Building size={20} className="text-blue-400" />
+                        </motion.button>
+                    )}
+
                     {/* Settings */}
                     <motion.button
                         onClick={() => handleAdminFeature('/owner-settings', 'הגדרות', 'owner-settings')}
                         whileTap={{ scale: 0.95 }}
-                        className="w-12 h-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center select-none touch-none"
+                        className="w-12 h-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center transition-all hover:bg-white/20 active:scale-95"
                         title="הגדרות מערכת"
                     >
                         <Settings size={20} className="text-white" />
@@ -443,7 +471,7 @@ const HierarchicalDashboard = () => {
                     <motion.button
                         onClick={logout}
                         whileTap={{ scale: 0.95 }}
-                        className="w-12 h-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center select-none touch-none"
+                        className="w-12 h-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center transition-all hover:bg-white/20 active:scale-95"
                         title="התנתק"
                     >
                         <LogOut size={20} className="text-white" />

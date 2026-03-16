@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const FALLBACK_URL = 'https://gxzsxvbercpkgxraiaex.supabase.co';
-const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4enN4dmJlcmNwa2d4cmFpYWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NjMyNzAsImV4cCI6MjA3NzEzOTI3MH0.6sJ7PJ2imo9-mzuYdqRlhQty7PCQAzpSKfcQ5ve571g';
+const FALLBACK_URL = 'http://127.0.0.1:54321';
+const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
 const cloudUrl = import.meta.env?.VITE_SUPABASE_URL || FALLBACK_URL;
 const cloudKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || FALLBACK_KEY;

@@ -107,6 +107,9 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
     const auth = useSafeAuth(); // Safely get auth - won't crash outside AuthProvider
     const location = useSafeLocation(); // Safely get location - won't crash outside Router
 
+    // DISABLED MAYA AT USER REQUEST
+    return null;
+
     // Use passed employee OR fallback to current auth user
     const activeEmployee = employee || auth.currentUser;
 
@@ -963,15 +966,19 @@ export const MayaOverlay: React.FC<MayaOverlayProps> = ({
 
                                 <motion.button
                                     whileTap={{ scale: 0.9 }}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                     onClick={() => setIsMinimized(!isMinimized)}
                                     className="p-2 hover:bg-white/10 rounded-lg transition"
+                                    title={isMinimized ? "הגדל חלון" : "מזער חלון"}
                                 >
                                     {isMinimized ? <Maximize2 className="w-4 h-4 text-white/70" /> : <Minimize2 className="w-4 h-4 text-white/70" />}
                                 </motion.button>
+
                                 <motion.button
                                     whileTap={{ scale: 0.9 }}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                     onClick={() => { setIsOpen(false); setShowModelSelector(false); }}
-                                    className="p-2 bg-white/10 hover:bg-red-500/20 text-white hover:text-red-400 rounded-lg transition"
+                                    className="p-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/30 rounded-lg transition"
                                     title="סגור חלון"
                                 >
                                     <X className="w-4 h-4" />

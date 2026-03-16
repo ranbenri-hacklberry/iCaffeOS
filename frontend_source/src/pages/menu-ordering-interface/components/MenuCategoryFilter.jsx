@@ -4,18 +4,8 @@ import { useTheme } from '@/context/ThemeContext';
 const MenuCategoryFilter = ({ activeCategory = 'hot-drinks', onCategoryChange, categories: propCategories }) => {
   const { isDarkMode } = useTheme();
 
-  // Fallback categories if none provided
-  const defaultCategories = [
-    { id: 'hot-drinks', name: 'שתיה חמה', icon: 'Coffee' },
-    { id: 'cold-drinks', name: 'שתיה קרה', icon: 'GlassWater' },
-    { id: 'pastries', name: 'מאפים', icon: 'Croissant' },
-    { id: 'salads', name: 'סלטים', icon: 'Leaf' },
-    { id: 'sandwiches', name: 'כריכים וטוסטים', icon: 'Sandwich' },
-    { id: 'desserts', name: 'קינוחים', icon: 'IceCream' }
-  ];
-
-  // Use provided categories or fallback
-  const categories = (propCategories && propCategories.length > 0) ? propCategories : defaultCategories;
+  // Use provided categories only - do NOT fallback to "Sample Data" ghosts
+  const categories = propCategories || [];
 
   const handleCategorySelect = (categoryId) => {
     if (onCategoryChange) {

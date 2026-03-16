@@ -150,8 +150,11 @@ export const PINPad: React.FC<PINPadProps> = ({
       if (data && data.length > 0) {
         // Success - found employee
         const employee = data[0];
-        const isSuper = employee.is_super_admin === true || employee.access_level === 'super-admin' || employee.access_level === 'owner';
-        console.log('✅ PIN verified:', employee.name, '| Super:', isSuper);
+        // 👑 CRITICAL: Only employees with is_super_admin=true are super admins.
+        // 'owner' is a business role (access_level), NOT a system super admin.
+        // Mixing these caused owners to be redirected to /super-admin portal.
+        const isSuper = employee.is_super_admin === true || employee.access_level === 'super-admin';
+        console.log('✅ PIN verified:', employee.name, '| access_level:', employee.access_level, '| isSuperAdmin:', isSuper);
 
         // Update context if we found the user in a different business
         if (employee.business_id && employee.business_id !== bid) {
@@ -161,6 +164,8 @@ export const PINPad: React.FC<PINPadProps> = ({
 
         if (isSuper) {
           localStorage.setItem('is_super_admin', 'true');
+        } else {
+          localStorage.removeItem('is_super_admin');
         }
 
         // Enriched employee object for MayaGateway
@@ -168,6 +173,7 @@ export const PINPad: React.FC<PINPadProps> = ({
           id: employee.id,
           name: employee.name,
           accessLevel: employee.access_level,
+          access_level: employee.access_level,
           isSuperAdmin: isSuper,
           is_super_admin: isSuper,
           businessId: employee.business_id,

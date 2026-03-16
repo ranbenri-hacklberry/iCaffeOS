@@ -3,9 +3,11 @@
 ## 📋 מה בנינו עד כה / What We've Built
 
 ### Phase 1: Face Recognition Hook ✅
+
 **מטרה:** אימות שהמצלמה והזיהוי הפנים עובדים במערכת
 
 **מה נבנה:**
+
 - **FaceScanner.tsx** - קומפוננטת זיהוי פנים מבוססת face-api.js
   - טעינת מודלים מ-CDN
   - צילום 2 פריימים וממוצע וקטורים (128 ממדים)
@@ -18,6 +20,7 @@
   - בדיקה שהמצלמה פועלת והזיהוי עובד
 
 **תיקונים שבוצעו:**
+
 - מ-512 ממדים ל-128 ממדים (מגבלת face-api.js)
 - מ-5 פריימים ל-2 פריימים (מהירות)
 - תיקון race condition עם functional state updates
@@ -26,11 +29,13 @@
 ---
 
 ### Phase 2: Backend Face Matching ✅
+
 **מטרה:** יצירת endpoints ו-RPC functions לאימות זהות
 
 **מה נבנה:**
 
 #### 1. Database Migration (002_face_recognition_setup.sql)
+
 ```sql
 -- הוספת עמודת face_embedding לטבלת employees
 ALTER TABLE employees ADD COLUMN face_embedding vector(128);
@@ -48,18 +53,22 @@ CREATE FUNCTION match_employee_face(
 ```
 
 #### 2. Backend Routes (mayaRoutes.js)
+
 4 endpoints חדשים:
+
 - **POST /api/maya/verify-face** - אימות זהות באמצעות וקטור פנים
 - **POST /api/maya/verify-pin** - אימות באמצעות PIN (fallback)
 - **POST /api/maya/check-clocked-in** - בדיקה אם עובד נכנס למשמרת
 - **POST /api/maya/enroll-face** - רישום פנים חדשות (admin)
 
 **המרת וקטור:**
+
 ```javascript
 const vectorString = `[${embedding.join(',')}]`;
 ```
 
 #### 3. Enrollment UI (EnrollFace.tsx)
+
 - עמוד admin ב-`/admin/enroll-face`
 - פריסה של 2 עמודות: סורק משמאל, רשימת עובדים מימין
 - סטטוס enrolled/not enrolled עם ✅
@@ -67,11 +76,13 @@ const vectorString = `[${embedding.join(',')}]`;
 ---
 
 ### Phase 2.5: Audit Log System ✅
+
 **מטרה:** רשת ביטחון - תיעוד כל הפעולות עם יכולת rollback
 
 **מה נבנה:**
 
 #### 1. Database Migration (003_sdk_audit_log.sql)
+
 ```sql
 -- רישום אפליקציות מורשות
 CREATE TABLE sdk_apps (
@@ -100,7 +111,9 @@ CREATE FUNCTION rollback_sdk_operation(p_correlation_id uuid);
 ```
 
 #### 2. Audit Service (auditService.js)
+
 פונקציות logging:
+
 - `logFaceEnrollment()` - תיעוד רישום פנים
 - `logFaceVerification()` - תיעוד ניסיון אימות (הצלחה/כישלון)
 - `logPinVerification()` - תיעוד אימות PIN
@@ -108,6 +121,7 @@ CREATE FUNCTION rollback_sdk_operation(p_correlation_id uuid);
 - `rollbackOperation()` - ביטול פעולות לפי correlation_id
 
 **שילוב ב-mayaRoutes.js:**
+
 ```javascript
 // כל verification מתועד
 await logFaceVerification(bestMatch.id, true, bestMatch.similarity, req);
@@ -116,18 +130,22 @@ await logFaceVerification(bestMatch.id, true, bestMatch.similarity, req);
 ---
 
 ### Phase 3: State Machine Gateway ✅
+
 **מטרה:** יצירת מנגנון אימות מלא עם routing מבוסס תפקידים
 
 **מה נבנה:**
 
 #### 1. MayaAuthContext.tsx - State Management
+
 **8 מצבים במכונת מצבים:**
+
 ```
 LOADING → SCANNING → MATCHING → IDENTIFIED →
 CLOCK_IN_REQUIRED → AUTHORIZED → [UNAUTHORIZED | ERROR]
 ```
 
 **אבטחה קריטית:**
+
 ```typescript
 // 🔒 accessLevel מגיע רקק מהשרת
 const setEmployee = useCallback((emp: Employee, sim: number) => {
@@ -137,12 +155,15 @@ const setEmployee = useCallback((emp: Employee, sim: number) => {
 ```
 
 **פונקציות עזר:**
+
 - `isFullyAuthorized()` - בדיקה אם מורשה לצ'אט
 - `canViewFinancialData()` - בדיקה אם רואה מידע פיננסי
 - `getAccessLevelName()` - שם תפקיד בעברית
 
 #### 2. MayaGateway.tsx - State Machine Orchestrator
+
 **תזרים מלא:**
+
 1. לחיצה על כפתור Maya (✨)
 2. פתיחת מודאל עם FaceScanner
 3. סריקת פנים (2 פריימים)
@@ -153,6 +174,7 @@ const setEmployee = useCallback((emp: Employee, sim: number) => {
 8. אם מורשה → מעבר ל-MayaOverlay (צ'אט)
 
 **Anti-Gravity Transitions:**
+
 ```typescript
 const transitionVariants = {
   initial: { opacity: 0, scale: 0.95, y: 20 },
@@ -165,6 +187,7 @@ const transitionVariants = {
 ```
 
 **UI States:**
+
 - SCANNING: תצוגת FaceScanner
 - MATCHING: Loader2 מסתובב
 - IDENTIFIED: UserCheck עם אנימציה + שלום {name}
@@ -172,11 +195,14 @@ const transitionVariants = {
 - ERROR: ShieldAlert עם retry button
 
 #### 3. MayaOverlay.tsx - Worker Sanity Check
+
 **שינויים:**
+
 - קבלת props: `employee`, `canViewFinancialData`, `sessionId`, `onLogout`
 - בדיקת הרשאה: אם לא authorized → return null
 
 **🔒 Worker Sanity Check - הוראת מערכת:**
+
 ```typescript
 if (employee && !canViewFinancialData) {
   const workerInstruction = {
@@ -190,6 +216,7 @@ if (employee && !canViewFinancialData) {
 ```
 
 **העברת context לשרת:**
+
 ```javascript
 const response = await fetch('http://localhost:3001/api/maya/chat', {
   method: 'POST',
@@ -209,6 +236,7 @@ const response = await fetch('http://localhost:3001/api/maya/chat', {
 ## 🔐 אבטחה / Security Features
 
 ### 1. Role-Based Access Control
+
 ```
 Super Admin:
   ✅ גישה מיידית לצ'אט
@@ -227,12 +255,15 @@ Worker:
 ```
 
 ### 2. Access Level Enforcement
+
 - **Client-side:** accessLevel מוצג מ-context (readonly)
 - **Server-side:** accessLevel מגיע רק מ-database verification
 - **אין אפשרות** לזייף תפקיד - הוא נשלף רק מהשרת
 
 ### 3. Audit Trail
+
 כל פעולה מתועדת עם:
+
 - `employee_id` - מי ביצע
 - `action_type` - מה בוצע
 - `correlation_id` - לקישור פעולות
@@ -240,6 +271,7 @@ Worker:
 - `old_data` + `new_data` - before/after snapshots
 
 ### 4. Session Management
+
 - `sessionId` (UUID) לכל session
 - מועבר לכל API call
 - מאפשר מעקב ו-rollback של כל השיחה
@@ -249,6 +281,7 @@ Worker:
 ## 📁 קבצים שנוצרו / Created Files
 
 ### Frontend (React + TypeScript)
+
 ```
 frontend_source/src/
 ├── components/maya/
@@ -263,6 +296,7 @@ frontend_source/src/
 ```
 
 ### Backend (Node.js + Express)
+
 ```
 backend/
 ├── api/
@@ -272,6 +306,7 @@ backend/
 ```
 
 ### Database (PostgreSQL + Supabase)
+
 ```
 migrations/
 ├── 002_face_recognition_setup.sql    ✅ (Phase 2)
@@ -302,6 +337,7 @@ function App() {
 ### צעד 2: החלף MayaOverlay ב-MayaGateway
 
 **לפני:**
+
 ```typescript
 import MayaOverlay from './components/maya/MayaOverlay';
 
@@ -309,6 +345,7 @@ import MayaOverlay from './components/maya/MayaOverlay';
 ```
 
 **אחרי:**
+
 ```typescript
 import { MayaGateway } from './components/maya/MayaGateway';
 
@@ -334,29 +371,34 @@ import EnrollFace from './pages/EnrollFace';
 ## ✅ בדיקות / Testing Checklist
 
 ### Phase 1 ✅
+
 - [x] המצלמה נפתחת ללא שגיאות
 - [x] פנים מזוהות עם bounding box ירוק
 - [x] 128-dim embedding מודפס לקונסול
-- [x] עובד על שתי המכונות (MacBook + N150)
+- [x] עובד על שתי המכונות (MacBook + AGX Orin)
 
 ### Phase 2 ✅
+
 - [x] SQL migrations הורצו בהצלחה
 - [x] RPC function `match_employee_face` חוזר תוצאות
 - [x] Enrollment UI מציג רשימת עובדים
 - [x] אפשר לשמור embeddings ב-database
 
 ### Phase 2.5 ✅
+
 - [x] Audit log migration הורץ
 - [x] auditService.js מתועד פעולות
 - [x] כל verification מתועד עם correlation_id
 
 ### Phase 3 ✅
+
 - [x] MayaAuthContext ניהול מצבים
 - [x] MayaGateway מציג מצבים שונים
 - [x] Framer-motion transitions עובדות
 - [x] Worker sanity check מוטמע ב-MayaOverlay
 
 ### Integration Testing (צריך לבדוק) ⏳
+
 - [ ] לחיצה על כפתור Maya פותחת Gateway
 - [ ] סריקת פנים מזהה עובד נכון
 - [ ] Backend מחזיר employee data עם accessLevel
@@ -373,9 +415,11 @@ import EnrollFace from './pages/EnrollFace';
 ### Phase 4: Clock-In Modal + PIN Pad (טרם בוצע)
 
 #### 1. ClockInModal.tsx
+
 **מטרה:** אפשר לעובדים לבחור תפקיד ולהיכנס למשמרת
 
 **תכונות:**
+
 - Grid של תפקידים: בריסטה, קופאי, צ׳קר, מטבח, עוזר כללי
 - כל תפקיד עם אייקון + שם בעברית
 - לחיצה → שליחה ל-`/api/maya/clock-in` (צריך endpoint חדש)
@@ -383,14 +427,17 @@ import EnrollFace from './pages/EnrollFace';
 - אנימציית הצלחה → מעבר ל-AUTHORIZED
 
 **Anti-Gravity UI:**
+
 - Glassmorphism cards לכל תפקיד
 - Hover effect: scale + glow
 - Selected state: cyan border + shadow
 
 #### 2. PINPad.tsx
+
 **מטרה:** Fallback אם המצלמה לא עובדת
 
 **תכונות:**
+
 - מקלדת מספרית 0-9
 - 4 ספרות
 - שליחה ל-`/api/maya/verify-pin`
@@ -400,6 +447,7 @@ import EnrollFace from './pages/EnrollFace';
 **לעיין ב-ManagerAuthModal.jsx** לקבלת השראה (קיים במערכת)
 
 #### 3. Backend Endpoints חדשים
+
 ```javascript
 // mayaRoutes.js
 router.post('/clock-in', async (req, res) => {
@@ -440,6 +488,7 @@ router.post('/clock-out', async (req, res) => {
 **כל הקומפוננטות משתמשות ב:**
 
 ### Colors
+
 ```css
 /* Backgrounds */
 bg-slate-900/90          /* Main modal background */
@@ -455,12 +504,14 @@ from-purple-600 to-pink-600   /* Maya branding */
 ```
 
 ### Effects
+
 ```css
 backdrop-blur-xl         /* Glassmorphism blur */
 backdrop-blur-sm         /* Light blur for overlays */
 ```
 
 ### Animations
+
 ```typescript
 // Spring physics (חוסר כבידה)
 transition: {
@@ -490,13 +541,15 @@ whileTap={{ scale: 0.9 }}
 
 ## 🔧 Known Issues & Improvements
 
-### ידוע:
+### ידוע
+
 1. **CLOCK_IN_REQUIRED state** - כרגע placeholder, צריך ClockInModal
 2. **PIN Pad** - לא מוטמע עדיין (fallback)
 3. **Context Sanitization** - צריך לממש בצד שרת ב-mayaService.js
 4. **Error Recovery** - retry logic בסיסי, צריך טיפול מתקדם יותר
 
-### שיפורים אפשריים:
+### שיפורים אפשריים
+
 - Cache של face-api.js models ב-IndexedDB
 - Progressive loading של models (טען רק מה שצריך)
 - Feedback haptic על מכשירים ניידים
@@ -509,12 +562,15 @@ whileTap={{ scale: 0.9 }}
 ## 💡 Developer Notes
 
 ### face-api.js Models
+
 מודלים נטענים מ-CDN:
+
 ```
 https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/
 ```
 
 להורדה מקומית:
+
 ```bash
 cd frontend_source/public
 mkdir models
@@ -522,6 +578,7 @@ mkdir models
 ```
 
 ### Float32Array → PostgreSQL Vector
+
 ```javascript
 // Frontend
 const embedding = new Float32Array([...]);
@@ -534,6 +591,7 @@ await supabase.rpc('match_employee_face', {
 ```
 
 ### Supabase RPC Testing
+
 ```sql
 -- Test match_employee_face
 SELECT * FROM match_employee_face(

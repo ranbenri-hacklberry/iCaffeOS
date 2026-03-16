@@ -1,13 +1,14 @@
 export interface InventoryItem {
     id: string;
     name: string;
-    unit: string;
+    base_unit: string;
+    display_unit?: string | null;
     current_stock: number;
     low_stock_threshold_units: number;
     supplier_id: string | null;
     category?: string;
     catalog_item_id?: string | null;
-    count_step?: number;
+    inventory_count_step?: number;
     weight_per_unit?: number;
     cost_per_unit?: number;
     min_order?: number;

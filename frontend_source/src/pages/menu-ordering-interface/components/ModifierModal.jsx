@@ -6,6 +6,9 @@ import {
   Plus, Minus
 } from 'lucide-react';
 import { fetchManagerItemOptions } from '@/lib/managerApi';
+import { getNormalizedModifiers } from '@/utils/modifierUtils';
+
+const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
 
 const formatPrice = (price = 0) => {
   const numPrice = Number(price);
@@ -193,8 +196,10 @@ const ModifierModal = (props) => {
           return;
         }
 
-        console.log('🔄 Fetching Options from DB for:', selectedItem.name, 'ID:', targetItemId);
-        const fetchedOptions = await fetchManagerItemOptions(targetItemId);
+        console.log('🔄 Fetching Options using Hybrid Engine for:', selectedItem.name, 'ID:', targetItemId);
+
+        // Use the new Hybrid Normalization Layer (Prioritizes JSONB, falls back to relational)
+        const fetchedOptions = await getNormalizedModifiers(selectedItem);
 
         // Combine with injected extra groups (e.g. for Salad Prep)
         const allOptions = [...(fetchedOptions || []), ...(props.extraGroups || [])];
@@ -561,7 +566,9 @@ const ModifierModal = (props) => {
             groupName: group.title || group.name, // Use title
             valueId: val.id,
             valueName: val.name,
-            priceAdjustment: effectivePrice
+            priceAdjustment: effectivePrice,
+            inventory_item_id: val.inventory_item_id || val.metadata?.inventory_item_id,
+            inhibits_ingredient_id: val.inhibits_ingredient_id || val.metadata?.inhibits_ingredient_id
           };
         }).filter(Boolean);
       }
@@ -576,7 +583,9 @@ const ModifierModal = (props) => {
         groupName: group.title || group.name, // Use title
         valueId: val.id,
         valueName: val.name,
-        priceAdjustment: effectivePrice
+        priceAdjustment: effectivePrice,
+        inventory_item_id: val.inventory_item_id || val.metadata?.inventory_item_id,
+        inhibits_ingredient_id: val.inhibits_ingredient_id || val.metadata?.inhibits_ingredient_id
       }];
     });
 
@@ -650,6 +659,14 @@ const ModifierModal = (props) => {
               </button>
             </div>
           </div>
+
+          {/* Business-Specific Context Bar (e.g. Nursery) */}
+          {selectedItem.business_id === NURSERY_BIZ_ID && (
+            <div className="bg-emerald-50 px-6 py-2 border-b border-emerald-100 flex items-center gap-2">
+              <Leaf size={16} className="text-emerald-600" />
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-widest">קטלוג משתלה - אפשרויות גידול</span>
+            </div>
+          )}
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[150px]">

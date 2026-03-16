@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { motion, useAnimation } from 'framer-motion';
 import { Music } from 'lucide-react';
 
 import { getBackendApiUrl } from '../../utils/apiUtils';
@@ -30,6 +31,23 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
     };
 
     const coverUrl = resolveCover();
+    const controls = useAnimation();
+
+    // 📀 Realistic "Coast to Stop" Effect
+    useEffect(() => {
+        if (isPlaying && (song || queue.length > 0)) {
+            controls.start({
+                rotate: 360,
+                transition: { duration: 1.8, repeat: Infinity, ease: "linear" }
+            });
+        } else {
+            // Coast slightly further before stopping
+            controls.start({
+                rotate: "+=60",
+                transition: { duration: 1.5, ease: "easeOut" }
+            });
+        }
+    }, [isPlaying, song, queue, controls]);
 
     return (
         <div
@@ -42,7 +60,10 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
                 {/* Platter */}
                 <div className="vinyl-platter-ring">
                     {/* Vinyl record */}
-                    <div className={`vinyl-disc ${isPlaying && song ? 'vinyl-spinning' : ''}`}>
+                    <motion.div
+                        className="vinyl-disc"
+                        animate={controls}
+                    >
                         {/* Grooves */}
                         <div className="vinyl-groove" style={{ width: '90%', height: '90%', opacity: 0.1 }}></div>
                         <div className="vinyl-groove" style={{ width: '75%', height: '75%', opacity: 0.1 }}></div>
@@ -63,11 +84,11 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
 
                         {/* Shine effect */}
                         <div className="vinyl-reflection"></div>
-                    </div>
+                    </motion.div>
                 </div>
 
                 {/* Tonearm - Rotates when isPlaying is true */}
-                <div className={`vinyl-arm ${isPlaying && song ? 'vinyl-arm-playing' : ''}`}>
+                <div className={`vinyl-arm ${isPlaying ? 'vinyl-arm-playing' : ''}`}>
                     <div className="vinyl-arm-pivot"></div>
                     <div className="vinyl-arm-stick">
                         <div className="vinyl-arm-head"></div>
@@ -78,7 +99,7 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
                 <div className="vinyl-armrest"></div>
 
                 {/* LED indicator */}
-                <div className={`vinyl-led ${isPlaying && song ? 'vinyl-led-on' : ''}`}></div>
+                <div className={`vinyl-led ${isPlaying ? 'vinyl-led-on' : ''}`}></div>
             </div>
 
             {/* Song info (Visualized below the base) */}

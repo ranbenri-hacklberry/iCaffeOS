@@ -313,7 +313,10 @@ export const useKDSData = () => {
                 // it is NOT effectively done, regardless of the order_status field!
                 const isEffectivelyDone = (order.order_status === 'completed' || order.order_status === 'ready') && !hasHeldItems;
 
-                if (isEffectivelyDone && !hasActiveItemsFlag && !isVeryRecent) return;
+                // 💰 Keep unpaid orders on screen for manual payment/archiving
+                const isUnpaid = order.is_paid === false || (order.total_amount > (order.paid_amount || 0));
+
+                if (isEffectivelyDone && !hasActiveItemsFlag && !isVeryRecent && !isUnpaid) return;
 
                 if (!rawItems || rawItems.length === 0) return;
 
@@ -333,9 +336,9 @@ export const useKDSData = () => {
                     // 🛡️ [KDS-STABILITY] SKIP FULLY COMPLETED CARDS:
                     // If every item in this specific status group is 'completed', 
                     // we don't want to show this card on the KDS anymore.
-                    // It should only exist in the history/reports.
+                    // (Unless the order is unpaid - we want to keep unpaid cards visible)
                     const allCompleted = groupItems.every(i => i.item_status === 'completed');
-                    if (allCompleted) {
+                    if (allCompleted && !isUnpaid) {
                         return;
                     }
 
@@ -644,7 +647,7 @@ export const useKDSData = () => {
 
             // If it's local, we still go to supabase (LAN/cloud).
             if (isLocal) {
-                log('🏘️ [Local Mode] Background syncing from Supabase (N150)...');
+                log('🏘️ [Local Mode] Background syncing from Supabase (Edge Hub)...');
             } else {
                 log('🌐 [Cloud Mode] Background syncing from Supabase...');
             }
@@ -1282,8 +1285,8 @@ export const useKDSData = () => {
             // SHIPPED -> COMPLETED (delivery completed)
             nextStatus = 'completed';
         } else if (statusLower === 'completed') {
-            // Already completed - keep it
-            nextStatus = 'completed';
+            // ALREADY COMPLETED -> User manually archives unpaid completed order
+            nextStatus = 'archived';
         } else if (statusLower === 'ready') {
             // READY -> Next step depends on order type
             // 🛡️ MODIFICATION: Only move to 'completed' if the action came from a card that was ALREADY 'ready'.

@@ -75,6 +75,7 @@ const MusicPageContent = () => {
         isLoading,
         error,
         isMusicDriveConnected,
+        diskStatus,
         checkMusicDriveConnection,
         refreshAll,
         addSongToPlaylist,
@@ -178,11 +179,11 @@ const MusicPageContent = () => {
     }, []);
 
     useEffect(() => {
-        // Start Heartbeat if we are on the N150
-        const isN150 = window.location.hostname.includes('n150') || true; // Auto-detect in real env
+        // Start Heartbeat if we are on the Edge Hub
+        const isEdgeHub = window.location.hostname.includes('edge') || true; // Auto-detect in real env
         fetch(`${MUSIC_API_URL}/api/music/discovery/start`, {
             method: 'POST',
-            body: JSON.stringify({ device_type: isN150 ? 'n150' : 'mbp' }),
+            body: JSON.stringify({ device_type: isEdgeHub ? 'edge_hub' : 'mac' }),
             headers: { 'Content-Type': 'application/json' }
         }).catch(err => console.warn('Discovery skipped:', err));
 
@@ -383,21 +384,6 @@ const MusicPageContent = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [albumCount]);
 
-    // Auto-repair album_id links on mount — fixes songs saved with album_id = null
-    // due to scan race conditions. Runs silently in background; refreshes songs if repairs made.
-    useEffect(() => {
-        fetch(`${MUSIC_API_URL}/music/repair-album-links`, { method: 'POST' })
-            .then(r => r.json())
-            .then(result => {
-                if (result.repaired > 0) {
-                    console.log(`🔧 Auto-repaired ${result.repaired} album_id links — refreshing songs`);
-                    fetchAllSongs().then(results => setAllSongs(results || []));
-                }
-            })
-            .catch(() => { /* silent — repair endpoint may not exist yet */ });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Once on mount
-
     // Check Sync Status (Obsolete, route removed)
     const checkSyncStatus = useCallback(async () => {
         // Obsolete route, just set mismatch detected false
@@ -407,12 +393,18 @@ const MusicPageContent = () => {
     useEffect(() => {
         checkSyncStatus();
 
+        // Periodically refresh drive status in background
+        const interval = setInterval(() => {
+            checkMusicDriveConnection();
+        }, 15000);
+
         // Listen for drive mount events
         if (window.electron?.ipcRenderer) {
             const removeListener = window.electron.ipcRenderer.on('system:volume-change', (data) => {
                 console.log('📦 Volume change event received:', data);
                 if (data.isMounted && data.filename === 'RANTUNES') {
                     checkSyncStatus();
+                    refreshAll();
                 }
             });
 
@@ -423,11 +415,13 @@ const MusicPageContent = () => {
             });
 
             return () => {
+                clearInterval(interval);
                 removeListener();
                 removeCdListener();
             };
         }
-    }, [checkSyncStatus]);
+        return () => clearInterval(interval);
+    }, [checkSyncStatus, checkMusicDriveConnection, refreshAll]);
 
     // Load songs when album/playlist is selected
     useEffect(() => {
@@ -448,7 +442,11 @@ const MusicPageContent = () => {
                             s.album_id === selectedAlbum.id ||
                             (s.file_path && s.file_path.startsWith(folderPath + '/')) ||
                             s.file_path === folderPath
-                        ).sort((a, b) => (a.track_number || 0) - (b.track_number || 0))
+                        ).sort((a, b) => {
+                            const trackSort = (a.track_number || 0) - (b.track_number || 0);
+                            if (trackSort !== 0) return trackSort;
+                            return (a.file_name || '').localeCompare(b.file_name || '');
+                        })
                         : (allSongs || []).filter(s => s.album_id === selectedAlbum.id);
 
                     if (fromMemory.length > 0) {
@@ -793,7 +791,6 @@ const MusicPageContent = () => {
                                 className="flex flex-col items-center justify-center w-full"
                             >
                                 <VinylTurntable
-                                    key={currentSong?.id || 'no-song'}
                                     song={currentSong}
                                     isPlaying={isPlaying}
                                     albumArt={currentSong?.album?.cover_url || currentSong?.cover_url || currentSong?.thumbnail_url}
@@ -850,14 +847,18 @@ const MusicPageContent = () => {
                                             </div>
 
                                             <div className="flex items-center gap-6" dir="ltr">
+                                                {/* RTL Swap: Forward is Left, Backward is Right */}
+                                                {/* Left Button (Next) */}
                                                 <button
-                                                    onClick={handlePrevious}
+                                                    onClick={handleNext}
                                                     disabled={!currentSong && playlist.length === 0}
-                                                    className="w-14 h-14 rounded-2xl music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                                    className="w-14 h-14 rounded-full music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                                    title="שיר הבא"
                                                 >
                                                     <SkipBack className="w-6 h-6 text-white" />
                                                 </button>
 
+                                                {/* Center Button (Play/Pause) */}
                                                 <button
                                                     onClick={() => {
                                                         if (!currentSong && playlist.length > 0) {
@@ -866,19 +867,21 @@ const MusicPageContent = () => {
                                                             togglePlay();
                                                         }
                                                     }}
-                                                    className="w-20 h-20 rounded-3xl music-gradient-purple flex items-center justify-center shadow-2xl hover:scale-105 transition-transform border border-white/20"
+                                                    className="w-20 h-20 rounded-full music-gradient-purple flex items-center justify-center shadow-2xl hover:scale-105 transition-transform border border-white/20"
                                                 >
                                                     {isPlaying ? (
                                                         <Pause className="w-9 h-9 text-white fill-current" />
                                                     ) : (
-                                                        <Play className="w-9 h-9 text-white fill-current ml-1" />
+                                                        <Play className="w-9 h-9 text-white fill-current -scale-x-100" />
                                                     )}
                                                 </button>
 
+                                                {/* Right Button (Previous) */}
                                                 <button
-                                                    onClick={handleNext}
+                                                    onClick={handlePrevious}
                                                     disabled={!currentSong && playlist.length === 0}
-                                                    className="w-14 h-14 rounded-2xl music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                                    className="w-14 h-14 rounded-full music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                                    title="שיר קודם"
                                                 >
                                                     <SkipForward className="w-6 h-6 text-white" />
                                                 </button>
@@ -1032,12 +1035,50 @@ const MusicPageContent = () => {
                                             <div className="col-span-full flex items-center justify-center py-12">
                                                 <div className="w-8 h-8 border-3 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
                                             </div>
-                                        ) : !isMusicDriveConnected && filteredAlbums.length === 0 ? (
-                                            <div className="col-span-full text-center py-12">
-                                                <HardDrive className="w-12 h-12 text-amber-400 mx-auto mb-4" />
-                                                <p className="text-white/60 text-lg mb-2">כונן המוזיקה לא מחובר</p>
-                                                <p className="text-white/40 text-sm mb-4">חבר את הכונן ונסה שוב</p>
-                                                <button onClick={handleRetryDisk} className="px-6 py-3 music-gradient-purple rounded-xl text-white font-medium">בדוק שוב</button>
+                                        ) : filteredAlbums.length === 0 ? (
+                                            <div className="col-span-full text-center py-20 px-6">
+                                                {!isMusicDriveConnected ? (
+                                                    // True Disconnection
+                                                    <>
+                                                        <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-5">
+                                                            <HardDrive className="w-10 h-10 text-amber-400" />
+                                                        </div>
+                                                        <p className="text-white text-xl font-bold mb-2">דיסק RANTUNES מנותק</p>
+                                                        <p className="text-white/60 mb-8">האלבומים המחוברים לדיסק החיצוני אינם זמינים כרגע</p>
+                                                        <button
+                                                            onClick={() => refreshAll()}
+                                                            className="px-6 py-2 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30 transition-all flex items-center gap-2 mx-auto"
+                                                        >
+                                                            <RefreshCw className="w-4 h-4" />
+                                                            <span>בדוק חיבור שוב</span>
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    // Drive connected but no albums in DB
+                                                    <>
+                                                        <div className="w-20 h-20 rounded-full bg-purple-500/10 flex items-center justify-center mx-auto mb-5">
+                                                            <Music className="w-10 h-10 text-purple-400" />
+                                                        </div>
+                                                        <p className="text-white text-xl font-bold mb-2">לא נמצאו אלבומים</p>
+                                                        <p className="text-white/60 mb-8">הדיסק מחובר, אך נראה שלא סרקת שירים עדיין</p>
+                                                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                                            <button
+                                                                onClick={() => setShowImport(true)}
+                                                                className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all flex items-center gap-2 shadow-lg shadow-purple-900/20"
+                                                            >
+                                                                <Search className="w-4 h-4" />
+                                                                <span>התחל סריקה</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => refreshAll()}
+                                                                className="px-6 py-2 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 transition-all flex items-center gap-2"
+                                                            >
+                                                                <RefreshCw className="w-4 h-4" />
+                                                                <span>רענן</span>
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         ) : (
                                             filteredAlbums.map(album => (

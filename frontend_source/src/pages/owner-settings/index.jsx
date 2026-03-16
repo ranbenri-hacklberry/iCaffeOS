@@ -4,6 +4,7 @@ import { BadgeCheck, HardDrive, ArrowRight, CheckCircle, Loader2, Sparkles } fro
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+// Temporarily removed react-i18next due to UI freezing issues
 import GoogleConnectButton from '@/components/GoogleConnectButton';
 import AccountantAccess from '@/components/settings/AccountantAccess';
 import WhatsAppConnect from '@/components/settings/WhatsAppConnect';
@@ -13,6 +14,21 @@ import SecuritySettings from '@/components/settings/SecuritySettings';
 const OwnerSettings = () => {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
+    // Removed: const { t, i18n } = useTranslation();
+
+    const t = (key) => {
+        const translations = {
+            'title': 'הגדרות בעלים (Owner)',
+            'subtitle': 'ניהול חיבורים ושירותים רגישים',
+            'geminiSaveSuccess': '✅ מפתח Gemini נשמר בהצלחה!',
+            'grokSaveSuccess': '✅ מפתח Grok נשמר בהצלחה!',
+            'saveError': '❌ שגיאה בשמירת המפתח',
+            'comingSoon': 'בקרוב',
+            'language': 'שפה'
+        };
+        return translations[key] || key;
+    };
+
     const [googleStatus, setGoogleStatus] = useState('loading'); // loading, connected, disconnected
     const [geminiKey, setGeminiKey] = useState(''); // For new input only
     const [grokKey, setGrokKey] = useState(''); // For new input only
@@ -21,6 +37,7 @@ const OwnerSettings = () => {
     const [isSavingGemini, setIsSavingGemini] = useState(false);
     const [isSavingGrok, setIsSavingGrok] = useState(false);
     const [folderId, setFolderId] = useState(null);
+    const [currentLanguage, setCurrentLanguage] = useState('he');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -32,12 +49,17 @@ const OwnerSettings = () => {
                 // 🔒 REFACTORED: Check Google status from businesses + key existence from business_secrets
                 const { data: bizData, error: bizError } = await supabase
                     .from('businesses')
-                    .select('is_google_connected')
+                    .select('is_google_connected, language')
                     .eq('id', currentUser.business_id)
                     .single();
 
                 if (bizError) throw bizError;
                 setGoogleStatus(bizData?.is_google_connected ? 'connected' : 'disconnected');
+
+                // Set current language from business config
+                if (bizData?.language) {
+                    setCurrentLanguage(bizData.language);
+                }
 
                 // Check key existence from business_secrets (RLS-protected)
                 const { data: secretsData } = await supabase
@@ -70,12 +92,12 @@ const OwnerSettings = () => {
             });
 
             if (error) throw error;
-            alert('✅ מפתח Gemini נשמר בהצלחה!');
+            alert(t('geminiSaveSuccess'));
             setHasGeminiKey(true);
             setGeminiKey(''); // Clear input - don't keep key in browser memory!
         } catch (err) {
             console.error('Error saving Gemini key:', err);
-            alert('❌ שגיאה בשמירת המפתח');
+            alert(t('saveError'));
         } finally {
             setIsSavingGemini(false);
         }
@@ -93,14 +115,30 @@ const OwnerSettings = () => {
             });
 
             if (error) throw error;
-            alert('✅ מפתח Grok נשמר בהצלחה!');
+            alert(t('grokSaveSuccess'));
             setHasGrokKey(true);
             setGrokKey(''); // Clear input - don't keep key in browser memory!
         } catch (err) {
             console.error('Error saving Grok key:', err);
-            alert('❌ שגיאה בשמירת המפתח');
+            alert(t('saveError'));
         } finally {
             setIsSavingGrok(false);
+        }
+    };
+
+    const handleLanguageChange = async (language) => {
+        try {
+            // Save language preference to business_config table
+            const { error } = await supabase
+                .from('businesses')
+                .update({ language })
+                .eq('id', currentUser.business_id);
+
+            if (error) throw error;
+
+            setCurrentLanguage(language);
+        } catch (err) {
+            console.error('Error saving language preference:', err);
         }
     };
 
@@ -109,16 +147,31 @@ const OwnerSettings = () => {
             <div className="max-w-4xl mx-auto space-y-8">
 
                 {/* Header with Back Button */}
-                <div className="flex items-center gap-4 mb-8">
-                    <button
-                        onClick={() => navigate('/mode-selection')}
-                        className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"
-                    >
-                        <ArrowRight size={24} />
-                    </button>
-                    <div>
-                        <h1 className="text-3xl font-black text-white mb-1">הגדרות בעלים (Owner)</h1>
-                        <p className="text-slate-400 text-lg">ניהול חיבורים ושירותים רגישים</p>
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => navigate('/mode-selection')}
+                            className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"
+                        >
+                            <ArrowRight size={24} />
+                        </button>
+                        <div>
+                            <h1 className="text-3xl font-black text-white mb-1">{t('title')}</h1>
+                            <p className="text-slate-400 text-lg">{t('subtitle')}</p>
+                        </div>
+                    </div>
+
+                    {/* Language Selection Dropdown */}
+                    <div className="flex items-center gap-2">
+                        <label className="text-white text-sm">{t('language')}:</label>
+                        <select
+                            value={currentLanguage}
+                            onChange={(e) => handleLanguageChange(e.target.value)}
+                            className="bg-slate-800 border border-slate-600 text-white px-3 py-1 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="he">עברית</option>
+                            <option value="en">English</option>
+                        </select>
                     </div>
                 </div>
 
@@ -167,7 +220,7 @@ const OwnerSettings = () => {
 
                     <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 flex items-center justify-between opacity-40 grayscale pointer-events-none">
                         <span className="text-white font-medium">Wolt Integration</span>
-                        <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">בקרוב</span>
+                        <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">{t('comingSoon')}</span>
                     </div>
                 </div>
 

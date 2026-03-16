@@ -1,4 +1,6 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, useAnimation } from 'framer-motion';
 import { Play, Pause, SkipBack, ThumbsUp, ThumbsDown, Music } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import MusicContext from '../../context/MusicContext';
@@ -12,27 +14,48 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
     const { isDarkMode: themeDarkMode } = useTheme();
     const isDarkMode = forceDark ? true : (forceLight ? false : themeDarkMode);
 
-    // Use context directly (returns null if not in MusicProvider)
     const music = useContext(MusicContext);
+    const navigate = useNavigate();
+    const controls = useAnimation();
 
-    // Open RanTunes in new tab
+    const currentSong = music?.currentSong;
+    const isPlaying = music?.isPlaying;
+    const togglePlay = music?.togglePlay;
+    const handleNext = music?.handleNext;
+    const rateSong = music?.rateSong;
+
+    // 📀 Realistic "Coast to Stop" Effect
+    useEffect(() => {
+        if (isPlaying) {
+            controls.start({
+                rotate: 360,
+                transition: { duration: 4, repeat: Infinity, ease: "linear" }
+            });
+        } else {
+            // Coast slightly further before stopping
+            controls.start({
+                rotate: "+=45",
+                transition: { duration: 1.2, ease: "easeOut" }
+            });
+        }
+    }, [isPlaying, controls]);
+
+    // Open RanTunes internal page
     const openRanTunes = () => {
-        window.open('https://music.hacklberryfinn.com', '_blank');
+        navigate('/music');
     };
 
     // Don't render if no music context or no current song
-    if (!music || !music.currentSong || !music.currentSong.title) {
+    // MUST BE AFTER ALL HOOKS
+    if (!music || !currentSong || !currentSong.title) {
         return null;
     }
-
-    const { currentSong, isPlaying, togglePlay, handleNext, rateSong } = music;
 
     const isLiked = currentSong.myRating === 5;
     const isDisliked = currentSong.myRating === 1;
 
     const handleRate = async (rating) => {
         if (!currentSong?.id) return;
-        // Toggle off if clicking the same rating, otherwise set new rating
         const newRating = currentSong.myRating === rating ? 0 : rating;
         await rateSong(currentSong.id, newRating);
     };
@@ -49,9 +72,9 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
             dir="rtl"
         >
             {/* Mini Vinyl Record */}
-            <div
-                className={`w-8 h-8 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20
-                    ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}
+            <motion.div
+                className="w-8 h-8 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20"
+                animate={controls}
                 onClick={openRanTunes}
             >
                 {/* Vinyl Grooves */}
@@ -71,7 +94,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     )}
                     <div className="w-1 h-1 rounded-full bg-black absolute z-30" />
                 </div>
-            </div>
+            </motion.div>
 
             {/* Song & Artist */}
             <div className="min-w-0 flex-1 cursor-pointer text-right" onClick={openRanTunes}>
@@ -83,9 +106,8 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                 </p>
             </div>
 
-            {/* Controls - order: Like, Dislike, Play/Pause, Next */}
+            {/* Controls */}
             <div className="flex items-center gap-1 shrink-0">
-                {/* Like */}
                 <button
                     onClick={() => handleRate(5)}
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all
@@ -98,7 +120,6 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     <ThumbsUp className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Dislike */}
                 <button
                     onClick={() => handleRate(1)}
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all
@@ -111,7 +132,6 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     <ThumbsDown className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Play/Pause */}
                 <button
                     onClick={togglePlay}
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDarkMode
@@ -123,11 +143,10 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     {isPlaying ? (
                         <Pause className={`w-4 h-4 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
                     ) : (
-                        <Play className={`w-4 h-4 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
+                        <Play className={`w-4 h-4 -scale-x-100 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
                     )}
                 </button>
 
-                {/* Next Song - arrow pointing left for RTL */}
                 <button
                     onClick={handleNext}
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isDarkMode

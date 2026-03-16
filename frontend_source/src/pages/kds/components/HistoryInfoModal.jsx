@@ -43,8 +43,8 @@ const HistoryInfoModal = ({ isOpen, onClose, orderNumber }) => {
                     <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Info size={32} />
                     </div>
-                    <h2 className="text-2xl font-black mb-1">הזמנה בטיפול</h2>
-                    {orderNumber && <p className="text-blue-100 font-bold">מספר הזמנה: #{orderNumber}</p>}
+                    <h2 className="text-2xl font-black mb-1">הועבר להיסטוריה</h2>
+                    {orderNumber && <p className="text-blue-100 font-bold">הזמנה מספר: #{orderNumber}</p>}
                 </div>
 
                 {/* Content */}

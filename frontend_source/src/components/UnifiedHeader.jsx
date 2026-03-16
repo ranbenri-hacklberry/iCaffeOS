@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { House, Speaker, Tablet } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import MiniMusicPlayer from './music/MiniMusicPlayer';
 import ConnectivityStatus from './ConnectivityStatus';
 import { useMusic } from '../context/MusicContext';
@@ -22,6 +22,7 @@ const UnifiedHeader = ({
     const navigate = useNavigate();
     const { currentUser } = useAuth();
     const { playbackTarget, setPlaybackTarget } = useMusic();
+    const location = useLocation();
     const [time, setTime] = useState(new Date());
 
     const isMusicPage = location.pathname.startsWith('/music');

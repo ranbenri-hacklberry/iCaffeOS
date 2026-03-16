@@ -36,7 +36,7 @@ services:
   # whisper-asr-gpu:
   #   image: onerahmet/openai-whisper-asr-webservice:latest-gpu
   #   ...
-  #   runtime: nvidia  # or rocm for AMD
+  #   runtime: nvidia
 
 volumes:
   whisper_model_cache:

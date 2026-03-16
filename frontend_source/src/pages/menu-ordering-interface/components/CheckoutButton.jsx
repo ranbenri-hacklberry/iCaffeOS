@@ -12,8 +12,11 @@ const CheckoutButton = ({
   disabled = false,
   className = "",
   isEditMode = false,
-  editingOrderData = null
+  editingOrderData = null,
+  businessId = null
 }) => {
+  const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
+  const MIN_ORDER_TOTAL = 190;
   const { isDarkMode } = useTheme();
   // Format price to Israeli Shekel (ILS) - show agorot if present
   const formatPrice = (price) => {
@@ -55,7 +58,11 @@ const CheckoutButton = ({
   // 1. Is it a Refund? (Paid order, and new total is lower)
   const isRefund = isEditMode && originalIsPaid && priceDifference < 0;
 
-  const isDisabled = disabled || (cartItems.length === 0 && !isRefund);
+  // 🛒 Nursery Validation: Minimum Order
+  const isNursery = businessId === NURSERY_BIZ_ID;
+  const isMinOrderValid = !isNursery || cartTotal >= MIN_ORDER_TOTAL || isEditMode;
+
+  const isDisabled = disabled || (cartItems.length === 0 && !isRefund) || !isMinOrderValid;
 
   // 2. Is it an Additional Charge? (Paid order, and new total is higher)
   const isAdditionalCharge = isEditMode && originalIsPaid && priceDifference > 0;
@@ -68,6 +75,10 @@ const CheckoutButton = ({
 
   // Text displayed on the button
   const buttonText = useMemo(() => {
+    if (isNursery && cartTotal > 0 && cartTotal < MIN_ORDER_TOTAL && !isEditMode) {
+      return 'מינימום להזמנה ומשלוח: 190 ₪';
+    }
+
     if (isDisabled) return 'הוסף פריטים להזמנה';
 
     if (!isEditMode) return 'המשך לתשלום';
@@ -98,6 +109,12 @@ const CheckoutButton = ({
     if (isDisabled) return 'bg-gray-300 text-gray-500 cursor-not-allowed border-gray-300';
     // Refund: Red background
     if (isEditMode && isRefund) return 'bg-red-500 hover:bg-red-600 text-white animate-scale-touch shadow-kiosk hover:shadow-kiosk-lg';
+
+    // Nursery Min Order violation: Red background
+    if (isNursery && cartTotal > 0 && cartTotal < MIN_ORDER_TOTAL && !isEditMode) {
+      return 'bg-red-600 text-white shadow-kiosk opacity-100 cursor-not-allowed';
+    }
+
     // Charge/Finalize/Regular: Orange (Primary Action)
     if (isAdditionalCharge || isFinalizingOrder || !isEditMode) return 'bg-orange-500 hover:bg-orange-600 text-white animate-scale-touch shadow-kiosk hover:shadow-kiosk-lg';
     // No change update: Gray/default

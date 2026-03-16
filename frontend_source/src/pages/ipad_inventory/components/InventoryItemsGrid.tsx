@@ -126,13 +126,16 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     const [lastCountedDate, setLastCountedDate] = useState(item.last_counted_at);
 
     // Calculate display units
-    // If wpu is 1000g and localStock is 500g, displayUnits = 0.5
-    const displayUnits = wpu > 0 ? localStock / wpu : localStock;
+    const rawDisplayUnits = wpu > 0 ? localStock / wpu : localStock;
+    const unitStep = Number(item.inventory_count_step) || 1;
+    
+    // Pessimistic rounding: always round DOWN to the nearest whole step
+    // Add epsilon (0.00001) to handle floating point precision errors (e.g. 1.0/1.0 being 0.99999...)
+    const displayUnits = Math.floor((rawDisplayUnits + 0.00001) / unitStep) * unitStep;
 
     const handleIncrement = () => {
         // Increment by count_step. If count_step is in units (e.g. 1 unit), 
         // and we store grams, we multiply by wpu.
-        const unitStep = Number(item.count_step) || 1;
         const gramStep = wpu > 0 ? unitStep * wpu : unitStep;
 
         const next = localStock + gramStep;
@@ -141,7 +144,6 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     };
 
     const handleDecrement = () => {
-        const unitStep = Number(item.count_step) || 1;
         const gramStep = wpu > 0 ? unitStep * wpu : unitStep;
 
         const next = Math.max(0, localStock - gramStep);

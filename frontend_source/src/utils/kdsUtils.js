@@ -110,7 +110,8 @@ export const groupOrderItems = (items) => {
         // ⚠️ CRITICAL: Key does NOT include status or is_early_delivered!
         // This ensures items stay in place when marked as ready
         // מפתח ייחודי: ID המנה + מחרוזת המודים בלבד
-        const key = `${item.menuItemId}|${item.modsKey || ''}`;
+        const courseKey = item.course_stage || 1;
+        const key = `${item.menuItemId}|${item.modsKey || ''}|course-${courseKey}`;
 
         if (map.has(key)) {
             const existing = map.get(key);

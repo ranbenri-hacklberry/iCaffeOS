@@ -418,21 +418,6 @@
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
-/* The vinyl disc */
-.vinyl-disc {
-  position: relative;
-  width: 216px;
-  /* Reduced from 240px (~10%) */
-  height: 216px;
-  background: radial-gradient(circle, #222 0%, #111 40%, #1a1a1a 100%);
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-.vinyl-disc.vinyl-spinning {
-  animation: vinyl-rotate 1.8s linear infinite;
-}
-
 @keyframes vinyl-rotate {
   from {
     transform: rotate(0deg);
@@ -441,6 +426,22 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.vinyl-disc {
+  position: relative;
+  width: 216px;
+  height: 216px;
+  background: radial-gradient(circle, #222 0%, #111 40%, #1a1a1a 100%);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  /* 📀 THE FIX: Keep animation always attached, control state to prevent "snapping" to 0deg */
+  animation: vinyl-rotate 1.8s linear infinite;
+  animation-play-state: paused;
+}
+
+.vinyl-disc.vinyl-spinning {
+  animation-play-state: running;
 }
 
 /* Vinyl grooves */
@@ -520,7 +521,7 @@
 
   /* Pivot point is top-center of this 140px box -> X=250, Y=20 */
   transform-origin: 50% 20px;
-  transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Resting: Needle X=250 (Vertical down) */
   transform: rotate(0deg);
@@ -530,6 +531,11 @@
 /* Playing: Needle X=220 (Rotated inward to record start) */
 .vinyl-arm.vinyl-arm-playing {
   transform: rotate(25deg);
+}
+
+/* Realistic needle ease-out stop */
+.vinyl-arm {
+  transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .vinyl-arm-pivot {
@@ -678,7 +684,7 @@
   }
 
   /* Show only the player controls bar on mobile */
-  .music-split-right > div > div {
+  .music-split-right>div>div {
     width: 100%;
   }
 

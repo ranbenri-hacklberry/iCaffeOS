@@ -39,7 +39,9 @@ export const normalizeOptionGroups = (rawGroups: any[] = []): OptionGroup[] => {
   return rawGroups
     .filter(Boolean)
     .map((group) => {
-      const values = Array.isArray(group?.values) ? group.values : (Array.isArray(group?.options) ? group.options : []);
+      const values = Array.isArray(group?.values) ? group.values 
+                   : (Array.isArray(group?.options) ? group.options 
+                   : (Array.isArray(group?.items) ? group.items : []));
       const title = group?.title || group?.name || group?.group || 'אפשרות';
 
       return {
@@ -62,6 +64,8 @@ export const normalizeOptionGroups = (rawGroups: any[] = []): OptionGroup[] => {
               price: price,
               priceAdjustment: price,
               is_default: Boolean(value?.is_default),
+              inventory_item_id: value?.inventory_item_id ?? null,
+              quantity: value?.quantity ?? null,
               description: value?.description ?? null,
               metadata: value?.metadata ?? null,
             };
