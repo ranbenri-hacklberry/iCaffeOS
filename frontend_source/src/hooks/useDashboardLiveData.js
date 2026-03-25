@@ -42,10 +42,18 @@ export const useDashboardLiveData = (businessId) => {
         const fetchFromSupabase = async () => {
             try {
                 // 1. KDS Orders - Count active vs ready
-                // Also include 'new' status for orders waiting to be prepared
+                // We fetch order_items as well to ensure we only count orders that TRULY have items requiring prep
                 const { data: orders, error: ordErr } = await supabase
                     .from('orders')
-                    .select('id, order_status')
+                    .select(`
+                        id, 
+                        order_status,
+                        order_items (
+                            kds_routing_logic,
+                            is_early_delivered,
+                            item_status
+                        )
+                    `)
                     .eq('business_id', businessId)
                     .in('order_status', ['new', 'preparing', 'ready', 'fired', 'in_progress'])
                     .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
@@ -55,19 +63,31 @@ export const useDashboardLiveData = (businessId) => {
                     throw ordErr;
                 }
 
-                console.log(`🍳 [Orders] Fetched ${(orders || []).length} active orders:`,
-                    (orders || []).map(o => o.order_status));
-
                 const activeOrders = (orders || []).filter(o => {
                     const s = o.order_status?.toLowerCase();
-                    return s === 'new' || s === 'preparing' || s === 'fired' || s === 'in_progress';
+                    const isPotentiallyActive = s === 'new' || s === 'preparing' || s === 'fired' || s === 'in_progress';
+                    if (!isPotentiallyActive) return false;
+
+                    // CHECK: Does this order have ANY item that requires prep?
+                    // Logic must match useKDSDataLocal.js exactly
+                    const hasPrepItems = (o.order_items || []).some(item => {
+                        const logic = item.kds_routing_logic;
+                        const isDelivered = item.is_early_delivered || logic === 'GRAB_AND_GO' || logic === 'prep_override';
+                        const isPrepReq = (logic === 'MADE_TO_ORDER') || (!isDelivered);
+                        
+                        // Item is still in progress if it needs prep and isn't marked as ready/ready_for_pickup
+                        const isItemActive = isPrepReq && !(['ready', 'ready_for_pickup', 'completed', 'shipped'].includes(item.item_status?.toLowerCase()));
+                        return isItemActive;
+                    });
+
+                    return hasPrepItems;
                 }).length;
 
                 const readyOrders = (orders || []).filter(o =>
                     o.order_status?.toLowerCase() === 'ready'
                 ).length;
 
-                console.log(`🍳 [Orders] Active: ${activeOrders}, Ready: ${readyOrders}`);
+                console.log(`🍳 [Orders] Active (Filtered for Prep): ${activeOrders}, Ready: ${readyOrders}`);
 
                 // 2. Tasks - Count incomplete recurring tasks (not completed today)
                 const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -203,9 +223,25 @@ export const useDashboardLiveData = (businessId) => {
                     })
                     .toArray();
 
-                const activeOrders = orders.filter(o => {
+                // Join with items for prep check in Dexie
+                const ordersWithItems = await Promise.all(orders.map(async (o) => {
+                    const items = await db.order_items.where('order_id').equals(o.id).toArray();
+                    return { ...o, order_items: items };
+                }));
+
+                const activeOrders = ordersWithItems.filter(o => {
                     const s = o.order_status?.toLowerCase();
-                    return s === 'new' || s === 'preparing' || s === 'fired' || s === 'in_progress';
+                    const isPotentiallyActive = s === 'new' || s === 'preparing' || s === 'fired' || s === 'in_progress';
+                    if (!isPotentiallyActive) return false;
+
+                    const hasPrepItems = (o.order_items || []).some(item => {
+                        const logic = item.kds_routing_logic;
+                        const isDelivered = item.is_early_delivered || logic === 'GRAB_AND_GO' || logic === 'prep_override';
+                        const isPrepReq = (logic === 'MADE_TO_ORDER') || (!isDelivered);
+                        return isPrepReq && !(['ready', 'ready_for_pickup', 'completed', 'shipped'].includes(item.item_status?.toLowerCase()));
+                    });
+
+                    return hasPrepItems;
                 }).length;
 
                 const readyOrders = orders.filter(o =>

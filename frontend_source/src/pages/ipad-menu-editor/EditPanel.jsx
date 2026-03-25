@@ -136,7 +136,7 @@ const EditPanel = ({ item, onItemChange, modifiers = [], onModifiersChange, onSa
     };
 
     const handleSave = () => {
-        if (item && onSave) onSave(item, []);
+        if (item && onSave) onSave(item, modifiers);
     };
 
     if (!item) return null;

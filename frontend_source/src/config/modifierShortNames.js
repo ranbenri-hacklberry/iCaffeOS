@@ -5,20 +5,21 @@
 export const modifierAliases = {
     // Milk Types
     "חלב רגיל": "רגיל",
-    "חלב דל שומן": "דל",
+    "חלב דל שומן": "חלב דל",
     "חלב סויה": "סויה",
-    "חלב שקדים": "שקד",
-    "חלב שיבולת שועל": "ש״ש",
+    "חלב שקדים": "שקדים",
+    "חלב שיבולת שועל": "שיבולת",
+    "חלב שיבולת": "שיבולת",
     "חלב אורז": "אורז",
-    "בלי חלב": "בלי",
-    "מעט חלב": "מעט",
-    "חלב בצד": "בצד",
+    "בלי חלב": "בלי חלב",
+    "מעט חלב": "מעט חלב",
+    "חלב בצד": "חלב בצד",
 
     // Coffee/Drink Specs
     "חזק": "חזק",
     "חלש": "חלש",
     "בלי קצף": "בלי קצף",
-    "הרבה קצף": "הרבה",
+    "הרבה קצף": "הרבה קצף",
     "פושר": "פושר",
     "רותח": "רותח",
     "קר": "קר",
@@ -27,14 +28,14 @@ export const modifierAliases = {
     // Extras
     "תוספת קצפת": "קצפת",
     "בלי סוכר": "בלי סוכר",
-    "סוכר חום": "חום",
+    "סוכר חום": "סוכר חום",
     "סליל": "סליל",
 
     // Food
     "בלי בצל": "בלי בצל",
     "בלי עגבניה": "בלי עגבניה",
-    "תוספת גבינה": "גבינה",
-    "לחם בצד": "לחם",
+    "תוספת גבינה": "תוספת גבינה",
+    "לחם בצד": "לחם בצד",
     "חיטה מלאה": "מלאה",
     "ללא גלוטן": "לל״ג"
 };
@@ -65,9 +66,9 @@ export const getShortName = (fullName) => {
     const reversed = Object.entries(modifierAliases).find(([k, v]) => v === fullName);
     if (reversed) return fullName;
 
-    // Fallback: If short enough, use it. Else truncate.
-    if (fullName.length <= 4) return fullName;
-    return fullName.slice(0, 4) + "..";
+    // 🛑 CRITICAL: DO NOT TRUNCATE NOTES OR NAMES.
+    // Kitchen staff must see the FULL text for free-form instructions.
+    return fullName;
 };
 
 export const getModColorClass = (fullName, shortName) => {

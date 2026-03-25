@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const FALLBACK_URL = 'http://127.0.0.1:54321';
-const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+const FALLBACK_URL = 'https://gxzsxvbercpkgxraiaex.supabase.co';
+const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4enN4dmJlcmNwa2d4cmFpYWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NjMyNzAsImV4cCI6MjA3NzEzOTI3MH0.6sJ7PJ2imo9-mzuYdqRlhQty7PCQAzpSKfcQ5ve571g';
+const LOCAL_URL = 'http://localhost:54321';
 
 const cloudUrl = import.meta.env?.VITE_SUPABASE_URL || FALLBACK_URL;
 const cloudKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || FALLBACK_KEY;
@@ -114,6 +115,29 @@ try {
 }
 
 isLocal = isStrictlyLocal;
+
+/**
+ * NEW: Resolve Supabase URL dynamically to handle Tailscale/Local IP mismatches.
+ * If the provided URL contains a local IP (192.168.x.x) but the browser is on a different network (e.g. Tailscale 100.x),
+ * it rewrites the URL to use the current hostname.
+ */
+export const resolveSupabaseUrl = (url) => {
+    if (!url || typeof url !== 'string') return url;
+
+    // Detect if the URL points to the known local IP of the M4/Mini-PC
+    const isLocalMachineIp = url.includes('192.168.0.55') || url.includes('10.0.0.5');
+    
+    if (isLocalMachineIp && typeof window !== 'undefined' && window.location.hostname) {
+        const currentHost = window.location.hostname;
+        
+        // Only rewrite if we are NOT on the local machine IP ourselves (e.g. we are on Tailscale)
+        if (currentHost !== '192.168.0.55' && currentHost !== '10.0.0.5' && currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+            // console.log(`🔗 [Supabase] Rewriting local IP in URL to current host: ${currentHost}`);
+            return url.replace(/192\.168\.0\.55|10\.0\.0\.5/g, currentHost);
+        }
+    }
+    return url;
+};
 
 export const supabase = new Proxy({}, {
     get: (target, prop) => {

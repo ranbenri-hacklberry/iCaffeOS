@@ -195,16 +195,38 @@ export const useKDSDataLocal = () => {
         return map;
     }, []);
 
+    // Get customers for active orders to resolve names
+    // 🔍 ENHANCEMENT: Also map by phone for unlinked guest orders
+    const { activeCustomers, activeCustomersByPhone } = useLiveQuery(async () => {
+        const idMap = new Map();
+        const phoneMap = new Map();
+        
+        try {
+            // Fetch all customers for current business for better resolution
+            const customers = await db.customers.toArray();
+            customers.forEach(c => {
+                if (c.id) idMap.set(String(c.id), c);
+                const phone = c.phone_number || c.phone;
+                if (phone) {
+                    const cleanPhone = String(phone).replace(/\D/g, '');
+                    if (cleanPhone) phoneMap.set(cleanPhone, c);
+                }
+            });
+        } catch (e) { console.error('Failed to load customers for KDS mapping:', e); }
+
+        return { activeCustomers: idMap, activeCustomersByPhone: phoneMap };
+    }, [activeOrders]) || { activeCustomers: new Map(), activeCustomersByPhone: new Map() };
+
     // ============================================
     // PROCESS DATA
     // ============================================
 
     const processedOrders = useMemo(() => {
         console.log('🔄 [KDS-HOOK] Processing orders...', {
-            active: !!activeOrders, items: !!orderItems, menu: !!menuItems, opts: !!optionValues
+            active: !!activeOrders, items: !!orderItems, menu: !!menuItems, opts: !!optionValues, cust: !!activeCustomers
         });
         try {
-            if (!activeOrders || !orderItems || !menuItems || !optionValues) {
+            if (!activeOrders || !orderItems || !menuItems || !optionValues || !activeCustomers) {
                 console.log('⏸️ [KDS-HOOK] Waiting for data (loading results)...');
                 return { current: [], completed: [] };
             }
@@ -221,16 +243,46 @@ export const useKDSDataLocal = () => {
                 itemsByOrder.get(oid).push(item);
             });
 
-            activeOrders.forEach(order => {
+            // ⚡ STABLE SORT: Prevent jumping during updates (like payment confirmation)
+            const sortedActiveOrders = [...activeOrders].sort((a, b) => 
+                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+
+            sortedActiveOrders.forEach(order => {
                 if (!order || !order.id) return;
 
-                // ⚡ Optimized lookup
-                const items = itemsByOrder.get(String(order.id)) || [];
+                // ⚡ Optimized lookup with robust fallbacks for embedded item lists
+                const items = itemsByOrder.get(String(order.id)) || order.order_items || order.items || order.items_detail || [];
+                
+                // CRITICAL: We also need to normalize the items if they came from JSON to ensure they have the order_id set correctly
+                const normalizedItems = items.map(i => ({
+                    ...i,
+                    order_id: i.order_id || order.id,
+                    item_status: i.item_status || i.status || 'new'
+                }));
 
-                if (items.length === 0) return;
+                // 🕵️ DEBUG ORDER 3757
+                if (String(order.order_number).includes('3757')) {
+                    console.log('🕵️ [KDS-PROCESS] Order 3757 details:', {
+                        status: order.order_status,
+                        customer_name: order.customer_name,
+                        customerName: order.customerName,
+                        normalizedItemsCount: normalizedItems.length,
+                        is_paid: order.is_paid,
+                        paid_amount: order.paid_amount,
+                        total_amount: order.total_amount,
+                        business_id: order.business_id,
+                        created_at: order.created_at
+                    });
+                }
+
+                if (normalizedItems.length === 0) {
+                    if (String(order.order_number).includes('3757')) console.log('🕵️ [KDS-PROCESS] Skipping 3757: No items found!');
+                    return;
+                }
 
                 // NEW: Calculate payment status early for filtering
-                const allItems = items.filter(i => i.item_status !== 'cancelled');
+                const allItems = normalizedItems.filter(i => i.item_status !== 'cancelled');
                 const calculatedTotal = allItems.reduce((sum, i) => {
                     const menuItem = menuItems.get(i.menu_item_id);
                     return sum + (menuItem?.price || 0) * (i.quantity || 1);
@@ -246,7 +298,7 @@ export const useKDSDataLocal = () => {
                 // An order is "Active" if it has ANY item that is NOT 'completed', 'shipped', or 'cancelled'.
                 // If ALL items are 'completed', 'shipped', or 'cancelled', it moves to History.
                 
-                const hasNonTerminalItems = items.some(i => 
+                const hasNonTerminalItems = normalizedItems.some(i => 
                     !['completed', 'shipped', 'cancelled'].includes(i.item_status)
                 );
 
@@ -259,13 +311,14 @@ export const useKDSDataLocal = () => {
                 }
 
                 // If all items are done AND it's paid, it shouldn't be in the active list at all.
-                if (!hasNonTerminalItems && !isEffectivelyUnpaid) {
+                // 🛡️ EXCEPTION: 'ready' orders stay on screen for final handover even if all items are 'completed'.
+                if (!hasNonTerminalItems && !isEffectivelyUnpaid && order.order_status !== 'ready') {
                     console.log(`⏭️ [KDS-PROCESS] Skipping fully completed & paid order ${order.order_number}`);
                     return;
                 }
 
                 // Process items
-                const processedItems = items
+                const processedItems = normalizedItems
                     .filter(item => item.item_status !== 'cancelled')
                     .map(item => {
                         const menuItem = menuItems.get(item.menu_item_id);
@@ -285,10 +338,17 @@ export const useKDSDataLocal = () => {
                         else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVER_REIDE__'))) hasOverride = true;
                         else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVERRIDE__'))) hasOverride = true;
 
+                        // Use the ORDER ITEM's own kds_routing_logic if it exists (set by POS clerk choice),
+                        // otherwise fall back to the menu item's default
+                        const effectiveLogic = item.kds_routing_logic || kdsLogic;
+
                         let isPrepRequired = true;
                         if (isPrep) isPrepRequired = true;
-                        else if (kdsLogic === 'GRAB_AND_GO') isPrepRequired = false;
-                        else if (kdsLogic === 'CONDITIONAL') isPrepRequired = hasOverride;
+                        // 🚀 HERO: If explicitly set to MADE_TO_ORDER by clerk/modal, it ALWAYS needs prep
+                        else if (effectiveLogic === 'MADE_TO_ORDER') isPrepRequired = true;
+                        else if (effectiveLogic === 'GRAB_AND_GO') isPrepRequired = false;
+                        else if (effectiveLogic === 'prep_override') isPrepRequired = false;
+                        else if (effectiveLogic === 'CONDITIONAL') isPrepRequired = hasOverride;
 
                         // ⚡ AUTO-READY: If item doesn't need prep, it's effectively 'ready' instantly
                         let itemStatus = item.item_status;
@@ -355,7 +415,9 @@ export const useKDSDataLocal = () => {
                             course_stage: item.course_stage || 1,
                             item_fired_at: item.item_fired_at,
                             is_early_delivered: item.is_early_delivered || false,
-                            isPrepRequired: isPrepRequired // Pass this through for filtering
+                            kds_routing_logic: effectiveLogic,
+                            was_conditional: item.was_conditional || (kdsLogic === 'CONDITIONAL'),
+                            isPrepRequired: isPrepRequired
                         };
                     });
 
@@ -363,12 +425,15 @@ export const useKDSDataLocal = () => {
 
                 /* (Calculated earlier) */
 
+                const cleanOrderPhone = String(order.customer_phone || order.customerPhone || '').replace(/\D/g, '');
+                const customerFromPhone = cleanOrderPhone ? activeCustomersByPhone.get(cleanOrderPhone) : null;
+
                 const baseOrder = {
                     id: order.id,
                     orderNumber: order.order_number || `#${String(order.id).slice(0, 8)}`,
-                    // 🛠️ FIX: Ensure customer name is prioritized correctly from all possible fields
-                    customerName: order.customer_name || order.customerName || (order.order_number ? `#${order.order_number}` : 'אורח'),
-                    customerPhone: order.customer_phone || order.customerPhone,
+                    // 🛠️ FIX: Ensure customer name is prioritized correctly from all possible fields (ID or PHONE)
+                    customerName: order.customer_name || order.customerName || activeCustomers.get(String(order.customer_id))?.name || customerFromPhone?.name || '',
+                    customerPhone: order.customer_phone || order.customerPhone || activeCustomers.get(String(order.customer_id))?.phone || activeCustomers.get(String(order.customer_id))?.phone_number || customerFromPhone?.phone_number || customerFromPhone?.phone || '',
                     customerId: order.customer_id,
                     isPaid: isOrderPaid,
                     isUnpaid: isEffectivelyUnpaid, // Added flag
@@ -416,7 +481,7 @@ export const useKDSDataLocal = () => {
 
                     // 🎯 HIDE INDIVIDUAL STAGE IF DELIVERED: 
                     // If all items in this specific course are already completed/shipped, 
-                    // then this specific card should not be visible anymore.
+                    // then this specific card should not be visible anymore in Active views.
                     if (allTerminal) return;
 
                     const allReady = stageItems.every(i =>
@@ -428,7 +493,10 @@ export const useKDSDataLocal = () => {
                     const hasHeldItems = stageItems.some(i => i.status === 'held');
 
                     let cardType, cardStatus;
-                    if (isClosed || allReady) {
+                    // 🧠 LOGIC: The card is 'ready' (moves to history) ONLY if ALL items in it are ready/terminal.
+                    // If even one item is in progress or held, the card MUST be active.
+                    // We ignore the top-level order_status here because items take priority for preparation flow.
+                    if (allReady) {
                         cardType = 'ready'; // This pushes it to the bottom list (completedOrders)
                         cardStatus = (isOrderCompleted || order.order_status === 'archived' || order.order_status === 'shipped') ? 'completed' : 'ready';
                     } else if (hasActiveItems) {
@@ -445,11 +513,11 @@ export const useKDSDataLocal = () => {
                         cardStatus = 'in_progress';
                     }
 
-                    // 🎯 KDS FILTERING: If the card is 'active', only show items that REQUIRE preparation.
-                    // Grab-and-go items will only appear when the card moves to 'ready'.
-                    const displayItems = cardType === 'active'
-                        ? stageItems.filter(i => i.isPrepRequired)
-                        : stageItems;
+                    // 🎯 KDS STABILITY: Send ALL items to the card object. 
+                    // Filtering which items to actually SHOW on the card face is now handled 
+                    // exclusively in OrderCard.jsx (render-time). This ensures the Edit Modal 
+                    // has access to the full list for toggle/undo purposes.
+                    const displayItems = stageItems;
 
                     // 🛡️ STABILITY: If an active card has NO items to display (all are non-prep), 
                     // but the order isn't 'ready' yet, we still show the card (maybe with a notice)
@@ -485,7 +553,7 @@ export const useKDSDataLocal = () => {
             console.error('🔥 [KDS-PROCESS] Critical failure in data processing:', err);
             return { current: [], completed: [] };
         }
-    }, [activeOrders, orderItems, menuItems, optionValues]);
+    }, [activeOrders, orderItems, menuItems, optionValues, activeCustomers, activeCustomersByPhone]);
 
     // ============================================
     // ACTIONS - All go through offline queue
@@ -556,27 +624,36 @@ export const useKDSDataLocal = () => {
                         'in_progress';
         const shouldResetEarlyMarks = ['ready', 'completed', 'shipped', 'archived'].includes(nextStatus);
 
+        // 🎯 STAGE-AWARE UPDATE: Only update items for the specific stage if provided
+        const stageMatch = String(orderId).match(/-stage-(\d+)/);
+        const targetStage = stageMatch ? Number(stageMatch[1]) : null;
+
         // 1. Update Dexie immediately
         await db.transaction('rw', db.orders, db.order_items, async () => {
             await db.orders.update(realId, payload);
-            await db.order_items
-                .where('order_id')
-                .equals(realId)
-                .modify(it => {
-                    // 🍫 SHOKO PROTECTION (REFINED): 
-                    // 1. NEVER overwrite a 'held' status during an order-level status change.
-                    // 2. NEVER downgrade a terminal status ('completed', 'shipped', 'cancelled') back to 'ready' or 'in_progress'.
-                    const terminalStatuses = ['completed', 'shipped', 'cancelled'];
-                    const isCurrentlyTerminal = terminalStatuses.includes(it.item_status);
-                    const isTargetTerminal = terminalStatuses.includes(itemStatusForItems);
+            
+            let itemsQuery = db.order_items.where('order_id').equals(realId);
+            
+            // If we have a target stage, only modify items for that stage
+            if (targetStage) {
+                itemsQuery = itemsQuery.filter(it => (it.course_stage || 1) === targetStage);
+            }
 
-                    if (it.item_status !== 'held' && (!isCurrentlyTerminal || isTargetTerminal)) {
-                        it.item_status = itemStatusForItems;
-                    }
+            await itemsQuery.modify(it => {
+                // 🍫 SHOKO PROTECTION (REFINED): 
+                // 1. NEVER overwrite a 'held' status during an order-level status change.
+                // 2. NEVER downgrade a terminal status ('completed', 'shipped', 'cancelled') back to 'ready' or 'in_progress'.
+                const terminalStatuses = ['completed', 'shipped', 'cancelled'];
+                const isCurrentlyTerminal = terminalStatuses.includes(it.item_status);
+                const isTargetTerminal = terminalStatuses.includes(itemStatusForItems);
 
-                    if (shouldResetEarlyMarks) it.is_early_delivered = false;
-                    it.updated_at = now;
-                });
+                if (it.item_status !== 'held' && (!isCurrentlyTerminal || isTargetTerminal)) {
+                    it.item_status = itemStatusForItems;
+                }
+
+                if (shouldResetEarlyMarks) it.is_early_delivered = false;
+                it.updated_at = now;
+            });
         });
 
         // 🛡️ Update mask
@@ -757,170 +834,143 @@ export const useKDSDataLocal = () => {
         }
     }, []);
 
-    const fetchHistoryOrders = useCallback(async (selectedDate, signal) => {
+    const fetchHistoryOrders = useCallback(async (selectedDate) => {
         if (!businessId) return [];
+        try {
+            // 🕒 CALENDAR DAY LOGIC: 00:00 start (per user request)
+            const startOfDay = new Date(selectedDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            
+            const endOfDay = new Date(startOfDay);
+            endOfDay.setDate(endOfDay.getDate() + 1);
 
-        const startOfDay = new Date(selectedDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(selectedDate);
-        endOfDay.setHours(23, 59, 59, 999);
+            const startISO = startOfDay.toISOString();
+            const endISO = endOfDay.toISOString();
 
-        const startISO = startOfDay.toISOString();
-        const endISO = endOfDay.toISOString();
+            console.log(`📜 [KDS History] Fetching for range: ${startISO} to ${endISO}`);
 
-        console.log(`📜 [KDS History] Fetching for ${selectedDate.toDateString()} [${startISO} to ${endISO}]`);
+            let ordersList = await db.orders
+                .where('[business_id+created_at]')
+                .between([businessId, startISO], [businessId, endISO])
+                .toArray();
 
-        // 1. Try Local First using composite index if available
-        let ordersList = await db.orders
-            .where('[business_id+created_at]')
-            .between([businessId, startISO], [businessId, endISO])
-            .toArray();
-
-        // 2. If nothing found locally (and we are online), try to fetch from server
-        if (ordersList.length === 0 && navigator.onLine) {
-            console.log(`📜 [KDS History] No local orders, attempting server fetch for biz ${businessId}...`);
-            try {
-                const { supabase } = await import('@/lib/supabase');
-                // Use get_orders_history which returns ALL orders (history + active) for the period
-                // It also returns nested items_detail, so we don't need a separate fetch!
-                const { data: serverOrders, error } = await supabase
-                    .rpc('get_orders_history', {
+            // Fallback to server if local is empty for that date
+            if (ordersList.length === 0 && navigator.onLine) {
+                try {
+                    const { supabase } = await import('@/lib/supabase');
+                    const { data: serverOrders } = await supabase.rpc('get_orders_history', {
                         p_from_date: startISO,
                         p_to_date: endISO,
                         p_business_id: businessId
                     });
+                    if (serverOrders?.length > 0) ordersList = serverOrders;
+                } catch (e) { console.warn('Online history fallback failed', e); }
+            }
 
-                if (error) throw error;
+            const orderIds = ordersList.map(o => o.id);
+            const [allItems, allCustomers, allMenuItems] = await Promise.all([
+                db.order_items.where('order_id').anyOf(orderIds).toArray(),
+                db.customers.where('business_id').equals(businessId).toArray(),
+                db.menu_items.where('business_id').equals(businessId).toArray()
+            ]);
 
-                if (serverOrders && serverOrders.length > 0) {
-                    console.log(`📥 [KDS History] Fetched ${serverOrders.length} orders from server.`);
+            const menuItemsMap = new Map(allMenuItems.map(m => [m.id, m]));
+            const customersMap = new Map(allCustomers.map(c => [c.id, c]));
+            const finalHistoryCards = [];
 
-                    // 1. Prepare Orders and Items for bulk saving
-                    const ordersToSave = [];
-                    const itemsToSave = [];
+            // Helper for Duration Formatting (MM:SS)
+            const formatDuration = (ms) => {
+                if (!ms || ms < 0) return null;
+                const totalSeconds = Math.floor(ms / 1000);
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            };
 
-                    serverOrders.forEach(order => {
-                        const { items_detail, ...orderData } = order;
-                        ordersToSave.push({
-                            ...orderData,
-                            business_id: businessId,
-                            is_offline: false,
-                            pending_sync: false,
-                            updated_at: orderData.updated_at || new Date().toISOString()
-                        });
+            ordersList.forEach(order => {
+                const rawItems = allItems.filter(i => String(i.order_id) === String(order.id) && i.item_status !== 'cancelled');
+                if (rawItems.length === 0) return;
 
-                        if (items_detail && Array.isArray(items_detail)) {
-                            items_detail.forEach(item => {
-                                itemsToSave.push({
-                                    ...item,
-                                    name: item.name || item.menu_items?.name, // 🛡️ SAVE NAME FOR OFFLINE ROBUSTNESS 
-                                    order_id: orderData.id // Ensure linkage
-                                });
+                // 🛠️ Normalize statuses
+                const orderItems = rawItems.map(i => ({
+                    ...i,
+                    item_status: i.item_status || (['completed', 'archived', 'shipped'].includes((order.orderStatus || order.order_status || '').toLowerCase()) ? 'completed' : 'new')
+                }));
+
+                const customer = customersMap.get(order.customer_id);
+                const rawCName = order.customer_name || order.customerName || customer?.name;
+                const isJustDigits = /^\d+$/.test(String(rawCName || ''));
+                const derivedCustomerName = (rawCName && (rawCName.length > 15 || rawCName.includes('_') || isJustDigits)) ? '' : rawCName;
+
+                const rawNum = String(order.order_number || '');
+                const displayOrderNo = /^\d{1,5}$/.test(rawNum) ? rawNum : String(order.id).slice(-4).toUpperCase();
+
+                // 📐 DURATION CALCULATIONS (Unified)
+                const items1 = orderItems.filter(i => (i.course_stage || 1) === 1);
+                const items2 = orderItems.filter(i => (i.course_stage || 1) === 2);
+
+                let duration1 = null;
+                let duration2 = null;
+
+                // Duration 1: From created_at to latest Terminal Stage 1 Update
+                if (items1.length > 0) {
+                    const start1 = new Date(order.created_at).getTime();
+                    const terminals1 = items1.filter(i => ['completed', 'shipped', 'ready', 'delivered'].includes(i.item_status));
+                    if (terminals1.length > 0) {
+                        const end1 = Math.max(...terminals1.map(i => new Date(i.updated_at || i.completed_at || order.updated_at).getTime()));
+                        duration1 = formatDuration(end1 - start1);
+                    }
+                }
+
+                // Duration 2: From earliest Fired_at to latest Terminal Stage 2 Update
+                if (items2.length > 0) {
+                    const firedItems = items2.filter(i => i.item_fired_at);
+                    if (firedItems.length > 0) {
+                        const start2 = Math.min(...firedItems.map(i => new Date(i.item_fired_at).getTime()));
+                        const terminals2 = items2.filter(i => ['completed', 'shipped', 'ready', 'delivered'].includes(i.item_status));
+                        if (terminals2.length > 0) {
+                            const end2 = Math.max(...terminals2.map(i => new Date(i.updated_at || i.completed_at || order.updated_at).getTime()));
+                            duration2 = formatDuration(end2 - start2);
+                        }
+                    }
+                }
+
+                finalHistoryCards.push({
+                    id: order.id,
+                    orderNumber: displayOrderNo,
+                    customerName: derivedCustomerName,
+                    customerPhone: order.customer_phone || order.customerPhone || customer?.phone_number,
+                    isPaid: order.is_paid || order.isPaid,
+                    totalAmount: order.totalAmount || order.total_amount,
+                    created_at: order.created_at,
+                    orderStatus: order.orderStatus || order.order_status,
+                    timestamp: new Date(order.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
+                    duration: duration1,
+                    duration2: duration2,
+                    items: orderItems.map(item => {
+                        const menuItem = menuItemsMap.get(item.menu_item_id) || { name: item.name || 'Unknown', price: 0 };
+                        let parsedMods = [];
+                        try {
+                            if (typeof item.mods === 'string') parsedMods = JSON.parse(item.mods);
+                            else if (Array.isArray(item.mods)) parsedMods = item.mods;
+                        } catch (e) { }
+                        if (Array.isArray(parsedMods)) {
+                            parsedMods = parsedMods.filter(m => {
+                                const name = (typeof m === 'object' ? (m.name || m.text || m.valueName) : String(m)) || '';
+                                return !name.includes('KDS_OVERRIDE');
                             });
                         }
-                    });
+                        return { ...item, name: menuItem.name || item.name, modifiers: parsedMods };
+                    })
+                });
+            });
 
-                    // 2. Save both to Dexie
-                    await db.orders.bulkPut(ordersToSave);
-                    if (itemsToSave.length > 0) {
-                        console.log(`__ [KDS History] Saving ${itemsToSave.length} nested items to Dexie...`);
-                        await db.order_items.bulkPut(itemsToSave);
-                    }
-
-                    // Re-query Dexie to reflect saved data
-                    ordersList = await db.orders
-                        .where('[business_id+created_at]')
-                        .between([businessId, startISO], [businessId, endISO])
-                        .toArray();
-                }
-            } catch (err) {
-                console.warn('❌ Failed to fetch history from server:', err);
-            }
+            console.log(`📜 [KDS History] Unified count: ${finalHistoryCards.length}`);
+            return finalHistoryCards;
+        } catch (err) {
+            console.error('❌ [KDS History] Failed to fetch:', err);
+            return [];
         }
-
-        // 🔒 TERMINAL STATUS FILTER: History should only show orders that are truly "finished".
-        // Filter out active statuses (new, in_progress, ready, pending, held).
-        ordersList = ordersList.filter(o =>
-            ['completed', 'archived', 'shipped', 'cancelled'].includes(o.order_status)
-        );
-
-        console.log(`📜 [KDS History] Final count (after terminal-status filter): ${ordersList.length} orders`);
-
-        if (ordersList.length === 0) return [];
-
-        // Get items for these orders
-        const orderIds = ordersList.map(o => o.id);
-        const allItems = await db.order_items
-            .where('order_id')
-            .anyOf(orderIds)
-            .toArray();
-
-        const customerIds = [...new Set(ordersList.map(o => o.customer_id).filter(Boolean))];
-        const customersMap = await db.customers
-            .where('id').anyOf(customerIds)
-            .toArray()
-            .then(custs => new Map(custs.map(c => [c.id, c])));
-
-        // Process for UI
-        const menuItemsMap = await db.menu_items.toArray().then(items =>
-            new Map(items.map(m => [m.id, m]))
-        );
-
-        return ordersList.map(order => {
-            const orderItems = allItems.filter(i => String(i.order_id) === String(order.id));
-            const customer = customersMap.get(order.customer_id);
-            const derivedCustomerName = order.customer_name || order.customerName || customer?.name || customer?.phone_number || (order.order_number ? `#${order.order_number}` : 'אורח');
-
-            return {
-                id: order.id,
-                order_number: order.order_number,
-                order_status: order.order_status,
-                orderNumber: order.order_number || `#${String(order.id).slice(0, 8)}`,
-                customerName: derivedCustomerName,
-                customer_name: derivedCustomerName,
-                customer_phone: order.customer_phone || order.customerPhone || customer?.phone_number,
-                isPaid: order.is_paid,
-                is_paid: order.is_paid,
-                totalAmount: order.total_amount,
-                created_at: order.created_at,
-                timestamp: new Date(order.created_at).toLocaleTimeString('he-IL', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                }),
-                items: orderItems.map(item => {
-                    const menuItem = menuItemsMap.get(item.menu_item_id) || { name: 'Unknown', price: 0 };
-
-                    let parsedMods = [];
-                    try {
-                        if (typeof item.mods === 'string') {
-                            parsedMods = JSON.parse(item.mods);
-                        } else if (Array.isArray(item.mods)) {
-                            parsedMods = item.mods;
-                        }
-                    } catch (e) { /* ignore */ }
-
-                    // Supress KDS Override tag from rendering in KDS
-                    if (Array.isArray(parsedMods)) {
-                        parsedMods = parsedMods.filter(m => {
-                            if (typeof m === 'string') return m !== '__KDS_OVERRIDE__';
-                            if (m && m.text) return m.text !== '__KDS_OVERRIDE__';
-                            if (m && m.valueName) return m.valueName !== '__KDS_OVERRIDE__';
-                            return true;
-                        });
-                    }
-
-                    return {
-                        id: item.id,
-                        name: menuItem.name || item.name, // Try falling back if present on item
-                        price: menuItem.price,
-                        quantity: item.quantity,
-                        item_status: item.item_status,
-                        modifiers: parsedMods,
-                        is_early_delivered: item.is_early_delivered
-                    };
-                })
-            };
-        });
     }, [businessId]);
 
     const findNearestActiveDate = useCallback(async (currentDate) => {
@@ -950,18 +1000,24 @@ export const useKDSDataLocal = () => {
 
     const fetchOrders = useCallback(async (signal) => {
         if (!businessId) return { success: false };
-        console.log('🔄 [KDS] Refreshing - pulling latest from Supabase...');
+        console.log('🔄 [KDS] Refreshing - pulling latest from Supabase (Orders + Customers)...');
         try {
-            // Pull latest orders from Supabase to Dexie
-            const { syncOrders } = await import('@/services/syncService');
-            const pullResult = await syncOrders(businessId);
-            if (pullResult.success) {
-                console.log(`✅ [KDS] Pulled ${pullResult.ordersCount || 0} orders from Supabase`);
-            } else {
-                console.warn(`⚠️ [KDS] Pull failed:`, pullResult.error);
-            }
+            const { syncOrders, syncLoyalty, syncTable } = await import('@/services/syncService');
+            
+            // Parallel sync of orders and supportive data (customers, loyalty)
+            const [orderRes, custRes, loyaltyRes] = await Promise.all([
+                syncOrders(businessId),
+                syncTable('customers', 'customers', null, businessId),
+                syncLoyalty(businessId).catch(() => ({ success: false })) // Non-critical fallback
+            ]);
 
-            return { success: true };
+            if (orderRes.success && custRes.success) {
+                console.log(`✅ [KDS] Refresh complete. Pulled ${orderRes.ordersCount || 0} orders and updated customers.`);
+                return { success: true };
+            } else {
+                console.warn(`⚠️ [KDS] Refresh partial failure:`, { orderRes, custRes });
+                return { success: false, error: 'Partial sync failure' };
+            }
         } catch (err) {
             console.error('❌ [KDS] Refresh failed:', err);
             return { success: false, error: err.message };

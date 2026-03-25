@@ -14,15 +14,22 @@ const MenuItemCard = ({ item, onAddToCart }) => {
   const fallbackImage = '/api/placeholder/400/300';
 
   // 🖼️ NEW: Use local cache if available
-  const { displayUrl } = useCachedImage(item?.image);
+  const { displayUrl } = useCachedImage(item?.image_url || item?.image);
 
   const bgImage = imageError ? fallbackImage : (displayUrl || fallbackImage);
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     if (item?.available !== false) {
       onAddToCart?.(item);
     }
   }, [item, onAddToCart]);
+
+  // 🛡️ Extra safety for touch devices to prevent bubbling to parent listeners
+  const stopPropagation = (e) => e.stopPropagation();
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -51,6 +58,11 @@ const MenuItemCard = ({ item, onAddToCart }) => {
         ${containerClass}
         ${item?.available === false ? 'opacity-60 cursor-not-allowed grayscale' : ''}`}
       onClick={handleClick}
+      onTouchEnd={(e) => {
+        // Prevent synthetic click on mobile to avoid ghost clicks on the modal
+        e.preventDefault();
+        handleClick(e);
+      }}
       onKeyDown={handleKeyDown}
       tabIndex={item?.available !== false ? 0 : -1}
       role="button"

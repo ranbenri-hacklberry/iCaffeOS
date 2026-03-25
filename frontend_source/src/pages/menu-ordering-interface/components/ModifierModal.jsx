@@ -3,12 +3,9 @@ import {
   X, Check, Coffee, Milk, Leaf, Wheat, Nut,
   Cloud, CloudOff, Thermometer, Flame, Droplets,
   Zap, Ban, Puzzle, ArrowUpFromLine, ArrowDownToLine, Blend, Gauge, Apple, Disc,
-  Plus, Minus
+  Plus, Minus, Package, ChefHat
 } from 'lucide-react';
 import { fetchManagerItemOptions } from '@/lib/managerApi';
-import { getNormalizedModifiers } from '@/utils/modifierUtils';
-
-const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
 
 const formatPrice = (price = 0) => {
   const numPrice = Number(price);
@@ -143,19 +140,27 @@ const ModifierModal = (props) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [itemQuantity, setItemQuantity] = useState(1);
+  const [clerkChoice, setClerkChoice] = useState(null); // 'GRAB_AND_GO' or 'MADE_TO_ORDER'
 
   // Check if this is an espresso item
   const isEspresso = selectedItem?.name?.includes('אספרסו');
+  const isConditional = selectedItem?.kds_routing_logic === 'CONDITIONAL';
 
-  // Reset state when selectedItem changes
+  const [lastLoadedId, setLastLoadedId] = useState(null);
+
+  // Reset state when selectedItem changes (only if it's a NEW item)
   useEffect(() => {
-    if (selectedItem) {
+    const currentId = selectedItem?.id || selectedItem?.menu_item_id;
+    if (currentId && currentId !== lastLoadedId) {
+      console.log('🔄 [ModifierModal] Resetting for new item:', currentId);
       setOptionGroups([]);
       setOptionSelections({});
       setShowAdvanced(false);
       setOrderNote('');
       setIsNoteOpen(false);
       setItemQuantity(1);
+      setClerkChoice(null);
+      setLastLoadedId(currentId);
     }
   }, [selectedItem?.id]);
 
@@ -164,83 +169,132 @@ const ModifierModal = (props) => {
       return;
     }
 
+    const currentId = selectedItem?.id || selectedItem?.menu_item_id;
+    // 🛡️ DUAL-LOAD GUARD: If we already have options for this specific ID, don't re-trigger the load logic
+    // this specifically fixes the 'shakiness' of jsonb items that might trigger reference changes.
+    if (optionGroups.length > 0 && currentId === lastLoadedId) {
+      return;
+    }
+
     const loadOptions = async () => {
       try {
         setIsLoadingOptions(true);
-        // Determine the correct ID to fetch options for
-        // If it's an existing order item, it has a menu_item_id property.
-        // If it's a new item from menu, id is the menu_item_id.
         const targetItemId = selectedItem.menu_item_id || selectedItem.id;
 
-        // Check cache first
+        console.log('🔄 Loading Options for:', selectedItem.name, 'ID:', targetItemId);
+        
+        let fetchedOptions = [];
+
+        // 🛡️ REVERT TO OLD STABLE WAY: Always prioritize table-based options (DB/Cache) over JSONB to fix jank
         if (props.optionsCache && props.optionsCache[targetItemId]) {
           console.log('⚡ Using Cached Options for:', selectedItem.name);
-          const cachedOptions = props.optionsCache[targetItemId];
-          setOptionGroups(cachedOptions);
-          setIsLoadingOptions(false);
-
-          // If cached options are empty, auto-add item immediately
-          if ((!cachedOptions || cachedOptions.length === 0) && props.allowAutoAdd !== false) {
-            onAddItem?.({
-              ...selectedItem,
-              selectedOptions: [],
-              totalPrice: selectedItem.price,
-              price: selectedItem.price
-            });
-            onClose();
-            return;
+          fetchedOptions = props.optionsCache[targetItemId];
+        } else {
+          try {
+            console.log('🔄 Fetching Options from DB for:', selectedItem.name);
+            fetchedOptions = await fetchManagerItemOptions(targetItemId);
+            if (props.onCacheUpdate && fetchedOptions?.length > 0) {
+              props.onCacheUpdate(prev => ({ ...prev, [targetItemId]: fetchedOptions }));
+            }
+          } catch (e) {
+            console.warn('DB fetch failed, falling back to embedded', e);
           }
-
-          setOptionGroups(cachedOptions);
-          processDefaults(cachedOptions);
-          return;
         }
 
-        console.log('🔄 Fetching Options using Hybrid Engine for:', selectedItem.name, 'ID:', targetItemId);
+        // Fallback to embedded ONLY if DB fetch returned nothing
+        if ((!fetchedOptions || fetchedOptions.length === 0) && selectedItem?.modifiers && Array.isArray(selectedItem.modifiers) && selectedItem.modifiers.length > 0) {
+          console.log('🍕 Using Embedded JSON Modifiers as fallback for:', selectedItem.name);
+          fetchedOptions = selectedItem.modifiers.map(group => {
+            const isLogicalMulti = group.logic === 'A' && group.maxSelection !== 1 && group.max_selection !== 1;
+            const isMultiSelect = group.is_multiple_select || isLogicalMulti;
+            
+            return {
+              id: group.id || `json-group-${group.name.replace(/\s+/g, '_')}`,
+              title: group.name,
+              name: group.name,
+              type: isMultiSelect ? 'multi' : 'single',
+              is_multiple_select: isMultiSelect,
+              is_required: group.is_required || group.minSelection > 0 || group.requirement === 'M',
+              min_selection: group.minSelection || 0,
+              max_selection: group.maxSelection || (isMultiSelect ? 99 : 1),
+              category: 'general',
+              values: (group.items || []).map((item, idx) => ({
+                id: item.id || `json-val-${item.name.replace(/\s+/g, '_')}`,
+                name: item.name,
+                price: item.price || 0,
+                priceAdjustment: item.price || 0,
+                is_default: Boolean(item.isDefault || item.is_default) // Crucial for auto-selecting "רגיל"
+              }))
+            };
+          });
+        }
 
-        // Use the new Hybrid Normalization Layer (Prioritizes JSONB, falls back to relational)
-        const fetchedOptions = await getNormalizedModifiers(selectedItem);
+        let allOptions = [...(fetchedOptions || []), ...(props.extraGroups || [])];
 
-        // Combine with injected extra groups (e.g. for Salad Prep)
-        const allOptions = [...(fetchedOptions || []), ...(props.extraGroups || [])];
+        // ── Pre-merge milk groups globally before setting state ──
+        const isMilkGroupDef = (group) => {
+          const title = (group.title || group.name || '').toLowerCase();
+          if (['חלב', 'milk', 'תחליף'].some(k => title.includes(k))) return true;
+          return group.values?.some(v => {
+            const n = (v.name || v.value_name || '').toLowerCase();
+            return n.includes('סויה') || n.includes('שיבולת') || n.includes('שקדים') ||
+                   n.includes('חלב') || n.includes('soy') || n.includes('oat') || n.includes('almond');
+          });
+        };
 
-        // Update cache (only with fetched options to keep cache clean)
-        if (props.onCacheUpdate && fetchedOptions?.length > 0) {
-          props.onCacheUpdate(prev => ({
-            ...prev,
-            [targetItemId]: fetchedOptions
-          }));
+        const milkGroups = allOptions.filter(isMilkGroupDef);
+        if (milkGroups.length > 1) {
+          console.log('🥛 Merging multiple milk groups into one global group. Discovered:', milkGroups.length);
+          const primary = milkGroups[0];
+          const secondaryIds = new Set(milkGroups.slice(1).map(g => String(g.id)));
+
+          const seenNames = new Set();
+          const mergedValues = [];
+          for (const mg of milkGroups) {
+            for (const v of (mg.values || [])) {
+              const n = (v.name || v.value_name || '').toLowerCase().trim();
+              const key = n.includes('סויה') ? 'סויה' :
+                          n.includes('שיבולת') ? 'שיבולת' :
+                          n.includes('שקדים') ? 'שקדים' :
+                          n.includes('רגיל') ? 'רגיל' : n;
+              if (!seenNames.has(key)) {
+                seenNames.add(key);
+                mergedValues.push(v);
+              }
+            }
+          }
+
+          const mergedMilkGroup = {
+            ...primary,
+            values: mergedValues
+          };
+
+          allOptions = allOptions.filter(g => !secondaryIds.has(String(g.id)));
+          allOptions = allOptions.map(g => String(g.id) === String(primary.id) ? mergedMilkGroup : g);
         }
 
         setOptionGroups(allOptions);
         setIsLoadingOptions(false);
 
-        // If NO options at all (fetched or extra), auto-add item immediately ONLY if allowed
         console.log('🔍 ModifierModal AutoAdd Check:', {
           item: selectedItem.name,
           optionsCount: allOptions.length,
           allowAutoAdd: props.allowAutoAdd
         });
 
+        /* 
+        // 🛡️ REVED: Removed auto-add logic to prevent modal from closing in user's face
+        // if network error occurs OR if they just want to add a note to a plain item.
         if (allOptions.length === 0 && props.allowAutoAdd !== false) {
-          console.log('⚡ Auto-adding item (no options & allowed)');
-          onAddItem?.({
-            ...selectedItem,
-            selectedOptions: [],
-            totalPrice: selectedItem.price,
-            price: selectedItem.price
-          });
-          onClose();
-          return;
+           ...
         }
+        */
 
         processDefaults(allOptions);
 
       } catch (error) {
         console.error('Error loading options:', error);
         setIsLoadingOptions(false);
-
-        // Only auto-add on error if allowed. Otherwise show modal (allows notes)
         if (props.allowAutoAdd !== false) {
           onAddItem?.(selectedItem);
           onClose();
@@ -248,38 +302,47 @@ const ModifierModal = (props) => {
       }
     };
 
+    const isMilkGroup = (group) => {
+      const title = (group.title || group.name || '').toLowerCase();
+      if (['חלב', 'milk', 'תחליף'].some(k => title.includes(k))) return true;
+      return group.values?.some(v => {
+        const n = (v.name || v.value_name || '').toLowerCase();
+        return n.includes('סויה') || n.includes('שיבולת') || n.includes('שקדים') ||
+               n.includes('חלב') || n.includes('soy') || n.includes('oat') || n.includes('almond');
+      });
+    };
+
     const processDefaults = (options) => {
       const defaults = {};
       const existingSelections = selectedItem.selectedOptions || [];
 
       options.forEach(group => {
+        const groupId = String(group.id);
         const isMultipleSelect = group.is_multiple_select || group.type === 'addition' || group.type === 'multi';
         const isMandatory = group.is_required || group.required || (group.min_selection !== undefined && group.min_selection > 0);
-        const isOptional = !isMandatory;
 
         if (isMultipleSelect) {
           const existingToppings = existingSelections
-            .filter(opt => String(opt.groupId) === String(group.id))
+            .filter(opt => String(opt.groupId) === groupId)
             .map(opt => String(opt.valueId));
-
+          
           if (existingToppings.length > 0) {
-            defaults[group.id] = existingToppings;
+            defaults[groupId] = existingToppings;
           } else {
-            defaults[group.id] = [];
-            // If it's multi-select, we generally don't set a default unless specifically asked.
-            // For now, adhere to "If optional, default should be off".
+            // New logic: Also support defaults in multi-select groups
+            const defaultValues = group.values
+              ?.filter(v => v.is_default || (v.name || '').includes('רגיל'))
+              .map(v => String(v.id)) || [];
+            defaults[groupId] = defaultValues;
           }
           return;
         }
 
         // --- Single Select Logic ---
-
-        // Try to find match by ID first
         let existingChoice = existingSelections.find(opt =>
-          opt.groupId && String(opt.groupId) === String(group.id)
+          opt.groupId && String(opt.groupId) === groupId
         );
 
-        // If not found by ID, try to find by matching value names (legacy support)
         if (!existingChoice) {
           const matchingValue = group.values?.find(v =>
             existingSelections.some(sel => {
@@ -293,49 +356,46 @@ const ModifierModal = (props) => {
         if (existingChoice) {
           const existingVal = group.values?.find(v => String(v.id) === String(existingChoice.valueId));
           if (existingVal) {
-            defaults[group.id] = String(existingVal.id);
+            defaults[groupId] = String(existingVal.id);
             return;
           }
         }
 
-        // No existing selection - Check default logic
-        if (isMandatory) {
-          // Mandatory -> Select Default or 'Regular'. 
-          // CRITICAL: Do NOT just pick group.values[0] if it's confusing. 
-          // If no default found, we leave it empty to force user interaction or use DB default.
+        const isMilk = isMilkGroup(group);
+
+        // No existing — set default
+        if (isMandatory || isMilk) {
           const defaultVal = group.values?.find(v => v.is_default) ||
-            group.values?.find(v => v.name?.includes('רגיל'));
+            group.values?.find(v => (v.name || '').includes('רגיל'));
 
           if (defaultVal) {
-            defaults[group.id] = String(defaultVal.id);
-          } else if (group.values?.length > 0) {
-            // Only pick the first as absolute last resort if it's NOT a complex coffee modifier
-            const isComplexCoffeeGroup = group.name?.includes('קצף') || group.name?.includes('טמפרטו');
+            defaults[groupId] = String(defaultVal.id);
+          } else if (group.values?.length > 0 && isMandatory) {
+            const isComplexCoffeeGroup = (group.name || '').includes('קצף') || (group.name || '').includes('טמפרטו');
             if (!isComplexCoffeeGroup) {
-              defaults[group.id] = String(group.values[0].id);
+              defaults[groupId] = String(group.values[0].id);
             }
           }
         } else {
-          // Optional -> Only select if explicitly marked as is_default in DB
           const explicitlyDefault = group.values?.find(v => v.is_default);
           if (explicitlyDefault) {
-            defaults[group.id] = String(explicitlyDefault.id);
+            defaults[groupId] = String(explicitlyDefault.id);
           }
         }
       });
 
+
       setOptionSelections(defaults);
 
       const hasOtherGroupSelections = options.some((group) => {
-        const isMilkGroup = group.name?.toLowerCase().includes('חלב');
-        if (isMilkGroup) return false;
+        if (isMilkGroup(group)) return false;
         return existingSelections.some(opt =>
           String(opt.groupId) === String(group.id)
         );
       });
 
-      const hasMilkGroup = options.some(g => g.name?.toLowerCase().includes('חלב'));
-      if ((hasOtherGroupSelections && options.length > 1) || !hasMilkGroup) {
+      const hasMilk = options.some(g => isMilkGroup(g));
+      if ((hasOtherGroupSelections && options.length > 1) || !hasMilk) {
         setShowAdvanced(true);
       }
     };
@@ -359,37 +419,25 @@ const ModifierModal = (props) => {
       });
     };
 
-    // Helper to check group name/title/category
     const checkGroup = (group, keywords, category) => {
-      const title = normalize(group.title || group.name); // Use title as primary, fallback to name
+      const title = normalize(group.title || group.name);
       const cat = normalize(group.category);
 
       if (category && cat === category) return true;
       return keywords.some(k => title.includes(k));
     };
 
-    // ---------------------------------------------------------
-    // 1. Identify ALL Milk Groups to prevent leakage & duplicates
-    // ---------------------------------------------------------
-    const allMilkGroups = optionGroups.filter(g => {
-      // Check A: Group Name
-      if (checkGroup(g, ['חלב', 'milk', 'תחליף'], 'milk')) return true;
-
-      // Check B: Values (Strong indicators)
-      // If ANY value is clearly a milk type, the whole group is a milk group
-      return g.values?.some(v => {
+    // 1. Identify Milk Group (now already merged in loadOptions)
+    const milkGroups = optionGroups.filter(g => checkGroup(g, ['חלב', 'milk', 'תחליף'], 'milk') || 
+      g.values?.some(v => {
         const n = normalize(v.name || v.value_name);
         return n.includes('סויה') || n.includes('שיבולת') || n.includes('שקדים') ||
-          n.includes('חלב') || n.includes('soy') || n.includes('oat') || n.includes('almond');
-      });
-    });
-
-    // Mark ALL identified milk groups as "used" immediately so they don't appear elsewhere
-    allMilkGroups.forEach(g => usedIds.add(g.id));
-
-    // Pick the "Best" milk group to display in the Hero section
-    // (We allow only one Hero Milk section)
-    const milk = allMilkGroups.length > 0 ? allMilkGroups[0] : null;
+               n.includes('חלב') || n.includes('soy') || n.includes('oat') || n.includes('almond');
+      })
+    );
+    
+    milkGroups.forEach(g => usedIds.add(g.id));
+    const milk = milkGroups.length > 0 ? milkGroups[0] : null;
 
     // ---------------------------------------------------------
     // 2. Identify Espresso Type Group (Start/Short/Long)
@@ -516,9 +564,14 @@ const ModifierModal = (props) => {
       const group = (optionGroups || []).find(g => g.id === groupId);
       const current = prev[groupId];
 
+      // 🥛 MILK RULE: Milk is ALWAYS single select, even if DB says otherwise
+      const title = (group?.title || group?.name || '').toLowerCase();
+      const isMilkGroup = ['חלב', 'milk', 'תחליף'].some(k => title.includes(k)) || 
+                          group?.values?.some(v => (v.name || '').toLowerCase().includes('סויה') || (v.name || '').toLowerCase().includes('שיבולת'));
+
       // Strict Logic: 'replacement' type is ALWAYS single select
       const isReplacement = group?.type === 'replacement';
-      const isMultipleSelect = !isReplacement && (group?.is_multiple_select || group?.type === 'addition' || group?.type === 'multi');
+      const isMultipleSelect = !isMilkGroup && !isReplacement && (group?.is_multiple_select || group?.type === 'addition' || group?.type === 'multi');
 
       const isOptional = group?.min_selection === 0 && !group?.is_required;
 
@@ -566,9 +619,7 @@ const ModifierModal = (props) => {
             groupName: group.title || group.name, // Use title
             valueId: val.id,
             valueName: val.name,
-            priceAdjustment: effectivePrice,
-            inventory_item_id: val.inventory_item_id || val.metadata?.inventory_item_id,
-            inhibits_ingredient_id: val.inhibits_ingredient_id || val.metadata?.inhibits_ingredient_id
+            priceAdjustment: effectivePrice
           };
         }).filter(Boolean);
       }
@@ -583,11 +634,15 @@ const ModifierModal = (props) => {
         groupName: group.title || group.name, // Use title
         valueId: val.id,
         valueName: val.name,
-        priceAdjustment: effectivePrice,
-        inventory_item_id: val.inventory_item_id || val.metadata?.inventory_item_id,
-        inhibits_ingredient_id: val.inhibits_ingredient_id || val.metadata?.inhibits_ingredient_id
+        priceAdjustment: effectivePrice
       }];
     });
+
+    if (isConditional && !clerkChoice) {
+      // Shaky effect or notification could go here
+      alert('יש לבחור סוג הכנה (לקוח קיבל/נדרשת הכנה) כדי להמשיך');
+      return;
+    }
 
     onAddItem?.({
       ...selectedItem,
@@ -596,7 +651,9 @@ const ModifierModal = (props) => {
       selectedOptions,
       notes: orderNote, // Add the note here
       totalPrice,
-      price: unitPrice
+      price: unitPrice,
+      // **תיקון קריטי: עדכון ה-Logic לפי בחירת הקופאי**
+      kds_routing_logic: isConditional ? clerkChoice : selectedItem.kds_routing_logic
     });
     onClose();
   };
@@ -660,16 +717,40 @@ const ModifierModal = (props) => {
             </div>
           </div>
 
-          {/* Business-Specific Context Bar (e.g. Nursery) */}
-          {selectedItem.business_id === NURSERY_BIZ_ID && (
-            <div className="bg-emerald-50 px-6 py-2 border-b border-emerald-100 flex items-center gap-2">
-              <Leaf size={16} className="text-emerald-600" />
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-widest">קטלוג משתלה - אפשרויות גידול</span>
-            </div>
-          )}
-
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[150px]">
+
+            {/* 🔥 HERO: Clerk Selection (Mandatory for CONDITIONAL items) */}
+            {isConditional && (
+              <section className="mb-4 animate-in slide-in-from-top-2 duration-300">
+                <div className="bg-orange-50/50 p-2.5 rounded-3xl border-2 border-orange-200/50 shadow-sm relative overflow-hidden">
+                  {/* Subtle background glow */}
+                  <div className="absolute -top-4 -right-4 w-12 h-12 bg-orange-400/10 blur-xl"></div>
+                  
+                  <div className="flex items-center gap-2 mb-2 px-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></div>
+                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">חובה: בחירת מצב הכנה</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <MilkCard
+                      label="לקוח קיבל מוכן"
+                      Icon={Package}
+                      price={0}
+                      isSelected={clerkChoice === 'prep_override'}
+                      onClick={() => setClerkChoice('prep_override')}
+                    />
+                    <MilkCard
+                      label="נדרשת הכנה"
+                      Icon={ChefHat}
+                      price={0}
+                      isSelected={clerkChoice === 'MADE_TO_ORDER'}
+                      onClick={() => setClerkChoice('MADE_TO_ORDER')}
+                    />
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* 1. Hero Section (Milk OR Coffee Type depending on item) */}
             {heroGroup && heroGroup.values && (
@@ -739,20 +820,29 @@ const ModifierModal = (props) => {
                               else if (displayName.includes('רגיל')) displayName = 'רגיל';
                             }
 
-                            const IconComponent = getIconForValue(value.name, heroType === 'milk' ? 'milk' : 'general');
-                            const isSelected = String(optionSelections[heroGroup.id]) === String(value.id);
-                            const effectivePrice = value.priceAdjustment || 0;
+                             // 🥛 MILK RULE: Forces single-select behavior for Milk
+                             const groupTitle = (heroGroup?.title || heroGroup?.name || '').toLowerCase();
+                             const isMilkLocal = ['חלב', 'milk', 'תחליף'].some(k => groupTitle.includes(k)) || 
+                                               heroGroup?.values?.some(v => (v.name || '').toLowerCase().includes('סויה') || (v.name || '').toLowerCase().includes('שיבולת'));
+                             
+                             const isMulti = !isMilkLocal && (heroGroup?.is_multiple_select || heroGroup?.type === 'multi');
+                             const currentSelection = optionSelections[heroGroup?.id];
+                             const isSelected = isMulti 
+                               ? (Array.isArray(currentSelection) && currentSelection.includes(String(value.id)))
+                               : String(currentSelection) === String(value.id);
+                             const IconComponent = getIconForValue(value.name, heroType === 'milk' ? 'milk' : 'general');
+                             const effectivePrice = value.priceAdjustment || 0;
 
-                            return (
-                              <MilkCard
-                                key={value.id}
-                                label={displayName}
-                                Icon={IconComponent}
-                                price={effectivePrice}
-                                isSelected={isSelected}
-                                onClick={() => toggleOption(heroGroup.id, String(value.id))}
-                              />
-                            );
+                             return (
+                               <MilkCard
+                                 key={value.id}
+                                 label={displayName}
+                                 Icon={IconComponent}
+                                 price={effectivePrice}
+                                 isSelected={isSelected}
+                                 onClick={() => toggleOption(heroGroup?.id, String(value.id))}
+                               />
+                             );
                           })}
                         </div>
                       );
@@ -797,8 +887,12 @@ const ModifierModal = (props) => {
                         const name = (v.name || '').toLowerCase();
                         return !name.includes('רגיל') && !name.includes('default');
                       }).map(value => {
+                        const isMulti = foamGroup?.is_multiple_select || foamGroup?.type === 'multi';
+                        const currentSelection = optionSelections[foamGroup?.id];
+                        const isSelected = isMulti 
+                          ? (Array.isArray(currentSelection) && currentSelection.includes(String(value.id)))
+                          : String(currentSelection) === String(value.id);
                         const IconComponent = getIconForValue(value.name, 'foam');
-                        const isSelected = String(optionSelections[foamGroup.id]) === String(value.id);
                         const effectivePrice = value.priceAdjustment || 0;
 
                         return (
@@ -823,8 +917,12 @@ const ModifierModal = (props) => {
                         const name = (v.name || '').toLowerCase();
                         return !name.includes('רגיל') && !name.includes('default');
                       }).map(value => {
+                        const isMulti = tempGroup?.is_multiple_select || tempGroup?.type === 'multi';
+                        const currentSelection = optionSelections[tempGroup?.id];
+                        const isSelected = isMulti 
+                          ? (Array.isArray(currentSelection) && currentSelection.includes(String(value.id)))
+                          : String(currentSelection) === String(value.id);
                         const IconComponent = getIconForValue(value.name, 'temp');
-                        const isSelected = String(optionSelections[tempGroup.id]) === String(value.id);
                         const effectivePrice = value.priceAdjustment || 0;
 
                         return (
@@ -849,8 +947,12 @@ const ModifierModal = (props) => {
                         const name = (v.name || '').toLowerCase();
                         return !name.includes('רגיל') && !name.includes('default');
                       }).map(value => {
+                        const isMulti = baseGroup?.is_multiple_select || baseGroup?.type === 'multi';
+                        const currentSelection = optionSelections[baseGroup?.id];
+                        const isSelected = isMulti 
+                          ? (Array.isArray(currentSelection) && currentSelection.includes(String(value.id)))
+                          : String(currentSelection) === String(value.id);
                         const IconComponent = getIconForValue(value.name, 'base');
-                        const isSelected = String(optionSelections[baseGroup.id]) === String(value.id);
                         const effectivePrice = value.priceAdjustment || 0;
 
                         return (
@@ -875,8 +977,12 @@ const ModifierModal = (props) => {
                         const name = (v.name || '').toLowerCase();
                         return !name.includes('רגיל') && !name.includes('default');
                       }).map(value => {
+                        const isMulti = strengthGroup?.is_multiple_select || strengthGroup?.type === 'multi';
+                        const currentSelection = optionSelections[strengthGroup?.id];
+                        const isSelected = isMulti 
+                          ? (Array.isArray(currentSelection) && currentSelection.includes(String(value.id)))
+                          : String(currentSelection) === String(value.id);
                         const IconComponent = getIconForValue(value.name, 'strength');
-                        const isSelected = String(optionSelections[strengthGroup.id]) === String(value.id);
                         const effectivePrice = value.priceAdjustment || 0;
 
                         return (
@@ -905,9 +1011,9 @@ const ModifierModal = (props) => {
                   const visibleOptions = (group.values || []).filter(v => {
                     if (!v.name) return false;
                     const lower = (v.name || '').toLowerCase();
+                    // Keep 'מפורק' and 'נטול' filtering as they are handled in the special row
                     if (lower.includes('מפורק')) return false;
                     if (lower.includes('נטול')) return false;
-                    if (lower.includes('רגיל') || lower.includes('default')) return false;
                     return true;
                   });
 
@@ -1006,22 +1112,27 @@ const ModifierModal = (props) => {
                   <div className={`grid gap-3 ${gridCols}`}>
                     {hasSpecialOptions && (
                       <div className="flex gap-2">
-                        {specialOptions.map(value => {
-                          const IconComponent = getIconForValue(value.name, '');
-                          const isSelected = String(optionSelections[value.groupId]) === String(value.id);
-                          const effectivePrice = value.priceAdjustment || 0;
-                          const displayName = value.name.includes('נטול') ? 'נטול קפאין' : 'מפורק';
+                         {specialOptions.map(value => {
+                           const group = (optionGroups || []).find(g => String(g.id) === String(value.groupId));
+                           const isMulti = group?.is_multiple_select || group?.type === 'multi';
+                           const currentSelection = optionSelections[value.groupId];
+                           const isSelected = isMulti 
+                             ? (Array.isArray(currentSelection) && currentSelection.includes(String(value.id)))
+                             : String(currentSelection) === String(value.id);
+                           const IconComponent = getIconForValue(value.name || '', '');
+                           const effectivePrice = value.priceAdjustment || 0;
+                           const displayName = value.name.includes('נטול') ? 'נטול קפאין' : 'מפורק';
 
-                          return (
-                            <button
-                              key={value.id}
-                              onClick={() => toggleOption(value.groupId, String(value.id))}
-                              className={`flex-1 relative flex items-center justify-center gap-2 h-[50px] rounded-xl border transition-all duration-200 ${isSelected
-                                ? 'bg-purple-50 border-purple-200 ring-1 ring-purple-500'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
-                                }`}
-                            >
-                              <IconComponent size={16} className={isSelected ? 'text-purple-600' : 'text-slate-400'} />
+                           return (
+                             <button
+                               key={value.id}
+                               onClick={() => toggleOption(value.groupId, String(value.id))}
+                               className={`flex-1 relative flex items-center justify-center gap-2 h-[50px] rounded-xl border transition-all duration-200 ${isSelected
+                                 ? 'bg-purple-50 border-purple-200 ring-1 ring-purple-500'
+                                 : 'bg-white border-slate-200 hover:border-slate-300'
+                                 }`}
+                             >
+                               <IconComponent size={16} className={isSelected ? 'text-purple-600' : 'text-slate-400'} />
                               <span className={`text-sm font-bold ${isSelected ? 'text-purple-700' : 'text-slate-600'}`}>
                                 {displayName}
                               </span>
@@ -1045,7 +1156,7 @@ const ModifierModal = (props) => {
                           type="text"
                           value={orderNote}
                           onChange={(e) => setOrderNote(e.target.value)}
-                          maxLength={20}
+                          maxLength={50}
                           placeholder="הוסף הערה"
                           className={`w-full h-full bg-transparent text-center font-bold text-sm focus:outline-none px-2 placeholder:text-slate-400 ${orderNote.length > 0 ? 'text-orange-600' : 'text-slate-800'
                             }`}
@@ -1053,7 +1164,7 @@ const ModifierModal = (props) => {
 
                         {orderNote.length > 0 && (
                           <span className="absolute bottom-1 left-2 text-[9px] text-orange-400 font-medium">
-                            {orderNote.length}/20
+                            {orderNote.length}/50
                           </span>
                         )}
                       </div>
@@ -1075,10 +1186,17 @@ const ModifierModal = (props) => {
               </button>
               <button
                 onClick={handleAdd}
-                className="flex-1 bg-slate-900 hover:bg-black text-white h-12 rounded-2xl flex items-center justify-between px-6 text-base font-bold shadow-xl shadow-slate-300/50 transition-colors active:scale-98"
+                disabled={isConditional && !clerkChoice}
+                className={`flex-1 h-12 rounded-2xl flex items-center justify-between px-6 text-base font-bold shadow-xl transition-all active:scale-98 ${
+                  isConditional && !clerkChoice 
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" 
+                  : "bg-slate-900 hover:bg-black text-white shadow-slate-300/50"
+                }`}
               >
-                <span>הוסף להזמנה</span>
-                <div className="flex items-center gap-2 bg-white/15 px-3 py-1 rounded-xl">
+                <span>{isConditional && !clerkChoice ? "בחר מצב הכנה" : "הוסף להזמנה"}</span>
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-xl ${
+                   isConditional && !clerkChoice ? "bg-slate-100" : "bg-white/15"
+                }`}>
                   <span>₪{totalPrice}</span>
                   <Check size={16} />
                 </div>

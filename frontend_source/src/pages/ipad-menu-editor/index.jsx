@@ -67,10 +67,6 @@ const IPadMenuEditor = () => {
                     console.error('❌ [MenuEditor] Fetch Error:', error);
                 } else {
                     console.log(`✅ [MenuEditor] Fetched ${data?.length || 0} items.`);
-                    if (data?.length === 0) {
-                        // Debug: Check if business ID matches what's in DB
-                        console.warn('⚠️ [MenuEditor] No items found through RLS/Filter.');
-                    }
                     setLocalItems(data || []);
                 }
             } catch (err) {
@@ -135,11 +131,12 @@ const IPadMenuEditor = () => {
         }
     };
 
-    const handleSaveRequest = async (updatedItem) => {
+    const handleSaveRequest = async (updatedItem, updatedModifiers = []) => {
         if (!currentUser?.business_id) return;
 
         setIsSaving(true);
         try {
+            // 1. Save main item data (JSONB + Core fields)
             const itemToSave = {
                 ...updatedItem,
                 business_id: currentUser.business_id,
@@ -156,8 +153,38 @@ const IPadMenuEditor = () => {
             }
 
             if (result.error) throw result.error;
-
             const savedItem = result.data[0];
+
+            // 2. 🛡️ SYNC TO OLD TABLES: Save modifiers to optiongroups and optionvalues
+            if (updatedModifiers && updatedModifiers.length > 0) {
+                console.log(`🔄 [MenuEditor] Syncing ${updatedModifiers.length} modifiers to relational tables...`);
+                
+                for (const group of updatedModifiers) {
+                    const groupPayload = {
+                        id: group.id,
+                        business_id: currentUser.business_id,
+                        menu_item_id: savedItem.id,
+                        name: group.name || group.title,
+                        is_required: group.is_required || group.required || false,
+                        is_multiple_select: group.is_multiple_select || group.type === 'multi',
+                        updated_at: new Date().toISOString()
+                    };
+                    
+                    await supabase.from('optiongroups').upsert([groupPayload]);
+                    
+                    if (group.optionvalues && group.optionvalues.length > 0) {
+                        const valuesPayload = group.optionvalues.map(v => ({
+                            id: v.id,
+                            group_id: group.id,
+                            value_name: v.value_name || v.name,
+                            price_adjustment: v.price_adjustment || v.price || 0,
+                            is_default: v.is_default || false,
+                            display_order: v.display_order || 0
+                        }));
+                        await supabase.from('optionvalues').upsert(valuesPayload);
+                    }
+                }
+            }
 
             setLocalItems(prev => {
                 const index = prev.findIndex(i => i.id === updatedItem.id);
@@ -170,6 +197,7 @@ const IPadMenuEditor = () => {
             });
 
             setSelectedItem(savedItem);
+            alert('שינויים נשמרו בהצלחה (כולל סנכרון לטבלאות ישנות)');
         } catch (err) {
             console.error('Save failed:', err);
             alert(`שגיאה בשמירה: ${err.message}`);
@@ -188,12 +216,10 @@ const IPadMenuEditor = () => {
         const reader = new FileReader();
         reader.onload = async (event) => {
             try {
-                setImportProgress(40);
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
-                setImportProgress(70);
                 const formattedItems = json.map(row => ({
                     name: row['Item Name'] || row['Name'] || row['שם'],
                     category: row['Category'] || row['קטגוריה'] || 'כללי',
@@ -203,18 +229,12 @@ const IPadMenuEditor = () => {
                     created_at: new Date().toISOString()
                 })).filter(item => item.name);
 
-                const { data: insertedData, error } = await supabase
-                    .from('menu_items')
-                    .insert(formattedItems)
-                    .select();
-
+                const { data: insertedData, error } = await supabase.from('menu_items').insert(formattedItems).select();
                 if (error) throw error;
 
                 setLocalItems(prev => [...prev, ...insertedData]);
-                setImportProgress(100);
                 alert(`בוצע! נוספו ${insertedData.length} פריטים.`);
             } catch (err) {
-                console.error('Import failed:', err);
                 alert(`שגיאה בייבוא: ${err.message}`);
             } finally {
                 setIsImporting(false);
@@ -228,11 +248,7 @@ const IPadMenuEditor = () => {
     const handleRefresh = async () => {
         setIsSaving(true);
         try {
-            const { data } = await supabase
-                .from('menu_items')
-                .select('*')
-                .eq('business_id', currentUser.business_id)
-                .order('name');
+            const { data } = await supabase.from('menu_items').select('*').eq('business_id', currentUser.business_id).order('name');
             if (data) setLocalItems(data);
         } finally {
             setIsSaving(false);
@@ -263,62 +279,30 @@ const IPadMenuEditor = () => {
 
     return (
         <div className={`flex flex-col h-screen w-full overflow-hidden ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'}`} dir="rtl">
-            {/* UnifiedHeader Header */}
-            <UnifiedHeader
-                title={`עורך תפריט - ${currentUser?.business_name || 'טוען...'}`}
-                subtitle={`פריטים: ${localItems?.length || 0}`}
-                onHome={() => navigate('/mode-selection')}
-            >
+            <UnifiedHeader title={`עורך תפריט - ${currentUser?.business_name || 'טוען...'}`} subtitle={`פריטים: ${localItems?.length || 0}`} onHome={() => navigate('/mode-selection')}>
                 <div className="flex items-center gap-2">
-                    <button onClick={handleRefresh} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl" title="רענן מ-Supabase">
+                    <button onClick={handleRefresh} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl">
                         <RefreshCw size={20} className={isSaving ? 'animate-spin' : ''} />
                     </button>
-
                     <div className="w-px h-6 bg-slate-200 mx-2" />
-
                     <input type="file" ref={fileInputRef} onChange={handleExcelUpload} className="hidden" accept=".xlsx, .xls" />
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg hover:bg-emerald-600 transition"
-                    >
+                    <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg">
                         {isImporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
                         {isImporting ? `מייבא (${importProgress}%)...` : 'ייבוא Excel'}
                     </button>
-
                     <div className="w-px h-6 bg-slate-200 mx-2" />
-
                     <button onClick={toggleTheme} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-yellow-500">
                         {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                     </button>
-                    <button
-                        onClick={() => setIsUnlocked(false)}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-red-500"
-                        title="נעל מסך"
-                    >
-                        <Lock size={20} />
-                    </button>
+                    <button onClick={() => setIsUnlocked(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-red-500"><Lock size={20} /></button>
                 </div>
             </UnifiedHeader>
-
             <div className="flex flex-1 overflow-hidden">
                 <div className="flex-1 h-full overflow-y-auto p-6">
-                    <PreviewPanel
-                        onItemSelect={setSelectedItem}
-                        activeId={selectedItem?.id}
-                        localItems={localItems}
-                    />
+                    <PreviewPanel onItemSelect={setSelectedItem} activeId={selectedItem?.id} localItems={localItems} />
                 </div>
                 <motion.div initial={{ x: 300 }} animate={{ x: 0 }} className={`w-[400px] border-r shadow-xl z-20 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                    <EditPanel
-                        item={draftItem}
-                        onItemChange={setDraftItem}
-                        modifiers={itemModifiers}
-                        onModifiersChange={setItemModifiers}
-                        onSave={handleSaveRequest}
-                        onClose={() => setSelectedItem(null)}
-                        aiSettings={aiSettings}
-                        businessId={currentUser?.business_id}
-                    />
+                    <EditPanel item={draftItem} onItemChange={setDraftItem} modifiers={itemModifiers} onModifiersChange={setItemModifiers} onSave={handleSaveRequest} onClose={() => setSelectedItem(null)} aiSettings={aiSettings} businessId={currentUser?.business_id} />
                 </motion.div>
             </div>
         </div>
@@ -328,8 +312,6 @@ const IPadMenuEditor = () => {
 const PinEntry = ({ onVerify }) => {
     const [pin, setPin] = useState('');
     const [loading, setLoading] = useState(false);
-    const { isDarkMode } = useTheme();
-
     const handleNum = async (num) => {
         if (pin.length < 4) {
             const newPin = pin + num;
@@ -342,7 +324,6 @@ const PinEntry = ({ onVerify }) => {
             }
         }
     };
-
     return (
         <div className="flex flex-col items-center gap-4">
             <div className="flex gap-2">
