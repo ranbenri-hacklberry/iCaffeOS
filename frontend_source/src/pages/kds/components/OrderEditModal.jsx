@@ -61,22 +61,37 @@ const OrderEditModal = ({
         });
 
         const flattened = [];
-        const seenIds = new Set();
-
-        order.items.forEach(item => {
+        
+        // Handle all items from the order object
+        (order.items || []).forEach(item => {
+            // Determine if it's a grouped item (composite IDs)
             const itemIds = item.ids && item.ids.length > 0 ? item.ids : [item.id];
-            itemIds.forEach(id => {
-                if (id && seenIds.has(id)) return;
-                if (id) seenIds.add(id);
+            
+            itemIds.forEach((id, subIdx) => {
+                const status = item.item_status || item.status;
+                const routingLogic = item.kds_routing_logic;
+                
+                // 🚀 HERO: Unified delivery logic
+                const isDelivered = 
+                    routingLogic === 'prep_override' || 
+                    routingLogic === 'GRAB_AND_GO' || 
+                    item.is_early_delivered === true ||
+                    status === 'ready' || 
+                    status === 'shipped' ||
+                    status === 'completed';
 
                 flattened.push({
-                    id: id,
+                    id: id || `item-${Date.now()}-${subIdx}`,
+                    ids: item.ids || [item.id], // 🚀 Crucial: Keep original DB IDs
+                    uniqueKey: `${id || item.name}-${subIdx}-${item.timestamp}`,
                     name: item.name,
                     quantity: 1,
                     price: item.price || 0,
-                    status: item.status,
-                    is_early_delivered: item.is_early_delivered || false,
-                    modifiers: item.modifiers || [] // 🔑 Pass modifiers for display
+                    status: status,
+                    is_delivered: isDelivered,
+                    kds_routing_logic: routingLogic,
+                    was_conditional: item.was_conditional || false,
+                    modifiers: item.modifiers || []
                 });
             });
         });
@@ -95,35 +110,90 @@ const OrderEditModal = ({
 
     const handleToggleEarlyDeliveredLocal = async (item) => {
         if (processingItemId || isHistoryMode) return;
-        setProcessingItemId(item.id);
-        const newValue = !item.is_early_delivered;
+        
+        // Items in the modal can represent multiple DB records (itemIds)
+        const itemIds = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+        const currentLogic = item.kds_routing_logic;
+        
+        setProcessingItemId(item.uniqueKey);
 
         try {
-            // 1. Optimistic update for Modal UI
+            // Toggle between prep_override and MADE_TO_ORDER
+            const targetLogic = currentLogic === 'prep_override' ? 'MADE_TO_ORDER' : 'prep_override';
+            const targetStatus = targetLogic === 'prep_override' ? 'ready' : 'in_progress';
+            
+            // 1. Optimistic UI update
             setItems(prevItems =>
-                prevItems.map(i => i.id === item.id ? { ...i, is_early_delivered: newValue } : i)
+                prevItems.map(i => i.uniqueKey === item.uniqueKey 
+                    ? { 
+                        ...i, 
+                        kds_routing_logic: targetLogic, 
+                        status: targetStatus,
+                        is_delivered: targetLogic === 'prep_override' 
+                      } 
+                    : i
+                )
             );
 
-            // 2. Call centralized toggle function (updates Dexie + Supabase)
-            if (onToggleEarlyDelivered) {
-                await onToggleEarlyDelivered(orderData.id, item.id, item.is_early_delivered);
-            } else {
-                // Fallback if prop missing
-                const { error } = await supabase.rpc('toggle_early_delivered', {
-                    p_item_id: item.id,
-                    p_value: newValue
-                });
-                if (error) throw error;
+            // 2. Update Dexie immediately for instant KDS card refresh (Local-First)
+            try {
+                const db = (await import('@/db/database')).default;
+                
+                // Update ALL individual records in this group
+                await Promise.all(itemIds.map(id => 
+                    db.order_items.update(id, { 
+                        kds_routing_logic: targetLogic,
+                        item_status: targetStatus,
+                        is_early_delivered: targetLogic === 'prep_override', // Sync legacy flag
+                        updated_at: new Date().toISOString()
+                    })
+                ));
+
+                // 🚀 HERO: If we are UNCHECKING an item, we MUST ensure the parent order 
+                // is NOT marked as 'completed' or 'ready' anymore, otherwise it won't show in Active KDS
+                if (targetLogic === 'MADE_TO_ORDER') {
+                    await db.orders.update(orderData.id, {
+                        order_status: 'in_progress',
+                        updated_at: new Date().toISOString()
+                    });
+                }
+
+                console.log(`✅ [Dexie] Updated ${itemIds.length} items to ${targetLogic} (${targetStatus})`);
+            } catch (dexieErr) {
+                console.warn('⚠️ [Dexie] update failed (non-critical):', dexieErr);
             }
+
+            // 3. Sync to Supabase (Cloud)
+            const { error: itemError } = await supabase
+                .from('order_items')
+                .update({ 
+                    kds_routing_logic: targetLogic,
+                    item_status: targetStatus,
+                    is_early_delivered: targetLogic === 'prep_override' // Sync legacy flag
+                })
+                .in('id', itemIds);
+            if (itemError) throw itemError;
+
+            // 🚀 HERO: Sync parent order status update to cloud
+            if (targetLogic === 'MADE_TO_ORDER') {
+                const { error: orderError } = await supabase
+                    .from('orders')
+                    .update({ order_status: 'in_progress' })
+                    .eq('id', orderData.id);
+                if (orderError) console.error('❌ Failed to sync order status back to in_progress:', orderError);
+            }
+
+            // Trigger refresh in parent
+            onRefresh?.();
         } catch (err) {
-            console.error('Error in toggle:', err);
-            // Revert locally on error
-            setItems(prevItems =>
-                prevItems.map(i => i.id === item.id ? { ...i, is_early_delivered: !newValue } : i)
-            );
+            console.error('❌ [OrderEditModal] Toggle failed:', err);
         } finally {
             setProcessingItemId(null);
         }
+    };
+
+    const handleCloseAndRefresh = () => {
+        onClose();
     };
 
     const formatPrice = (price) => {
@@ -132,7 +202,7 @@ const OrderEditModal = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={handleCloseAndRefresh}>
             <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()} dir="rtl">
                 <div className="bg-white p-4 flex items-center justify-between border-b">
                     <div>
@@ -147,7 +217,7 @@ const OrderEditModal = ({
                             </button>
                         )}
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition shrink-0"><X size={24} /></button>
+                    <button onClick={handleCloseAndRefresh} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X size={24} /></button>
                 </div>
 
                 <div className="px-4 py-4 space-y-2 max-h-[50vh] overflow-y-auto">
@@ -159,15 +229,21 @@ const OrderEditModal = ({
                             .map(mod => ({ ...mod, shortName: getShortName(mod.text || mod.valueName || mod) }))
                             .filter(mod => mod.shortName !== null);
 
+                        const isDelivered = 
+                            item.kds_routing_logic === 'prep_override' || 
+                            item.kds_routing_logic === 'GRAB_AND_GO' || 
+                            item.status === 'ready' ||
+                            item.status === 'completed';
+
                         return (
-                            <div key={item.id} onClick={() => handleToggleEarlyDeliveredLocal(item)} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-all active:scale-[0.99]">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 me-3 ${item.is_early_delivered ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                            <div key={item.uniqueKey} onClick={() => handleToggleEarlyDeliveredLocal(item)} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-all active:scale-[0.99]">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 me-3 ${isDelivered ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
                                     <Check size={20} strokeWidth={3} />
                                 </div>
                                 <div className="flex-1 flex flex-col gap-1">
                                     <div className="flex items-center justify-between gap-3">
-                                        <span className={`text-lg font-bold ${item.is_early_delivered ? 'text-gray-400 line-through' : 'text-slate-800'}`}>{item.name}</span>
-                                        <div className={`text-base font-bold ${item.is_early_delivered ? 'text-gray-400' : 'text-gray-600'}`}>{formatPrice(item.price)}</div>
+                                        <span className={`text-lg font-bold ${isDelivered ? 'text-gray-400 line-through' : 'text-slate-800'}`}>{item.name}</span>
+                                        <div className={`text-base font-bold ${isDelivered ? 'text-gray-400' : 'text-gray-600'}`}>{formatPrice(item.price)}</div>
                                     </div>
                                     {/* 🔑 Show modifiers so barista knows what to prepare */}
                                     {visibleMods.length > 0 && (
@@ -212,7 +288,14 @@ const OrderEditModal = ({
                     </div>
                 )}
 
-                <div className="p-4 border-t"><button onClick={onClose} className="w-full py-4 bg-slate-900 text-white font-bold text-lg rounded-2xl shadow-lg active:scale-[0.98] transition-all">סגור</button></div>
+                <div className="p-4 border-t">
+                    <button 
+                        onClick={handleCloseAndRefresh} 
+                        className="w-full py-4 bg-slate-900 text-white font-bold text-lg rounded-2xl shadow-lg active:scale-[0.98] transition-all"
+                    >
+                        סגור
+                    </button>
+                </div>
             </div>
 
             <CustomerInfoModal

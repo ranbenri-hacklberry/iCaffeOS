@@ -29,6 +29,9 @@ export function useOrderAlerts({ pendingOrders = [], enabled = true }) {
 
     // Play notification sound
     const playSound = useCallback(() => {
+        // 🔇 SOUND DISABLED PER USER REQUEST
+        return;
+/*
         if (audioRef.current && pendingOrders.length > 0) {
             audioRef.current.currentTime = 0;
             audioRef.current.play().catch(err => {
@@ -36,6 +39,7 @@ export function useOrderAlerts({ pendingOrders = [], enabled = true }) {
                 console.log('[useOrderAlerts] Sound blocked:', err.message);
             });
         }
+*/
     }, [pendingOrders.length]);
 
     // Setup interval for repeating alert

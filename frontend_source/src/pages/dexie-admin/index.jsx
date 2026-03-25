@@ -123,26 +123,22 @@ const DexieAdminPanel = () => {
             const businessId = currentUser?.business_id;
             if (!businessId) return;
 
-            // 0. SYNC CUSTOMERS from Supabase first (to get new customers from simulation)
+            // 0. SYNC CUSTOMERS from Supabase - GLOBAL for Admin to ensure local consistency
             try {
                 const { data: cloudCustomers, error: custErr } = await supabase
                     .from('customers')
-                    .select('*')
-                    .eq('business_id', businessId);
+                    .select('*'); // Pull all local customers for the admin view
 
                 if (!custErr && cloudCustomers?.length > 0) {
-                    console.log(`☁️ Syncing ${cloudCustomers.length} customers from Supabase...`);
+                    console.log(`☁️ Global Sync: ${cloudCustomers.length} customers from local Docker...`);
                     await db.customers.bulkPut(cloudCustomers);
                 }
             } catch (syncErr) {
-                console.warn('Customer sync failed:', syncErr);
+                console.warn('Customer global sync failed:', syncErr);
             }
 
-            // 1. Load Customers (Optimized indexed query)
-            const customersData = await db.customers
-                .where('business_id')
-                .equals(businessId)
-                .toArray();
+            // 1. Load Customers (Global for admin panel)
+            const customersData = await db.customers.toArray();
 
             const loyaltyCards = await db.loyalty_cards
                 .where('business_id')
@@ -158,15 +154,20 @@ const DexieAdminPanel = () => {
             const finalCustomers = customersData.map(c => {
                 const cleanPhone = (c.phone_number || c.phone || '').toString().replace(/\D/g, '');
                 const card = loyaltyCards.find(lc => lc.customer_phone?.replace(/\D/g, '') === cleanPhone);
-                const cardPoints = card?.points_balance;
-                const cardRewards = card?.free_coffees;
+
+                // FINAL TRICK: Use loyalty_coffee_count if card is missing or points are 0
+                const cardPoints = card?.points_balance || 0;
+                const customerCount = c.loyalty_coffee_count || 0;
+                const points = Math.max(cardPoints, customerCount);
 
                 return {
                     ...c,
-                    points: cardPoints !== undefined ? cardPoints : (c.loyalty_coffee_count || 0),
-                    rewards: cardRewards || 0
+                    points,
+                    rewards: card?.free_coffees || 0
                 };
             }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
+
+            console.log(`📊 Loaded ${finalCustomers.length} customers with loyalty resolution (Ran: ${finalCustomers.find(c => c.name?.includes('רן'))?.points || 0})`);
 
             // 1.1 Load last purchase dates for these customers
             // Fetch all orders from business to match in-memory for speed if not too many
@@ -189,15 +190,26 @@ const DexieAdminPanel = () => {
             }));
             setCustomers(customersWithHistory);
 
-            // 2. Load ALL Transactions (last 30 days) - Optimized indexed query
+            // 2. Load ALL Transactions (last 30 days) - GLOBAL for admin panel
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-            const txData = await db.loyalty_transactions
-                .where('business_id')
-                .equals(businessId)
-                .toArray();
-            console.log(`📊 Loaded ${txData.length} transactions for sync check`);
+            // SYNC Transactions from Supabase first
+            try {
+                const { data: cloudTxs, error: txError } = await supabase
+                    .from('loyalty_transactions')
+                    .select('*'); // Pull all local transactions
+
+                if (!txError && cloudTxs?.length > 0) {
+                    await db.loyalty_transactions.clear();
+                    await db.loyalty_transactions.bulkPut(cloudTxs);
+                }
+            } catch (err) {
+                console.warn('Loyalty transaction global sync failed:', err);
+            }
+
+            const txData = await db.loyalty_transactions.toArray();
+            console.log(`📊 Loaded ${txData.length} global transactions for sync check`);
 
             // Filter to last 30 days and sort newest first
             const allTx = txData
@@ -206,21 +218,60 @@ const DexieAdminPanel = () => {
 
             const txWithNames = allTx.map(tx => {
                 const card = loyaltyCards.find(c => c.id === tx.card_id);
-                const cardPhone = card?.customer_phone?.replace(/\D/g, '');
-                const customer = finalCustomers.find(cust => {
+                const txPhone = (tx.customer_phone || card?.customer_phone || '').toString().replace(/\D/g, '');
+                
+                // Use the enhanced PhoneMap to find the customer
+                const customer = customerPhoneMap.get(txPhone) || finalCustomers.find(cust => {
                     const cp = (cust.phone_number || cust.phone || '').toString().replace(/\D/g, '');
-                    return cp === cardPhone;
+                    return cp === txPhone && txPhone !== '';
                 });
+
                 return {
                     ...tx,
-                    customerName: customer?.name || (cardPhone ? `${cardPhone}` : 'לקוח אנונימי'),
-                    customerPhone: card?.customer_phone || customer?.phone_number || customer?.phone,
-                    currentBalance: card?.points_balance ?? 0,
+                    customerName: customer?.name || (txPhone ? `${txPhone}` : 'לקוח אנונימי'),
+                    customerPhone: tx.customer_phone || card?.customer_phone || customer?.phone_number || customer?.phone,
+                    currentBalance: card?.points_balance ?? customer?.points ?? 0,
                     customer_id: customer?.id || tx.customer_id,
-                    // Add date string for grouping
                     dateGroup: new Date(tx.created_at).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
                 };
             });
+
+            // 🌟 VIRTUAL TRANSACTION INJECTION - Add virtual "Starting Balance" for customers with points but NO TXs
+            const customersWithTransactions = new Set(txWithNames.map(tx => tx.customerPhone?.replace(/\D/g, '')));
+            
+            finalCustomers.forEach(cust => {
+                const phone = (cust.phone_number || cust.phone || '').toString().replace(/\D/g, '');
+                if (cust.points > 0 && !customersWithTransactions.has(phone)) {
+                    // 🎯 FIND LATEST ORDER DATE for this customer to make the virtual TX realistic
+                    const customerOrders = allOrders.filter(o => {
+                        const oPhone = (o.customer_phone || o.customerPhone || '').toString().replace(/\D/g, '');
+                        return (oPhone === phone && phone !== '') || (o.customer_id === cust.id);
+                    });
+
+                    // Sort orders newest first to find the latest
+                    customerOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    const latestOrderDate = customerOrders[0]?.created_at;
+
+                    // Priority: Latest Order Date -> Customer Created At -> Now
+                    const txDate = latestOrderDate ? new Date(latestOrderDate) : (cust.created_at ? new Date(cust.created_at) : new Date());
+                    
+                    txWithNames.push({
+                        id: `virtual-${phone}`,
+                        customerName: cust.name || phone,
+                        customerPhone: phone,
+                        change_amount: cust.points,
+                        transaction_type: 'sync_balance',
+                        created_at: txDate.toISOString(),
+                        currentBalance: cust.points,
+                        notes: latestOrderDate ? 'נצבר בהזמנה אחרונה (יומן חסר)' : 'יתרת פתיחה/סנכרון - לא נמצא יומן עסקאות',
+                        dateGroup: txDate.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
+                    });
+                }
+            });
+
+            // 🕒 CHRONOLOGICAL SORT: Newest first
+            txWithNames.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
             setTransactions(txWithNames);
 
             // 3. Load ALL Orders (last 14 days) - Optimized indexed query
@@ -231,7 +282,6 @@ const DexieAdminPanel = () => {
                 .where('business_id')
                 .equals(businessId)
                 .toArray();
-            console.log(`📊 Loaded ${allOrdersData.length} total orders for this business`);
 
             const recentOrders = allOrdersData
                 .filter(o => new Date(o.created_at) >= fourteenDaysAgo)
@@ -241,20 +291,55 @@ const DexieAdminPanel = () => {
             const orderIds = recentOrders.map(o => o.id);
             const orderItems = await db.order_items.where('order_id').anyOf(orderIds).toArray();
 
-            // Fetch Menu Items to get names
-            const allMenuItems = await db.menu_items.where('business_id').equals(businessId).toArray();
-            const menuMap = new Map(allMenuItems.map(m => [m.id, m.name]));
+            // 2. Fetch ALL Menu Items in Dexie (to ensure names display even with business_id mismatches in Admin)
+            const allMenuItems = await db.menu_items.toArray();
+            const menuMap = new Map();
+            allMenuItems.forEach(m => {
+                if (m.id) {
+                    menuMap.set(String(m.id), m.name);
+                    const numId = Number(m.id);
+                    if (!isNaN(numId)) menuMap.set(numId, m.name);
+                }
+            });
 
-            // Attach items to orders
+            // Fast Customer Access Maps
+            const customerMap = new Map();
+            const customerPhoneMap = new Map();
+            customersWithHistory.forEach(c => {
+                customerMap.set(String(c.id), c);
+                const phone = (c.phone_number || c.phone || '').toString().replace(/\D/g, '');
+                if (phone) customerPhoneMap.set(phone, c);
+            });
+
+            // Fetch Loyalty Transactions to get points added per order
+            const txDataForPoints = await db.loyalty_transactions
+                .where('business_id')
+                .equals(businessId)
+                .toArray();
+
+            const orderPointsMap = new Map();
+            txDataForPoints.forEach(tx => {
+                if (tx.order_id && tx.transaction_type === 'purchase') {
+                    const current = orderPointsMap.get(tx.order_id) || 0;
+                    orderPointsMap.set(tx.order_id, current + (tx.change_amount || 0));
+                }
+            });
+
+            // Attach items and resolved customer names to orders
             const ordersWithItems = recentOrders.map(order => {
-                const items = orderItems.filter(i => i.order_id === order.id).map(i => ({
+                const cleanPhone = (order.customer_phone || '').toString().replace(/\D/g, '');
+                const resolvedCustomer = customerMap.get(String(order.customer_id)) || customerPhoneMap.get(cleanPhone);
+
+                const items = orderItems.filter(i => String(i.order_id) === String(order.id)).map(i => ({
                     ...i,
-                    menu_item_name: menuMap.get(i.menu_item_id) || 'פריט לא ידוע'
+                    menu_item_name: menuMap.get(String(i.menu_item_id)) || menuMap.get(Number(i.menu_item_id)) || 'פריט לא ידוע'
                 }));
+
                 return {
                     ...order,
                     items,
-                    // Add date string for grouping
+                    resolved_customer_name: resolvedCustomer?.name || (cleanPhone ? null : order.customer_name),
+                    points_added: orderPointsMap.get(order.id) || 0,
                     dateGroup: new Date(order.created_at).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
                 };
             });
@@ -556,15 +641,16 @@ const DexieAdminPanel = () => {
                 log(`✅ ${txs.length} פעולות נאמנות סונכרנו`);
             }
 
-            // 5. Sync Menu Items
+            // 5. Sync Menu Items - ROBUST: Pull all available to avoid ID mismatches
             log('🍕 מסנכרן תפריט...');
             const { data: menuData, error: menuErr } = await supabase
                 .from('menu_items')
-                .select('*')
-                .eq('business_id', businessId);
+                .select('*');
+                // Removed .eq('business_id', businessId) temporarily to ensure everything is local
             if (menuErr) {
                 log(`⚠️ שגיאה בתפריט: ${menuErr.message}`);
             } else if (menuData?.length > 0) {
+                await db.menu_items.clear(); // Clear old to avoid stale duplicates
                 await db.menu_items.bulkPut(menuData);
                 log(`✅ ${menuData.length} פריטי תפריט סונכרנו`);
             }
@@ -967,8 +1053,13 @@ const DexieAdminPanel = () => {
                                             // 🆕 Check if actually paid
                                             const isPaid = order.is_paid === true;
 
-                                            const relatedCustomer = customers.find(c => c.name === order.customer_name || c.id === order.customer_id);
+                                            const relatedCustomer = customers.find(c =>
+                                                (c.id && c.id === order.customer_id) ||
+                                                (c.phone_number?.replace(/\D/g, '') === order.customer_phone?.replace(/\D/g, '')) ||
+                                                (c.phone?.replace(/\D/g, '') === order.customer_phone?.replace(/\D/g, ''))
+                                            );
                                             const displayPhone = order.customer_phone || relatedCustomer?.phone || relatedCustomer?.phone_number;
+                                            const displayName = order.resolved_customer_name || relatedCustomer?.name || `#${order.order_number}`;
 
                                             // 🆕 Get loyalty points info for this customer
                                             const customerPoints = relatedCustomer?.points || 0;
@@ -976,14 +1067,14 @@ const DexieAdminPanel = () => {
                                             return (
                                                 <div key={order.id} className="bg-white rounded-xl px-4 py-3 border border-slate-100 shadow-sm hover:shadow-md transition-all flex items-center gap-4 group w-full text-slate-800 h-[72px]">
                                                     <div className="flex flex-col justify-center w-[180px] shrink-0 border-l border-slate-50 pl-4">
-                                                        <div className="font-black text-lg leading-tight text-slate-800 truncate text-right" title={order.customer_name || relatedCustomer?.name}>
-                                                            {order.customer_name || relatedCustomer?.name || `#${order.order_number}`}
+                                                        <div className="font-black text-lg leading-tight text-slate-800 truncate text-right" title={displayName}>
+                                                            {displayName}
                                                         </div>
                                                         <div className="text-xs font-bold text-slate-400 flex items-center gap-2 mt-0.5 h-4">
-                                                            {(order.customer_name || relatedCustomer?.name) && <span>#{order.order_number}</span>}
-                                                            {displayPhone && displayPhone !== '0500000000' && (
+                                                            {displayName !== `#${order.order_number}` && <span>#{order.order_number}</span>}
+                                                            {displayPhone && !displayPhone.toString().includes('GUEST') && (
                                                                 <>
-                                                                    {(order.customer_name || relatedCustomer?.name) && <span className="text-slate-300">|</span>}
+                                                                    {(displayName) && <span className="text-slate-300">|</span>}
                                                                     <span className="truncate" dir="ltr">{displayPhone}</span>
                                                                 </>
                                                             )}

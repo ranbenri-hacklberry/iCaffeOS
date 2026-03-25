@@ -1041,7 +1041,7 @@ const MenuOrderingInterface = () => {
         ...(modifiedItem.mods || {}),
         kds_override: kdsOverride
       },
-      // Preserve the original menu_item_id (numeric ID from database)
+      was_conditional: originalItem?.kds_routing_logic === 'CONDITIONAL',
       // Preserve the original menu_item_id (numeric ID from database)
       menu_item_id: originalItem?.id || modifiedItem?.id
     };
@@ -1932,12 +1932,25 @@ const MenuOrderingInterface = () => {
       let orderResult = null;
       let orderError = null;
       // const isOnline = navigator.onLine; // Moved up
-
       if (isOnline) {
         // Online: Submit to Supabase normally
         const response = await supabase.rpc('submit_order_v3', orderPayload);
         orderResult = response.data;
         orderError = response.error;
+
+        // --- 🚀 AUTO-ARCHIVE LOGIC ---
+        // If all items are GRAB_AND_GO or prep_override, move the order immediately to 'completed' status
+        const allNonPrep = (preparedItems || []).every(item => 
+          item.kds_routing_logic === 'GRAB_AND_GO' || item.kds_routing_logic === 'prep_override'
+        );
+        if (orderResult?.order_id && allNonPrep && !orderError) {
+          console.log('📦 Auto-Archiving order (All items are GRAB_AND_GO or prep_override)');
+          await supabase
+            .from('orders')
+            .update({ order_status: 'completed' })
+            .eq('id', orderResult.order_id);
+        }
+        // ------------------------------
 
         // 📉 INVENTORY DECREMENT (Client-Side Logic for "Ready" Items)
         if (orderResult && orderResult.order_id && !orderError) {
@@ -1966,34 +1979,42 @@ const MenuOrderingInterface = () => {
               });
 
               // 3. Perform updates (Fetch latest stock first to avoid race conditions)
-              await Promise.all(Object.values(stockUpdates).map(async (update) => {
-                // Fetch LATEST stock from DB instead of using snapshotted value from cart
-                const { data: currentRecord } = await supabase
-                  .from('prepared_items_inventory')
-                  .select('current_stock')
-                  .eq('item_id', update.id)
-                  .single();
+              // 🛡️ NON-BLOCKING: We don't await the entire Promise.all to avoid sticking the UI if one call is slow/fails
+              Promise.all(Object.values(stockUpdates).map(async (update) => {
+                try {
+                  // Fetch LATEST stock from DB instead of using snapshotted value from cart
+                  const { data: currentRecord } = await supabase
+                    .from('prepared_items_inventory')
+                    .select('current_stock')
+                    .eq('item_id', update.id)
+                    .single();
 
-                const dbStock = currentRecord?.current_stock ?? 0;
-                const newStock = dbStock - update.qty;
+                  const dbStock = currentRecord?.current_stock ?? 0;
+                  const newStock = dbStock - update.qty;
 
-                const { error: updateErr } = await supabase
-                  .from('prepared_items_inventory')
-                  .update({
-                    current_stock: newStock,
-                    last_updated: new Date().toISOString()
-                  })
-                  .eq('item_id', update.id);
+                  const { error: updateErr } = await supabase
+                    .from('prepared_items_inventory')
+                    .update({
+                      current_stock: newStock,
+                      last_updated: new Date().toISOString()
+                    })
+                    .eq('item_id', update.id);
 
-                if (updateErr) console.error(`   ❌ Failed to decrement ${update.name}:`, updateErr);
-                else {
-                  console.log(`   ✅ Decremented ${update.name}: DB(${dbStock}) -> ${newStock}`);
-                  // 🚀 OPTIMISTIC UI FIX: Update local menu state immediately
-                  updateStockLocally(update.id, newStock);
+                  if (updateErr) {
+                    console.error(`   ❌ Failed to decrement ${update.name} (ID: ${update.id}):`, updateErr);
+                  } else {
+                    console.log(`   ✅ Decremented ${update.name}: DB(${dbStock}) -> ${newStock}`);
+                    // 🚀 OPTIMISTIC UI FIX: Update local menu state immediately
+                    if (typeof updateStockLocally === 'function') {
+                      updateStockLocally(update.id, newStock);
+                    }
+                  }
+                } catch (innerErr) {
+                  console.warn(`⚠️ Inventory update skipped for ${update.name} due to error:`, innerErr.message);
                 }
-              }));
-
-              console.log('📉 All inventory updates completed.');
+              })).then(() => {
+                console.log('📉 All inventory updates attempted.');
+              });
             }
           } catch (invErr) {
             console.error('Inventory logic crash:', invErr);
@@ -2030,7 +2051,7 @@ const MenuOrderingInterface = () => {
             customer_id: orderPayload.p_customer_id,
             customer_name: orderPayload.p_customer_name,
             customer_phone: orderPayload.p_customer_phone,
-            order_status: 'in_progress', // Shows in KDS immediately
+            order_status: (preparedItems || []).every(item => item.kds_routing_logic === 'GRAB_AND_GO' || item.kds_routing_logic === 'prep_override') ? 'completed' : 'in_progress',
             is_paid: orderPayload.p_is_paid,
             total_amount: orderPayload.p_final_total,
             discount_id: orderPayload.p_discount_id,
@@ -2546,6 +2567,7 @@ const MenuOrderingInterface = () => {
         <ModifierModal
           isOpen={showModifierModal}
           selectedItem={itemsWithCartStock.find(i => i.id === selectedItemForMod.id) || selectedItemForMod}
+          allowAutoAdd={false}
           onClose={() => {
             setShowModifierModal(false);
             setSelectedItemForMod(null);

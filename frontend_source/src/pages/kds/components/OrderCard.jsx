@@ -6,7 +6,7 @@
 
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
-import { Clock, Edit, RotateCcw, Flame, Truck, Phone, MapPin, Package, Check, CheckCircle, Box } from 'lucide-react';
+import { Clock, Edit, RotateCcw, Flame, Truck, Phone, MapPin, Package, Check, CheckCircle, Box, CreditCard } from 'lucide-react';
 import { sortItems } from '@/utils/kdsUtils';
 import { getShortName, getModColorClass } from '@/config/modifierShortNames';
 
@@ -103,6 +103,18 @@ const OrderCard = memo(({
     return stored || isTablet;
   }, []);
 
+  // 🕵️ DEBUG: Log order 3757 to see why name is missing
+  useEffect(() => {
+    if (String(order.orderNumber).includes('3757')) {
+      console.log('🕵️ OrderCard 3757 Debug:', {
+        customerName: order.customerName,
+        customer_name: order.customer_name,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId
+      });
+    }
+  }, [order]);
+
   // --- 🕒 AGING LOGIC ---
   const [agingMinutes, setAgingMinutes] = useState(0);
 
@@ -149,8 +161,14 @@ const OrderCard = memo(({
   const { isLargeOrder, rightColItems, leftColItems, unifiedItems } = useMemo(() => {
     // ⚠️ CRITICAL: NO sortItems here!
     // Items arrive pre-sorted and must NOT be re-sorted on render
-    // This prevents items from jumping when marked as ready
-    const items = order.items || [];
+    const allItems = order.items || [];
+    const items = isHistory 
+      ? allItems 
+      : allItems.filter(item => 
+          item.isPrepRequired && 
+          item.kds_routing_logic !== 'GRAB_AND_GO' && 
+          item.kds_routing_logic !== 'prep_override'
+        );
 
     const getItemRows = (item) => {
       if (!item.modifiers) return 1;
@@ -186,6 +204,7 @@ const OrderCard = memo(({
     };
   }, [order.items, isHistory]);
 
+
   // Calculate packing progress for Kanban
   const packedCount = useMemo(() => {
     if (!order.items) return 0;
@@ -201,13 +220,11 @@ const OrderCard = memo(({
   const isReadyStatus = ['ready', 'completed', 'shipped'].includes(orderStatusLower);
   const isNew = orderStatusLower === 'new';
 
-  const nextStatusLabel = isPending
-    ? 'ראיתי'
+  const nextStatusLabel = isReady 
+    ? 'נמסר' 
     : (isHeld 
-      ? (order.isFired ? 'מוכן להגשה' : 'הכן עכשיו!')
-      : (isNew 
-        ? 'התחל הכנה'
-        : (orderStatusLower === 'in_progress' ? 'מוכן להגשה' : 'נמסר')));
+        ? (order.isFired ? 'מוכן להגשה' : 'הכן עכשיו!') 
+        : 'מוכן להגשה');
 
   const actionBtnColor = isReadyStatus
     ? 'bg-slate-900 text-white hover:bg-slate-800'
@@ -268,18 +285,11 @@ const OrderCard = memo(({
             </span>
 
             <div className="flex-1 pt-0.5 min-w-0 pr-0">
-              {item.course_stage === 2 && (
-                <div className="flex mb-1">
-                  <span className="px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[9px] font-black rounded-md border border-violet-200">
-                    מנה שנייה (COURSE 2) 🕒
-                  </span>
-                </div>
-              )}
               {(() => {
                 if (!item.modifiers || item.modifiers.length === 0) {
                   return (
                     <div className="flex flex-col">
-                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-right leading-normal whitespace-normal break-words">
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-right leading-normal whitespace-normal break-words">
                         <span className={`font-bold ${isEarlyDelivered ? 'text-slate-600 line-through' : (item.quantity > 1 ? 'text-orange-700' : 'text-gray-900')} ${nameSizeClass}`}>
                           {getIcon(item.name)} {item.name}
                         </span>
@@ -299,15 +309,15 @@ const OrderCard = memo(({
 
                 return (
                   <div className="flex flex-col">
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-right leading-normal whitespace-normal break-words">
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-right leading-normal whitespace-normal break-words">
                       <span className={`font-bold ${isEarlyDelivered ? 'text-slate-600 line-through' : (item.quantity > 1 ? 'text-orange-700' : 'text-gray-900')} ${nameSizeClass}`}>
                         {getIcon(item.name)} {item.name}
                       </span>
                       {isPackedItem && <Check size={14} className="text-green-600 stroke-[3]" />}
 
                       {visibleMods.map((mod, i) => (
-                        <span key={i} className={`mod-label inline-block ${getModColorClass(mod.fullName, mod.shortName)} ${modSizeClass} px-2 py-1 rounded leading-relaxed min-h-[auto] max-w-full text-right whitespace-pre-wrap break-words`}>
-                          {mod.fullName}
+                        <span key={i} className={`mod-label inline-block ${getModColorClass(mod.fullName, mod.shortName)} ${modSizeClass} px-1.5 py-0.5 rounded leading-relaxed min-h-[auto] max-w-full text-right whitespace-pre-wrap break-words`}>
+                          {mod.shortName}
                         </span>
                       ))}
                     </div>
@@ -340,11 +350,16 @@ const OrderCard = memo(({
 
       {/* Header */}
       <div className="z-0 flex justify-between items-start mb-0.5 border-b border-gray-50 pb-0.5">
-        <div className="flex flex-col overflow-hidden flex-1">
+        <div className="flex flex-col flex-1">
           <div className="flex flex-col w-full">
             <div className="flex items-center gap-2 w-full">
-              <div className={`${isHistory ? 'text-lg' : 'text-2xl'} font-black text-slate-900 leading-none tracking-tight truncate`}>
-                {order.customerName && !['אורח', 'אורח אנונימי'].includes(order.customerName) ? order.customerName : `#${order.orderNumber}`}
+              {/* 🛑 CRITICAL: NEVER TRUNCATE NAMES OR NUMBERS. MUST WRAP. */}
+              <div className={`${isHistory ? 'text-lg' : 'text-2xl'} font-black text-slate-900 leading-tight tracking-tight whitespace-normal break-words`}>
+                {(() => {
+                  const name = order.customerName || order.customer_name;
+                  if (name && !['אורח', 'אורח אנונימי', 'Guest', ''].includes(name)) return name;
+                  return `#${order.orderNumber}`;
+                })()}
               </div>
             </div>
 
@@ -371,7 +386,10 @@ const OrderCard = memo(({
           <div className="flex items-center gap-2">
             {!isHistory && onEditOrder && (
               <button
-                onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
+                onClick={(e) => { 
+                    e.stopPropagation(); 
+                    onEditOrder(order); 
+                }}
                 className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 title="עריכת הזמנה"
               >
@@ -389,21 +407,21 @@ const OrderCard = memo(({
       <div className="z-0 flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar pr-1 mr-1 mb-2">
         {isLargeOrder ? (
           <div className="flex h-full gap-2">
-            <div className="flex-1 flex flex-col space-y-1 border-l border-gray-100 pl-2">
+            <div className="flex-1 flex flex-col space-y-0.5 border-l border-gray-100 pl-2">
               {rightColItems.map((item, idx) => renderItemRow(item, idx, true))}
             </div>
-            <div className="flex-1 flex flex-col space-y-1">
+            <div className="flex-1 flex flex-col space-y-0.5">
               {leftColItems.map((item, idx) => renderItemRow(item, idx, true))}
             </div>
           </div>
         ) : (
-          <div className="flex flex-col space-y-1">
+          <div className="flex flex-col space-y-0.5">
             {unifiedItems.map((item, idx) => renderItemRow(item, idx, false))}
           </div>
         )}
       </div>
 
-      <div className={`mt-auto flex flex-col gap-2 relative ${orderStatusLower === 'new' ? 'z-[10]' : 'z-0'}`}>
+      <div className={`mt-auto flex flex-col gap-2 relative z-50`}>
         {isHeld ? (
           <button
             disabled={isUpdating}
@@ -414,6 +432,17 @@ const OrderCard = memo(({
                 if (onFireItems) await onFireItems(order.originalOrderId || order.id, flatIds);
               } finally { setIsUpdating(false); }
             }}
+            onTouchEnd={async (e) => {
+                // Prevent ghost clicks but handle touch immediately
+                e.preventDefault();
+                e.stopPropagation();
+                if (isUpdating) return;
+                setIsUpdating(true);
+                try {
+                  const flatIds = order.items.flatMap(i => i.ids || [i.id]);
+                  if (onFireItems) await onFireItems(order.originalOrderId || order.id, flatIds);
+                } finally { setIsUpdating(false); }
+            }}
             className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl font-black text-lg shadow-lg active:translate-y-1 transition-all flex items-center justify-center gap-2"
           >
             <Flame size={18} className="fill-white animate-pulse" />
@@ -422,13 +451,21 @@ const OrderCard = memo(({
         ) : (
           <>
             {isHistory && (
-              <div className="mt-1 mb-2 pt-2 border-t border-gray-100 flex flex-col gap-2 overflow-hidden">
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-1.5 text-slate-500 font-bold">
-                    <Clock size={16} />
-                    <span className="text-xs">משך הכנה:</span>
+              <div className="mt-1 mb-2 pt-2 border-t border-gray-100 flex flex-col gap-1.5 px-2">
+                <div className="flex items-start gap-1.5 text-slate-500 font-bold">
+                  <Clock size={16} className="mt-0.5 shrink-0" />
+                  <div className="flex flex-col gap-0.5">
+                     <div className="flex items-center gap-2">
+                        <span className="text-xs">משך הכנה:</span>
+                        <span className="text-xs font-black text-slate-700">{order.duration || '-'}</span>
+                     </div>
+                     {order.duration2 && (
+                       <div className="flex items-center gap-2 text-[11px] opacity-80">
+                          <span className="text-slate-500">#2</span>
+                          <span className="font-black text-slate-600">{order.duration2}</span>
+                       </div>
+                     )}
                   </div>
-                  <PrepTimer order={order} isHistory={true} isReady={true} />
                 </div>
               </div>
             )}
@@ -460,7 +497,7 @@ const OrderCard = memo(({
                           <div className="flex items-center gap-1.5 min-w-0">
                             <CheckCircle size={14} className="text-green-500 shrink-0" />
                             <div className="flex flex-col">
-                              <span className="truncate font-bold text-xs">
+                              <span className="font-bold text-xs whitespace-normal break-words">
                                 {PAYMENT_LABELS[order.payment_method] || order.payment_method || 'שולם'}
                               </span>
                             </div>
@@ -507,13 +544,28 @@ const OrderCard = memo(({
                         setIsUpdating(false);
                       }
                     }}
+                    onTouchEnd={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (isUpdating || !onPaymentCollected) return;
+                        setIsUpdating(true);
+                        await onPaymentCollected(order);
+                        setIsUpdating(false);
+                    }}
                     className="flex-1 bg-white border-2 border-orange-600 hover:bg-orange-50 text-orange-600 rounded-xl font-black text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 outline-none"
                   >
                     <img
-                      src="http://127.0.0.1:54321/storage/v1/object/public/Photos/cashregister.jpg"
+                      src={`http://${window.location.hostname}:54321/storage/v1/object/public/Photos/cashregister.jpg`}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'block';
+                      }}
                       alt="קופה"
                       className="w-8 h-8 object-contain"
                     />
+                    <div style={{ display: 'none' }} className="text-white">
+                      <CreditCard size={20} />
+                    </div>
                     <span>גביית תשלום: ₪{order.totalAmount?.toLocaleString()}</span>
                   </button>
                 ) : (
@@ -534,6 +586,14 @@ const OrderCard = memo(({
                           try { await onOrderStatusUpdate(order.originalOrderId || order.id, 'undo_ready'); }
                           finally { setIsUpdating(false); }
                         }}
+                        onTouchEnd={async (e) => {
+                             e.preventDefault();
+                             e.stopPropagation();
+                             if (isUpdating) return;
+                             setIsUpdating(true);
+                             try { await onOrderStatusUpdate(order.originalOrderId || order.id, 'undo_ready'); }
+                             finally { setIsUpdating(false); }
+                        }}
                         className="w-11 h-11 bg-gray-200 border-2 border-gray-300 rounded-xl shadow-sm flex items-center justify-center text-gray-700 shrink-0 active:scale-95 transition-all outline-none"
                       >
                         <RotateCcw size={20} />
@@ -544,6 +604,27 @@ const OrderCard = memo(({
                       disabled={isUpdating}
                       onClick={async (e) => {
                         e.stopPropagation();
+                        setIsUpdating(true);
+                        try {
+                          const orderId = order.originalOrderId || order.id;
+                          const flatIds = order.items.flatMap(i => i.ids || [i.id]);
+
+                          if (isHeld) {
+                             if (onFireItems) await onFireItems(orderId, flatIds);
+                          } else if (orderStatusLower === 'in_progress' && onReadyItems) {
+                             await onReadyItems(orderId, flatIds);
+                          } else if (isReadyStatus && onDeliverItems) {
+                             await onDeliverItems(orderId, flatIds);
+                          } else {
+                             await onOrderStatusUpdate(orderId, order.orderStatus);
+                          }
+                        }
+                        finally { setIsUpdating(false); }
+                      }}
+                      onTouchEnd={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (isUpdating) return;
                         setIsUpdating(true);
                         try {
                           const orderId = order.originalOrderId || order.id;
@@ -575,13 +656,26 @@ const OrderCard = memo(({
                             setIsUpdating(true); await onPaymentCollected(order); setIsUpdating(false);
                           }
                         }}
+                        onTouchEnd={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (isUpdating || !onPaymentCollected) return;
+                            setIsUpdating(true); await onPaymentCollected(order); setIsUpdating(false);
+                        }}
                         className="w-11 h-11 bg-white border-2 border-orange-600 rounded-xl shadow-sm flex items-center justify-center hover:bg-orange-50 shrink-0 relative active:scale-95 transition-all outline-none"
                       >
                         <img
-                          src="http://127.0.0.1:54321/storage/v1/object/public/Photos/cashregister.jpg"
+                          src={`http://${window.location.hostname}:54321/storage/v1/object/public/Photos/cashregister.jpg`}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'block';
+                          }}
                           alt="קופה"
                           className="w-9 h-9 object-contain"
                         />
+                        <div style={{ display: 'none' }} className="text-orange-600">
+                          <CreditCard size={24} />
+                        </div>
                         <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md ring-1 ring-white">
                           ₪{order.totalAmount?.toFixed(0)}
                         </span>
