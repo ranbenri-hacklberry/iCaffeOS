@@ -156,7 +156,7 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
             // If data is stale OR from KDS (detect via session or URL), we want to wait for network.
             const fromKds = window.location.search.includes('from=kds') || sessionStorage.getItem('order_origin') === 'kds' || sessionStorage.getItem('order_origin') === 'kds-history';
             const isOnline = navigator.onLine;
-            const shouldWaitForNetwork = (isStale || fromKds) && isOnline;
+            const shouldWaitForNetwork = fromKds && isOnline && localData.length === 0; // 🚀 MODIFIED: Only wait for network if no local data exists
 
             const enrichedLocalData = localData.filter(i => !i.is_deleted).map(item => ({
                 ...item,
