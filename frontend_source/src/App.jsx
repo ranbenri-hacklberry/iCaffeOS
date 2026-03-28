@@ -17,7 +17,7 @@ function App() {
     // 🛡️ GLOBAL CRASH MONITORING
     const handleError = (e) => {
       console.error("🔥 GLOBAL_CRASH:", e);
-      const errorMsg = e.message || (e.reason && e.reason.message) || "Unknown Crash";
+      const errorMsg = e.message || (e.reason && e.reason.message) || "Unknown Crash";\n      \n      // 🛡️ IGNORE BENIGN LAYOUT ERRORS\n      if (errorMsg.includes("ResizeObserver loop completed with undelivered notifications") || errorMsg.includes("ResizeObserver loop limit exceeded")) {\n        console.warn("Ignoring benign ResizeObserver error:", errorMsg);\n        return;\n      }
       if (typeof window !== 'undefined') {
         const overlay = document.createElement('div');
         overlay.id = 'crash-overlay';
