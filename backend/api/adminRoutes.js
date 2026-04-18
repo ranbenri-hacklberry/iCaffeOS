@@ -7,74 +7,111 @@
  * - GET /api/admin/sync-queue - Get sync queue status (if needed)
  */
 
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import dotenv from 'dotenv';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '../.env') });
-
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
 
-// Cloud Supabase Client
-const cloudSupabase = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
-);
+// 1. Cloud Supabase Client (Service Role)
+const REMOTE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const REMOTE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY; // Must be Service Role
 
-// Docker Local Supabase Client
-const DOCKER_URL = process.env.LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
-const DOCKER_KEY = process.env.LOCAL_SUPABASE_ANON_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+if (!REMOTE_KEY) console.warn("⚠️ [AdminRoutes] Missing SUPABASE_SERVICE_KEY. Sync might fail due to RLS.");
 
-const dockerSupabase = createClient(DOCKER_URL, DOCKER_KEY);
-
-/**
- * GET /api/admin/identity
- * Zero-Config Auto-Discovery: returns businesses known to the local DB.
- * Used by the frontend to auto-login when exactly one business exists.
- */
-router.get('/identity', async (req, res) => {
-    try {
-        const { data, error } = await dockerSupabase
-            .from('businesses')
-            .select('id, name, settings')
-            .order('created_at', { ascending: true });
-
-        if (error) {
-            console.warn('[AdminRoutes/identity] Local DB query failed:', error.message);
-            // Fallback: try Cloud Supabase
-            const { data: cloudData, error: cloudError } = await cloudSupabase
-                .from('businesses')
-                .select('id, name, settings')
-                .order('created_at', { ascending: true });
-
-            if (cloudError) {
-                return res.status(500).json({ success: false, error: cloudError.message });
-            }
-
-            return res.json({
-                success: true,
-                source: 'cloud',
-                businesses: cloudData || [],
-                count: cloudData?.length || 0
-            });
-        }
-
-        return res.json({
-            success: true,
-            source: 'local',
-            businesses: data || [],
-            count: data?.length || 0
-        });
-    } catch (err) {
-        console.error('[AdminRoutes/identity] Error:', err);
-        return res.status(500).json({ success: false, error: err.message });
+const cloudSupabase = createClient(REMOTE_URL, REMOTE_KEY, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false
     }
 });
+
+// 2. Docker Local Supabase Client (Service Role)
+const DOCKER_URL = process.env.LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
+// Prefer Service Role Key for Admin operations
+const DOCKER_KEY = process.env.VITE_LOCAL_SERVICE_ROLE_KEY ||
+    process.env.LOCAL_SUPABASE_SERVICE_KEY ||
+    process.env.VITE_LOCAL_SUPABASE_ANON_KEY;
+
+if (!DOCKER_KEY) console.warn("⚠️ [AdminRoutes] Missing DOCKER_KEY.");
+
+const dockerSupabase = createClient(DOCKER_URL, DOCKER_KEY, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false
+    }
+});
+
+
+/**
+ * Helper: Transform data before upserting to match schema differences
+ */
+const transformData = (table, data, target) => {
+    if (!data || data.length === 0) return data;
+
+    // Columns that exist in Cloud but NOT in Docker local schema
+    // These cause PGRST204 errors during upsert
+    const DOCKER_MISSING_COLUMNS = {
+        businesses: ['gemini_api_key', 'grok_api_key', 'claude_api_key', 'youtube_api_key', 'whatsapp_api_key', 'google_access_token', 'google_refresh_token', 'google_drive_folder_id', 'google_token_expiry'], // Migrated to business_secrets / not in Docker schema
+        employees: ['face_descriptor', 'face_enrollment_date'], // gender now exists
+        customers: [], // gender now exists
+        orders: ['status'], // is_local_only now exists, 'status' exists in cloud but not docker
+        order_items: [], // status DOES exist in docker now (item_status is standard)
+        menu_items: [],
+    };
+
+    return data.map(row => {
+        const newRow = { ...row };
+
+        // Strip columns not present in Docker schema when pulling FROM cloud
+        if (target === 'docker') {
+            const missingCols = DOCKER_MISSING_COLUMNS[table] || [];
+            for (const col of missingCols) {
+                delete newRow[col];
+            }
+        }
+
+        // 1. inventory_items Mapping
+        if (table === 'inventory_items') {
+            // Remove Generated Columns (read-only in both DBs)
+            delete newRow.cost_per_1000_units;
+
+            if (target === 'docker') {
+                // Cloud (low_stock_alert) -> Docker (low_stock_threshold_units)
+                if (newRow.low_stock_alert !== undefined) {
+                    newRow.low_stock_threshold_units = newRow.low_stock_alert;
+                    delete newRow.low_stock_alert;
+                }
+            } else {
+                // Docker (low_stock_threshold_units) -> Cloud (low_stock_alert)
+                if (newRow.low_stock_threshold_units !== undefined) {
+                    newRow.low_stock_alert = newRow.low_stock_threshold_units;
+                    delete newRow.low_stock_threshold_units;
+                }
+            }
+        }
+
+        // 2. Orders Mapping (Remove cashier_id if pushing to Cloud and Cloud doesn't support it yet)
+        if (table === 'orders' && target === 'cloud') {
+            // Cloud schema doesn't have cashier_id yet
+            delete newRow.cashier_id;
+            delete newRow.face_match_confidence;
+        }
+
+        // 3. Task Completions - Cloud doesn't support recurring_task_id yet? or wait...
+        // Let's check the task completetions push error...
+        return newRow;
+    });
+};
+
+/**
+ * Helper: Get Conflict Columns
+ */
+const getConflictColumns = (table) => {
+    if (table === 'menuitemoptions') return 'item_id,group_id';
+    // Add other composite keys if needed
+    return 'id';
+};
+
 
 /**
  * GET /api/admin/docker-dump/:table
@@ -89,12 +126,16 @@ router.get('/docker-dump/:table', async (req, res) => {
     try {
         let query = dockerSupabase.from(table).select('*');
 
-        // Filter by businessId if provided and table has business_id column
+        // Filter by businessId if provided
         if (businessId) {
-            // Tables without business_id: optionvalues, menuitemoptions
-            const noBusinessIdTables = ['optionvalues', 'menuitemoptions'];
-            if (!noBusinessIdTables.includes(table)) {
-                query = query.eq('business_id', businessId);
+            if (table === 'businesses') {
+                query = query.eq('id', businessId);
+            } else {
+                // Tables without business_id: optionvalues, menuitemoptions
+                const noBusinessIdTables = ['optionvalues', 'menuitemoptions'];
+                if (!noBusinessIdTables.includes(table)) {
+                    query = query.eq('business_id', businessId);
+                }
             }
         }
 
@@ -241,6 +282,58 @@ router.get('/sync-queue', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/trusted-stats
+ * Get trusted counts from Cloud and Docker for comparison
+ */
+router.get('/trusted-stats', async (req, res) => {
+    const { table, businessId, noBusinessId } = req.query;
+
+    console.log(`[AdminRoutes] Trusted Stats for ${table} (businessId: ${businessId})`);
+
+    try {
+        // Build queries
+        let cloudQuery = cloudSupabase.from(table).select('*', { count: 'exact', head: true });
+        let dockerQuery = dockerSupabase.from(table).select('*', { count: 'exact', head: true });
+
+        // Filter by businessId
+        if (businessId && noBusinessId !== 'true') {
+            if (table === 'businesses') {
+                cloudQuery = cloudQuery.eq('id', businessId);
+                dockerQuery = dockerQuery.eq('id', businessId);
+            } else {
+                cloudQuery = cloudQuery.eq('business_id', businessId);
+                dockerQuery = dockerQuery.eq('business_id', businessId);
+            }
+        }
+
+        // Execute queries in parallel
+        const [cloudRes, dockerRes] = await Promise.all([cloudQuery, dockerQuery]);
+
+        if (cloudRes.error || dockerRes.error) {
+            console.error(`[AdminRoutes] Stats error for ${table}:`, cloudRes.error || dockerRes.error);
+            // Don't fail completely, return what we have or -1
+            return res.json({
+                cloud: cloudRes.count ?? -1,
+                docker: dockerRes.count ?? -1,
+                error: cloudRes.error?.message || dockerRes.error?.message
+            });
+        }
+
+        return res.json({
+            cloud: cloudRes.count || 0,
+            docker: dockerRes.count || 0,
+            // Future: Add recent counts here if needed
+            cloudRecent: 0,
+            dockerRecent: 0
+        });
+
+    } catch (err) {
+        console.error(`[AdminRoutes] Stats fatal error for ${table}:`, err);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * POST /api/sync-cloud-to-local
  * Master sync endpoint: Cloud → Docker (Full bidirectional sync)
  * This is the main endpoint that syncs ALL tables from Cloud to Docker Local Supabase
@@ -283,7 +376,7 @@ router.post('/sync-cloud-to-local', async (req, res) => {
 
         // Orders (historical - 3 days only)
         { name: 'orders', hasBusinessId: true, priority: 4, recentDays: 3 },
-        { name: 'order_items', hasBusinessId: false, priority: 4, recentDays: 3 },
+        { name: 'order_items', hasBusinessId: true, priority: 4, recentDays: 3 },
 
         // Discounts
         { name: 'discounts', hasBusinessId: true, priority: 3 }
@@ -301,65 +394,82 @@ router.post('/sync-cloud-to-local', async (req, res) => {
             try {
                 console.log(`[CloudSync] Syncing ${table.name}...`);
 
-                // Build Cloud query
-                let cloudQuery = cloudSupabase.from(table.name).select('*');
+                let allCloudData = [];
+                let offset = 0;
+                const PAGE_SIZE = 1000;
+                let hasMore = true;
 
-                // Filter by businessId if applicable
-                if (table.hasBusinessId) {
-                    cloudQuery = cloudQuery.eq('business_id', businessId);
+                while (hasMore) {
+                    // Build Cloud query
+                    let cloudQuery = cloudSupabase.from(table.name).select('*').range(offset, offset + PAGE_SIZE - 1);
+
+                    // Filter by businessId if applicable
+                    if (table.hasBusinessId) {
+                        cloudQuery = cloudQuery.eq('business_id', businessId);
+                    }
+
+                    // Special case for businesses (pk is id)
+                    if (table.name === 'businesses') {
+                        cloudQuery = cloudQuery.eq('id', businessId);
+                    }
+
+                    // Filter by date for historical tables, unless fullSync is requested
+                    if (table.recentDays && !req.body.fullSync) {
+                        const cutoffDate = new Date();
+                        cutoffDate.setDate(cutoffDate.getDate() - table.recentDays);
+                        cloudQuery = cloudQuery.gte('created_at', cutoffDate.toISOString());
+                    }
+
+                    // Fetch from Cloud
+                    const { data: cloudData, error: cloudError } = await cloudQuery;
+
+                    if (cloudError) {
+                        console.error(`[CloudSync] Cloud fetch error for ${table.name}:`, cloudError);
+                        if (allCloudData.length === 0) throw cloudError; // Throw only if we haven't fetched anything yet
+                        break;
+                    }
+
+                    if (!cloudData || cloudData.length === 0) {
+                        hasMore = false;
+                        break;
+                    }
+
+                    allCloudData = allCloudData.concat(cloudData);
+
+                    if (cloudData.length < PAGE_SIZE) {
+                        hasMore = false;
+                    } else {
+                        offset += PAGE_SIZE;
+                    }
                 }
 
-                // Filter by date for historical tables
-                if (table.recentDays) {
-                    const cutoffDate = new Date();
-                    cutoffDate.setDate(cutoffDate.getDate() - table.recentDays);
-                    cloudQuery = cloudQuery.gte('created_at', cutoffDate.toISOString());
-                }
-
-                // Fetch from Cloud
-                const { data: cloudData, error: cloudError } = await cloudQuery;
-
-                if (cloudError) {
-                    console.error(`[CloudSync] Cloud fetch error for ${table.name}:`, cloudError);
-                    results[table.name] = { success: false, error: cloudError.message };
-                    totalErrors++;
-                    continue;
-                }
-
-                if (!cloudData || cloudData.length === 0) {
+                if (allCloudData.length === 0) {
                     console.log(`[CloudSync] No data in Cloud for ${table.name}`);
                     results[table.name] = { success: true, count: 0, action: 'skip' };
                     continue;
                 }
 
-                // Clear Docker table first (for this business only)
-                console.log(`[CloudSync] Clearing Docker ${table.name}...`);
-                if (table.hasBusinessId) {
-                    await dockerSupabase.from(table.name).delete().eq('business_id', businessId);
-                } else if (table.name === 'businesses') {
-                    await dockerSupabase.from(table.name).delete().eq('id', businessId);
-                } else {
-                    // For tables without business_id (optionvalues, menuitemoptions, order_items)
-                    // We need to be more careful - delete only what's related to this business
-                    // For now, we'll skip clearing these tables completely to avoid data loss
-                    console.log(`[CloudSync] Skipping clear for ${table.name} (no business_id)`);
+                // Transform Data (e.g. Map column names)
+                const transformedData = transformData(table.name, allCloudData, 'docker');
+                const onConflict = getConflictColumns(table.name);
+
+                // Insert/Upsert into Docker in CHUNKS
+                const CHUNK_SIZE = 500;
+                for (let i = 0; i < transformedData.length; i += CHUNK_SIZE) {
+                    const chunk = transformedData.slice(i, i + CHUNK_SIZE);
+                    const { error: dockerError } = await dockerSupabase
+                        .from(table.name)
+                        .upsert(chunk, { onConflict });
+
+                    if (dockerError) {
+                        console.error(`[CloudSync] Docker upsert error for ${table.name} chunk ${i}:`, dockerError);
+                        throw dockerError; // Throw to be caught by the outer try-catch for this table
+                    }
                 }
 
-                // Insert/Upsert into Docker
-                const { error: dockerError } = await dockerSupabase
-                    .from(table.name)
-                    .upsert(cloudData, { onConflict: 'id' });
-
-                if (dockerError) {
-                    console.error(`[CloudSync] Docker upsert error for ${table.name}:`, dockerError);
-                    results[table.name] = { success: false, error: dockerError.message };
-                    totalErrors++;
-                    continue;
-                }
-
-                console.log(`[CloudSync] ✓ Synced ${cloudData.length} rows for ${table.name}`);
-                results[table.name] = { success: true, count: cloudData.length, action: 'synced' };
-                totalSynced += cloudData.length;
+                console.log(`[CloudSync] ✓ Synced ${allCloudData.length} rows for ${table.name}`);
+                results[table.name] = { success: true, count: allCloudData.length, action: 'synced' };
+                totalSynced += allCloudData.length;
 
             } catch (tableError) {
                 console.error(`[CloudSync] Error syncing ${table.name}:`, tableError);
@@ -407,7 +517,8 @@ router.post('/sync-local-to-cloud', async (req, res) => {
         'loyalty_cards',
         'loyalty_transactions',
         'task_completions',
-        'prepared_items_inventory'
+        'prepared_items_inventory',
+        'inventory_items'
     ];
 
     const results = {};
@@ -419,53 +530,72 @@ router.post('/sync-local-to-cloud', async (req, res) => {
             try {
                 console.log(`[DockerSync] Pushing ${tableName}...`);
 
-                // Fetch from Docker
-                let dockerQuery = dockerSupabase.from(tableName).select('*');
+                let allDockerData = [];
+                let offset = 0;
+                const PAGE_SIZE = 1000;
+                let hasMore = true;
 
-                // Filter by businessId if table has it
-                if (!['order_items'].includes(tableName)) {
-                    dockerQuery = dockerQuery.eq('business_id', businessId);
+                while (hasMore) {
+                    // Fetch from Docker
+                    let dockerQuery = dockerSupabase.from(tableName).select('*').range(offset, offset + PAGE_SIZE - 1);
+
+                    // Filter by businessId if table has it
+                    if (!['order_items'].includes(tableName)) {
+                        dockerQuery = dockerQuery.eq('business_id', businessId);
+                    }
+
+                    const { data: dockerData, error: dockerError } = await dockerQuery;
+
+                    if (dockerError) {
+                        console.error(`[DockerSync] Docker fetch error for ${tableName}:`, dockerError);
+                        if (allDockerData.length === 0) throw dockerError;
+                        break;
+                    }
+
+                    if (!dockerData || dockerData.length === 0) {
+                        hasMore = false;
+                        break;
+                    }
+
+                    allDockerData = allDockerData.concat(dockerData);
+
+                    if (dockerData.length < PAGE_SIZE) {
+                        hasMore = false;
+                    } else {
+                        offset += PAGE_SIZE;
+                    }
                 }
 
-                const { data: dockerData, error: dockerError } = await dockerQuery;
-
-                if (dockerError) {
-                    console.error(`[DockerSync] Docker fetch error for ${tableName}:`, dockerError);
-                    results[tableName] = { success: false, error: dockerError.message };
-                    totalErrors++;
-                    continue;
-                }
-
-                if (!dockerData || dockerData.length === 0) {
+                if (allDockerData.length === 0) {
                     console.log(`[DockerSync] No data in Docker for ${tableName}`);
                     results[tableName] = { success: true, count: 0, action: 'skip' };
                     continue;
                 }
 
-                // Upsert to Cloud in chunks to prevent large payload failures
-                const chunkSize = 50;
-                let pushedInTable = 0;
+                // Transform Data
+                const transformedData = transformData(tableName, allDockerData, 'cloud');
+                const onConflict = getConflictColumns(tableName);
 
-                for (let i = 0; i < dockerData.length; i += chunkSize) {
-                    const chunk = dockerData.slice(i, i + chunkSize);
+                // Upsert to Cloud in CHUNKS
+                const CHUNK_SIZE = 500;
+                for (let i = 0; i < transformedData.length; i += CHUNK_SIZE) {
+                    const chunk = transformedData.slice(i, i + CHUNK_SIZE);
                     const { error: cloudError } = await cloudSupabase
                         .from(tableName)
                         .upsert(chunk, {
-                            onConflict: 'id',
+                            onConflict,
                             ignoreDuplicates: false
                         });
 
                     if (cloudError) {
-                        console.error(`[DockerSync] Cloud upsert error for ${tableName} (chunk ${i}):`, cloudError);
-                        results[tableName] = { success: false, error: cloudError.message };
-                        throw new Error(`Cloud upsert failed for ${tableName}`); // Break the inner loop but catch below
+                        console.error(`[DockerSync] Cloud upsert error for ${tableName} chunk ${i}:`, cloudError);
+                        throw cloudError; // Throw so we see it outside and don't misreport
                     }
-                    pushedInTable += chunk.length;
                 }
 
-                console.log(`[DockerSync] ✓ Pushed ${pushedInTable} rows for ${tableName}`);
-                results[tableName] = { success: true, count: dockerData.length, action: 'pushed' };
-                totalPushed += dockerData.length;
+                console.log(`[DockerSync] ✓ Pushed ${allDockerData.length} rows for ${tableName}`);
+                results[tableName] = { success: true, count: allDockerData.length, action: 'pushed' };
+                totalPushed += allDockerData.length;
 
             } catch (tableError) {
                 console.error(`[DockerSync] Error pushing ${tableName}:`, tableError);

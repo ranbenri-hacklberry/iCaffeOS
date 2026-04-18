@@ -1759,9 +1759,10 @@ const MenuOrderingInterface = () => {
           : [];
 
         // [CLEANED] Extract IDs
-        const isUUIDValue = typeof item.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
-        const itemId = item.menu_item_id || (isUUIDValue ? null : item.id);
-        const currentOrderItemId = isUUIDValue ? item.id : null;
+        // Fix for UUID-based menu items (which were being incorrectly stripped)
+        const isExistingOrderItem = Boolean(item.menu_item_id);
+        const itemId = isExistingOrderItem ? item.menu_item_id : item.id;
+        const currentOrderItemId = isExistingOrderItem ? item.id : null;
 
         // [CLEANED] Status & Stage Logic
         const isDelayed = item.isDelayed === true;

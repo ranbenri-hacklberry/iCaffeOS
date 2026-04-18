@@ -1063,7 +1063,7 @@ const MusicPageContent = () => {
                                                         <p className="text-white/60 mb-8">הדיסק מחובר, אך נראה שלא סרקת שירים עדיין</p>
                                                         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                                                             <button
-                                                                onClick={() => setShowImport(true)}
+                                                                onClick={() => setShowScanner(true)}
                                                                 className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all flex items-center gap-2 shadow-lg shadow-purple-900/20"
                                                             >
                                                                 <Search className="w-4 h-4" />

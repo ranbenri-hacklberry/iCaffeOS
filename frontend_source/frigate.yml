@@ -36,6 +36,6 @@ detectors:
     type: cpu
 
 # Frigate 0.14+ config
-version: 0.16-0
+version: 0.17-0
 detect:
   enabled: true

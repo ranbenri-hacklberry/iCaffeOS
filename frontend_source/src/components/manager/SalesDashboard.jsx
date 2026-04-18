@@ -197,7 +197,7 @@ const SalesDashboard = () => {
       };
 
       // Fallback to Supabase if local is empty (initial load not done)
-      const checkLocalCount = await db.orders.count();
+      const checkLocalCount = 0;
       if (checkLocalCount === 0 && navigator.onLine) {
         console.log('⚠️ Local Sales cache empty, falling back to Supabase RPC...');
         const fetchPeriodRemote = async (start, end) => {

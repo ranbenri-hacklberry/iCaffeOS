@@ -51,7 +51,28 @@ const ModeSelectionScreen = () => {
 
     const user = displayUser || currentUser;
 
-    // ... (rest of logic) ...
+
+    const isAppVisible = (app) => true;
+
+    const handleModeSelect = (mode) => {
+        setMode(mode);
+        const routes = {
+            manager: '/data-manager-interface',
+            kiosk: '/menu-ordering-interface/pos',
+            kds: '/kds',
+            prep: '/prep',
+            inventory: '/inventory',
+            music: '/music',
+            kanban: '/kanban',
+            driver: '/driver',
+            'owner-settings': '/owner-settings',
+            'menu-editor': '/menu-editor'
+        };
+        const target = routes[mode] || '/';
+        console.log('ð Navigating to:', target);
+        navigate(target);
+    };
+
 
     return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 pt-16 font-heebo" dir="rtl">

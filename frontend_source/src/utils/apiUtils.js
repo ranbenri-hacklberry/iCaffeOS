@@ -18,7 +18,7 @@ const checkIsLocalOrLan = () => {
         hostname.startsWith('192.168.') ||
         hostname.startsWith('10.') ||
         hostname.startsWith('100.') ||
-        hostname.startsWith('172.') ||
+        hostname.startsWith('172.') || window.location.hostname.endsWith('.ts.net')   ||
         import.meta.env.VITE_FORCE_LOCAL === 'true'
     );
 };
@@ -32,7 +32,7 @@ export const resolveUrl = async () => {
     if (envUrl) return envUrl.replace(/\/$/, '');
 
     if (isElectron()) {
-        return 'http://127.0.0.1:8081';
+        return 'http://' + window.location.hostname + ':8081';
     }
 
     // 2. Local/LAN Access
@@ -48,7 +48,7 @@ export const resolveUrl = async () => {
  * Legacy support for sync calls - used by Splash and other services
  */
 export const getBackendApiUrl = () => {
-    if (isElectron()) return 'http://localhost:8081';
+    if (isElectron()) return 'http://' + window.location.hostname + ':8081';
 
     // Priority 1: Direct backend override
     const backendEnv = import.meta.env.VITE_DATA_MANAGER_API_URL || import.meta.env.VITE_MANAGER_API_URL;
