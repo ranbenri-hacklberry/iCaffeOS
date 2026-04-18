@@ -37,3 +37,6 @@ frontend_source/public/music/
 *.flac
 *.mp3
 *.wav
+
+*.bak
+~

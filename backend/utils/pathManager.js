@@ -11,7 +11,14 @@ export const PathManager = {
     // All known external mount candidates (macOS: /Volumes/*, Linux: /mnt/*)
     EXTERNAL_CANDIDATES: process.platform === 'darwin'
         ? ['/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
-        : ['/mnt/music_ssd', '/mnt/rantunes'],
+        : [
+            '/Volumes/RANTUNES', 
+            '/mnt/mac/Volumes/RANTUNES', 
+            '/mnt/rantunes', 
+            '/media/icaffeos/RANTUNES', 
+            '/media/RANTUNES',
+            '/mnt/music_ssd'
+        ],
     STAGING_ROOT: path.join(os.homedir(), 'Music', 'iCaffe'),
 
     // Returns the first mounted external candidate (or the first candidate as default)
@@ -56,17 +63,25 @@ export const PathManager = {
      */
     getFolderSize(dirPath) {
         let size = 0;
-        if (!fs.existsSync(dirPath)) return 0;
+        try {
+            if (!fs.existsSync(dirPath)) return 0;
 
-        const files = fs.readdirSync(dirPath);
-        for (const file of files) {
-            const fullPath = path.join(dirPath, file);
-            const stats = fs.statSync(fullPath);
-            if (stats.isDirectory()) {
-                size += this.getFolderSize(fullPath);
-            } else {
-                size += stats.size;
+            const files = fs.readdirSync(dirPath);
+            for (const file of files) {
+                try {
+                    const fullPath = path.join(dirPath, file);
+                    const stats = fs.lstatSync(fullPath); // lstat avoids following broken symlinks
+                    if (stats.isDirectory()) {
+                        size += this.getFolderSize(fullPath);
+                    } else if (stats.isFile()) {
+                        size += stats.size;
+                    }
+                } catch (fileErr) {
+                    // Skip files with permission errors or broken symlinks
+                }
             }
+        } catch (dirErr) {
+            // Skip directories we can't read
         }
         return size;
     },

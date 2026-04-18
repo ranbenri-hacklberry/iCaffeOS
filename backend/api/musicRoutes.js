@@ -88,13 +88,20 @@ const ensureSupabase = (req, res, next) => {
 // List available volumes/drives
 router.get("/volumes", (req, res) => {
     try {
-        // Use PathManager for robust drive discovery
         const volumes = [];
-        if (fs.existsSync('/Volumes')) {
-            const entries = fs.readdirSync('/Volumes', { withFileTypes: true });
-            for (const entry of entries) {
-                if (entry.isDirectory() || entry.isSymbolicLink()) {
-                    volumes.push({ name: entry.name, path: path.join('/Volumes', entry.name) });
+        const mountPoints = process.platform === 'darwin' ? ['/Volumes'] : ['/mnt', '/media'];
+
+        for (const root of mountPoints) {
+            if (fs.existsSync(root)) {
+                try {
+                    const entries = fs.readdirSync(root, { withFileTypes: true });
+                    for (const entry of entries) {
+                        if (entry.isDirectory() || entry.isSymbolicLink()) {
+                            volumes.push({ name: entry.name, path: path.join(root, entry.name) });
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Error reading ${root}:`, e.message);
                 }
             }
         }
@@ -104,15 +111,18 @@ router.get("/volumes", (req, res) => {
             volumes.push({ name: 'Local Staging', path: PathManager.STAGING_ROOT });
         }
 
-        // Ensure the active external drive is explicitly listed
+        // Ensure the active external drive is explicitly listed if not already there
         if (PathManager.isExternalMounted()) {
-            volumes.push({ name: 'External RANTUNES', path: PathManager.getExternalRoot() });
+            const extRoot = PathManager.getExternalRoot();
+            if (!volumes.some(v => v.path === extRoot)) {
+                volumes.push({ name: path.basename(extRoot) || 'RANTUNES', path: extRoot });
+            }
         }
 
-        res.json({ volumes });
+        res.json({ success: true, volumes });
     } catch (err) {
         console.error('Error listing volumes:', err);
-        res.json({ volumes: [] });
+        res.status(500).json({ success: false, volumes: [] });
     }
 });
 
@@ -351,7 +361,8 @@ router.get("/library/albums/:albumId/songs", ensureSupabase, async (req, res) =>
             .from('music_songs')
             .select('*, album:music_albums(id, name, cover_url), artist:music_artists(id, name)')
             .eq('album_id', albumId)
-            .order('track_number', { ascending: true });
+            .order('track_number', { ascending: true })
+            .order('file_name', { ascending: true });
         if (error) throw error;
         res.json({ success: true, songs: data || [] });
     } catch (err) {
@@ -985,14 +996,95 @@ router.get("/library/stats", async (req, res) => {
 
 // 📁 Manually Register a file in the library
 // POST /library/register - Manually register a file (e.g. from Electron download)
-router.post("/library/register", ensureSupabase, async (req, res) => {
+
+// ──────────────────────────────────────────────────────────────
+// SERVER-SIDE AUDIO OUTPUT
+// ──────────────────────────────────────────────────────────────
+
+// Map to track active mpv processes by ID or role
+let activeServerProcesses = new Map(); // id -> process
+let serverVolume = 100;
+
+router.post("/play-server", async (req, res) => {
+    const { path: songPath, id, initialVolume, crossfade = false } = req.body;
+    if (!songPath) return res.status(400).json({ error: "Missing song path" });
+
+    if (initialVolume !== undefined) {
+        serverVolume = Math.round(initialVolume * 100);
+    }
+
     try {
-        const songData = await registerInternal(req.body);
-        res.json({ success: true, song: songData });
+        const musicDir = process.env.MUSIC_DIRECTORY || "/mnt/rantunes";
+        const audioDevice = process.env.AUDIO_DEVICE || "hw:1,0";
+
+        // If NOT crossfading, stop everything else
+        if (!crossfade) {
+            activeServerProcesses.forEach((proc, pid) => {
+                try { proc.kill('SIGKILL'); } catch (e) { }
+            });
+            activeServerProcesses.clear();
+        }
+
+        console.log(`🔈 [ServerPlay] Playing: ${songPath} on ${audioDevice} (Crossfade: ${crossfade})`);
+
+        const fullPath = path.isAbsolute(songPath) ? songPath : path.join(musicDir, songPath);
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ error: "File not found on server storage." });
+        }
+
+        const { spawn } = await import('child_process');
+
+        // Spawn mpv with specific flags for remote control
+        const proc = spawn('mpv', [
+            `--audio-device=alsa/${audioDevice}`,
+            '--no-video',
+            '--input-terminal=no',
+            `--volume=${serverVolume}`,
+            '--idle=no',
+            '--force-window=no',
+            fullPath
+        ]);
+
+        const procId = id || Date.now();
+        activeServerProcesses.set(procId, proc);
+
+        proc.on('exit', (code) => {
+            console.log(`🔈 [ServerPlay] mpv (${procId}) exited with code ${code}`);
+            activeServerProcesses.delete(procId);
+        });
+
+        res.json({ success: true, message: "Playback started", id: procId });
     } catch (err) {
-        console.error('❌ Register failed:', err);
+        console.error('❌ [ServerPlay] failed:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
+router.post("/stop-server", (req, res) => {
+    activeServerProcesses.forEach((proc) => {
+        try { proc.kill('SIGKILL'); } catch (e) { }
+    });
+    activeServerProcesses.clear();
+    res.json({ success: true, message: "Server playback stopped" });
+});
+
+router.post("/volume-server", (req, res) => {
+    const { volume, id } = req.body; // 0 to 1
+    if (volume === undefined) return res.status(400).json({ error: "Missing volume" });
+
+    serverVolume = Math.round(volume * 100);
+
+    // If specific ID, only update that one, otherwise all
+    if (id && activeServerProcesses.has(id)) {
+        const proc = activeServerProcesses.get(id);
+        try { proc.stdin.write(`set volume ${serverVolume}\n`); } catch (e) { }
+    } else {
+        activeServerProcesses.forEach(proc => {
+            try { proc.stdin.write(`set volume ${serverVolume}\n`); } catch (e) { }
+        });
+    }
+
+    res.json({ success: true, volume: serverVolume });
 });
 
 export default router;

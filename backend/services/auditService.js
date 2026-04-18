@@ -5,20 +5,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-let supabaseInstance = null;
-const getSupabase = () => {
-    if (supabaseInstance) return supabaseInstance;
-    const url = process.env.SUPABASE_URL || process.env.LOCAL_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-    if (!url || !key) {
-        console.warn('⚠️ auditService: Missing credentials, unable to connect to Supabase.');
-        return null;
-    }
-
-    supabaseInstance = createClient(url, key);
-    return supabaseInstance;
-};
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Default iCaffe Core app ID (will be fetched on first use)
 let ICAFFE_CORE_APP_ID = null;
@@ -30,9 +20,6 @@ async function initialize() {
     if (ICAFFE_CORE_APP_ID) return ICAFFE_CORE_APP_ID;
 
     try {
-        const supabase = getSupabase();
-        if (!supabase) return null;
-
         const { data, error } = await supabase
             .from('sdk_apps')
             .select('id')
@@ -78,9 +65,6 @@ export async function logAction({
             console.warn('⚠️ Audit logging unavailable - app ID not found');
             return null;
         }
-
-        const supabase = getSupabase();
-        if (!supabase) return null;
 
         const { data, error } = await supabase.rpc('log_sdk_action', {
             p_app_id: appId,
@@ -217,9 +201,6 @@ export async function logOrderVerified(orderId, employeeId, confidence, req) {
  */
 export async function rollbackOperation(correlationId) {
     try {
-        const supabase = getSupabase();
-        if (!supabase) return null;
-
         const { data, error } = await supabase.rpc('rollback_sdk_operation', {
             p_correlation_id: correlationId
         });
@@ -240,9 +221,6 @@ export async function rollbackOperation(correlationId) {
  */
 export async function getEmployeeLogs(employeeId, limit = 50) {
     try {
-        const supabase = getSupabase();
-        if (!supabase) return null;
-
         const { data, error } = await supabase
             .from('sdk_audit_logs')
             .select('*')

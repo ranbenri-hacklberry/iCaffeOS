@@ -1391,17 +1391,17 @@ export const useKDSData = () => {
                     isLocalOrder: isLocalOnly
                 });
 
-                if (nextStatus === 'ready' && order?.customerPhone && navigator.onLine) {
-                    handleSendSms(order.customerPhone, order.customerName);
+                if (nextStatus === 'ready' && order?.customer_phone && navigator.onLine) {
+                    handleSendSms(orderId, order.customer_name, order.customer_phone);
                 }
 
                 console.log(`✅ Local update complete for ${smartOrderId} -> ${nextStatus}`);
 
                 // 🛡️ SMART OPTIMISTIC UI:
                 if (nextStatus === 'completed') {
-                    setCurrentOrders(prev => prev.filter(o => o.id !== orderId));
+                    fetchOrders(false, null, true);
                 } else if (nextStatus === 'ready') {
-                    setCurrentOrders(prev => prev.filter(o => o.id !== orderId));
+                    fetchOrders(false, null, true);
                 }
 
                 // Background silent refresh
@@ -1562,8 +1562,8 @@ export const useKDSData = () => {
                     }
                 }
 
-                if (nextStatus === 'ready' && orderToMove?.customerPhone) {
-                    handleSendSms(orderToMove.customerPhone, orderToMove.customerName);
+                if (nextStatus === 'ready' && orderToMove?.customer_phone) {
+                    handleSendSms(orderId, orderToMove.customer_name, orderToMove.customer_phone);
                 }
 
                 log('✅ [SERVER] Supabase update confirmed:', rpcData);
@@ -1600,12 +1600,12 @@ export const useKDSData = () => {
                     if (nextStatus === 'completed') {
                         // 🛡️ [STABILITY FIX] ONLY remove the specific card updated (orderId).
                         // DO NOT remove all cards with serverOrderId (smartId) as that breaks split cards!
-                        setCurrentOrders(prev => prev.filter(o => o.id !== orderId));
+                        fetchOrders(false, null, true);
                         setCompletedOrders(prev => prev.filter(o => o.id !== orderId));
                         log(`🗑️ [UI] Removed card ${orderId} from view (Moved to history/completed)`);
                     } else if (nextStatus === 'ready') {
                         // For ready, we ONLY move the specific card being updated.
-                        setCurrentOrders(prev => prev.filter(o => o.id !== orderId));
+                        fetchOrders(false, null, true);
                         setCompletedOrders(prev => {
                             const newList = prev.filter(o => o.id !== targetId);
                             newList.push({

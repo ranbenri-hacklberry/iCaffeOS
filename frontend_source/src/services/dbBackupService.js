@@ -125,3 +125,5 @@ export const getLastBackupTime = async (businessId) => {
         return null;
     }
 };
+
+export default { uploadBackupToDrive, getLastBackupTime };

@@ -1,37 +1,61 @@
-import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useState, useRef } from 'react';
 import { sendSms } from '@/services/smsService';
 
 /**
- * 📱 useKDSSms Hook
+ * ð± useKDSSms Hook
  * Handles the logic for sending SMS notifications to customers from the KDS.
  */
 export const useKDSSms = () => {
     const [smsToast, setSmsToast] = useState(null);
     const [isSendingSms, setIsSendingSms] = useState(false);
 
-    const handleSendSms = async (phone, customerName = null) => {
-        // 🛠️ STRICT CHECK: Ensure phone exists and is valid before even attempting anything
-        const cleanPhone = String(phone || '').trim();
-        if (!cleanPhone || cleanPhone === '0500000000' || cleanPhone === 'null' || cleanPhone === 'undefined') {
-            console.log('🚫 Skipping SMS: No valid phone number provided');
+    // Track recently sent sms status with timestamps (orderId-phone -> timestamp)
+    const sentLogRef = useRef(new Map());
+
+    const handleSendSms = async (phoneOrOrderId, customerName = null, customerPhone = null) => {
+        // ð AUTO-DETECT call pattern
+        let cleanPhone;
+        let displayName = customerName;
+        let orderId = null;
+
+        if (customerPhone !== null && customerPhone !== undefined) {
+            orderId = phoneOrOrderId;
+            cleanPhone = String(customerPhone).trim();
+        } else {
+            cleanPhone = String(phoneOrOrderId || '').trim();
+        }
+
+        // ð¡️ IDEMPOTENCY: Short-term lockout (2 minutes) per unique key
+        const idempotencyKey = orderId ? `${orderId}-${cleanPhone}` : cleanPhone;
+        const lastSent = sentLogRef.current.get(idempotencyKey);
+        const now = Date.now();
+        const LOCKOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+        if (lastSent && (now - lastSent) < LOCKOUT_MS) {
+            const remaining = Math.ceil((LOCKOUT_MS - (now - lastSent)) / 1000);
+            console.log(`ð¡️ SMS recently sent to ${idempotencyKey}, locking for safety (${remaining}s remaining)`);
             return;
         }
 
-        // Test phone support
-        if (phone.startsWith('00')) {
-            console.log('🧪 Test phone detected, skipping SMS:', phone);
+        if (!cleanPhone || cleanPhone === '0500000000' || cleanPhone === 'null' || cleanPhone === 'undefined') {
+            console.log('ð« Skipping SMS: No valid phone number provided');
+            return;
+        }
+
+        if (cleanPhone.startsWith('00')) {
+            console.log('ð§ª Test phone detected, skipping SMS:', cleanPhone);
             setSmsToast({
                 show: true,
-                message: `שליחה ל${customerName || 'לקוח'} לא הצליחה - מספר בדיקה`,
+                message: `שליחה ל${displayName || 'לקוח'} לא הצליחה - מספר בדיקה`,
                 isError: true
             });
             setTimeout(() => setSmsToast(null), 3000);
             return;
         }
 
-        // 📴 OFFLINE CHECK
         if (!navigator.onLine) {
-            console.log('📴 Offline: Skipping SMS and showing notification');
+            console.log('ð´ Offline: Skipping SMS and showing notification');
             setSmsToast({
                 show: true,
                 message: 'הודעת ה-SMS לא נשלחה (אין חיבור לאינטרנט)',
@@ -41,21 +65,42 @@ export const useKDSSms = () => {
             return;
         }
 
+        sentLogRef.current.set(idempotencyKey, Date.now());
         setIsSendingSms(true);
 
-        const message = `היי ${customerName || 'אורח'}, ההזמנה שלכם מוכנה! 🎉, מוזמנים לעגלה לאסוף אותה`;
+        const message = `היי ${displayName || 'אורח'}, ההזמנה שלכם מוכנה! ð¥³, מוזמנים לעגלה לאסוף אותה`;
 
         try {
-            const result = await sendSms(phone, message);
+            const result = await sendSms(cleanPhone, message);
+
+            try {
+                await supabase.from('sms_queue').insert({
+                    phone: cleanPhone,
+                    message: message,
+                    status: result.success ? 'success' : 'failed',
+                    error: result.error || null,
+                    sent_at: result.success ? new Date().toISOString() : null,
+                    order_id: orderId || null
+                });
+            } catch (logErr) {
+                console.error('❌ Failed to log SMS to DB:', logErr);
+            }
+
             setIsSendingSms(false);
 
             if (result.success) {
-                setSmsToast({ show: true, message: `הודעה נשלחה ל${customerName || 'לקוח'} בהצלחה!` });
-                setTimeout(() => setSmsToast(null), 2000);
+                sentLogRef.current.set(idempotencyKey, Date.now());
+                setSmsToast({
+                    show: true,
+                    message: `הודעה נשלחה ל-${displayName || 'לקוח'} בהצלחה! ð¥³`,
+                    isError: false
+                });
+                setTimeout(() => setSmsToast(null), 3000);
             } else {
+                sentLogRef.current.delete(idempotencyKey);
                 const errorMessage = result.isBlocked
                     ? result.error
-                    : `שליחה ל${customerName || 'לקוח'} לא הצליחה - ${result.error || 'מספר שגוי'}`;
+                    : `שליחה ל${displayName || 'לקוח'} לא הצליחה - ${result.error || 'מספר שגוי'}`;
 
                 setSmsToast({
                     show: true,
@@ -66,6 +111,7 @@ export const useKDSSms = () => {
             }
         } catch (err) {
             console.error('❌ SMS error:', err);
+            sentLogRef.current.delete(idempotencyKey);
             setIsSendingSms(false);
             setSmsToast({
                 show: true,

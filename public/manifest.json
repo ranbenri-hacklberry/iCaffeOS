@@ -1,0 +1,20 @@
+{
+  "short_name": "icaffeos",
+  "name": "icaffeos",
+  "description": "icaffeos",
+  "icons": [
+    {
+      "src": "assets/images/icaffeos_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "prefer_related_applications": false
+}

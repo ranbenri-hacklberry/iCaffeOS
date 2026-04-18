@@ -296,6 +296,8 @@ export const useStore = create((set, get) => ({
             let smsResult = null;
             if (navigator.onLine) {
                 const { error } = await supabase.rpc('submit_order_v3', {
+                    p_customer_phone: customerPhone,
+                    p_customer_name: customerName,
                     p_items: cart.map(i => ({
                         menu_item_id: i.id,
                         quantity: i.quantity || 1,
@@ -309,12 +311,7 @@ export const useStore = create((set, get) => ({
 
                 if (!error) {
                     await db.orders.update(newOrder.id, { pending_sync: false });
-                    if (customerName || customerPhone) {
-                        await supabase.from('orders').update({
-                            customer_name: customerName,
-                            customer_phone: customerPhone
-                        }).eq('id', newOrder.id);
-                    }
+// Redundant update removed - parameters now sent in RPC
                     if (customerPhone) {
                         try {
                             const { error: smsError } = await supabase.functions.invoke('send-sms', {

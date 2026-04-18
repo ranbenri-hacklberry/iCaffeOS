@@ -1,20 +1,13 @@
+
 import os from 'os';
 import { createClient } from '@supabase/supabase-js';
 
-let supabaseInstance = null;
-const getSupabase = () => {
-    if (supabaseInstance) return supabaseInstance;
-    const url = process.env.SUPABASE_URL || process.env.LOCAL_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-    if (!url || !key) {
-        console.warn('⚠️ discoveryService: Missing credentials, unable to connect to Supabase.');
-        return null;
-    }
-
-    supabaseInstance = createClient(url, key);
-    return supabaseInstance;
-};
+const supabase = (supabaseUrl && supabaseKey)
+    ? createClient(supabaseUrl, supabaseKey)
+    : null;
 
 export const DiscoveryService = {
     nodeId: null,
@@ -26,10 +19,7 @@ export const DiscoveryService = {
         const hostname = os.hostname();
         const localIp = this.getLocalIp();
 
-        console.log(`📡 Node Discovery: Starting heartbeat for ${hostname} (${localIp})`);
-
-        const supabase = getSupabase();
-        if (!supabase) return;
+        console.log(`📡 Node Discovery: Starting heartbeat for ${hostname}(${localIp})`);
 
         // Register/Update Node
         const { data, error } = await supabase
@@ -57,9 +47,7 @@ export const DiscoveryService = {
 
         // Start 30s heartbeat
         setInterval(async () => {
-            const sb = getSupabase();
-            if (!sb) return;
-            await sb
+            await supabase
                 .from('music_nodes')
                 .update({ last_seen: new Date().toISOString(), is_online: true })
                 .eq('id', this.nodeId);
@@ -84,7 +72,6 @@ export const DiscoveryService = {
      * Returns the base URL of the "Master" node (N150) or uses local if none
      */
     async getMasterUrl() {
-        const supabase = getSupabase();
         if (!supabase) return null;
         const { data: nodes } = await supabase
             .from('music_nodes')

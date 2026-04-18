@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import AppRoutes from './Routes';
-import { useTheme } from './context/ThemeContext';
 
-function App() {
+function AppContent() {
   const { isDarkMode } = useTheme();
 
   useEffect(() => {
@@ -12,12 +12,10 @@ function App() {
       console.error('🔥 GLOBAL_CRASH:', e);
       const errorMsg = e.message || (e.reason && e.reason.message) || 'Unknown Crash';
 
-      // 🛡️ IGNORE BENIGN LAYOUT ERRORS
       if (
         errorMsg.includes('ResizeObserver loop completed with undelivered notifications') ||
         errorMsg.includes('ResizeObserver loop limit exceeded')
       ) {
-        console.warn('Ignoring benign ResizeObserver error:', errorMsg);
         return;
       }
 
@@ -46,6 +44,16 @@ function App() {
     <div className={isDarkMode ? 'dark' : ''}>
       <AppRoutes />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 

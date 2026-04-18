@@ -1,15 +1,8 @@
 /**
  * Maya API Routes
  */
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import dotenv from 'dotenv';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '../.env') });
-
 import express from 'express';
+import crypto from 'crypto';
 import {
     chatWithMaya,
     askMaya,
@@ -30,31 +23,81 @@ import {
 const router = express.Router();
 
 // Initialize Supabase client
-let supabaseInstance = null;
-const getSupabase = () => {
-    if (supabaseInstance) return supabaseInstance;
-    const url = process.env.SUPABASE_URL || process.env.LOCAL_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!url || !key) {
-        console.warn('⚠️ mayaRoutes: Missing credentials, unable to connect to Supabase.');
-        return null;
+// 🛡️ Biometric Security Transformation (Permutation + Inversion Mask) derived from master key
+// This protects against template inversion attacks while preserving Cosine Similarity.
+const SCRAMBLE_KEY = process.env.BIOMETRIC_SCRAMBLE_KEY;
+
+/**
+ * Deterministically generates permutation and mask from the master key
+ */
+function getTransformationConfig(key) {
+    if (!key) return { permutation: null, mask: null };
+
+    // Create a seed from the key
+    const seed = crypto.createHash('sha256').update(key).digest();
+
+    // Simple LCG-like or hash-based PRNG to get 128 indices and 128 bits
+    const permutation = Array.from({ length: 128 }, (_, i) => i);
+    const mask = new Array(128);
+
+    // Deterministic Fisher-Yates shuffle
+    let currentHash = seed;
+    for (let i = 127; i > 0; i--) {
+        // Refresh hash every few iterations to keep entropy flowing if needed, 
+        // but for 128 elements, one SHA256 is plenty if we sub-slice or re-hash
+        currentHash = crypto.createHash('sha256').update(currentHash).digest();
+        const j = currentHash.readUInt32BE(0) % (i + 1);
+        [permutation[i], permutation[j]] = [permutation[j], permutation[i]];
     }
 
-    supabaseInstance = createClient(url, key);
-    return supabaseInstance;
-};
-
-const supabase = new Proxy({}, {
-    get: function (target, prop) {
-        const instance = getSupabase();
-        if (!instance) {
-            return () => Promise.reject(new Error("Supabase client not configured"));
+    // Deterministic Mask (1 or -1)
+    currentHash = crypto.createHash('sha256').update(seed).update('mask').digest();
+    for (let i = 0; i < 128; i++) {
+        if (i % 32 === 0) {
+            currentHash = crypto.createHash('sha256').update(currentHash).digest();
         }
-        const val = Reflect.get(instance, prop);
-        return typeof val === 'function' ? val.bind(instance) : val;
+        const byteIdx = Math.floor((i % 32) / 8);
+        const bitIdx = i % 8;
+        const bit = (currentHash[byteIdx] >> bitIdx) & 1;
+        mask[i] = bit === 1 ? 1 : -1;
     }
-});
+
+    return { permutation, mask };
+}
+
+const { permutation: VECTOR_PERMUTATION, mask: VECTOR_MASK } = getTransformationConfig(SCRAMBLE_KEY);
+
+function secureTransform(embedding) {
+    if (!VECTOR_PERMUTATION || !VECTOR_MASK || !embedding || embedding.length !== 128) {
+        console.warn('⚠️ Biometric security transformation not applied (missing key or invalid embedding)');
+        return embedding;
+    }
+
+    // 1. Invert based on secret mask
+    const inverted = embedding.map((val, i) => val * VECTOR_MASK[i]);
+
+    // 2. Permute based on secret order
+    const secured = new Array(128);
+    for (let i = 0; i < 128; i++) {
+        secured[i] = inverted[VECTOR_PERMUTATION[i]];
+    }
+    return secured;
+}
+
+// Force reload schema cache on startup (if possible)
+// This fixes "Could not find column" errors after migrations
+(async () => {
+    try {
+        await supabase.rpc('run_sql', { query_text: 'NOTIFY pgrst, "reload schema";' });
+        console.log('🔄 Triggered PostgREST schema reload');
+    } catch (e) {
+        // Ignore error
+    }
+})();
 
 // Health check
 router.get('/health', async (req, res) => {
@@ -66,10 +109,56 @@ router.get('/health', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/maya/providers
+ * Securely check which AI providers are available for a business
+ */
+router.get('/providers', async (req, res) => {
+    try {
+        const { businessId } = req.query;
+        if (!businessId) return res.json(['local']);
+
+        const providers = ['local'];
+
+        // Check business_secrets table
+        const { data: secrets } = await supabase
+            .from('business_secrets')
+            .select('gemini_api_key, claude_api_key, grok_api_key')
+            .eq('business_id', businessId)
+            .single();
+
+        if (secrets) {
+            if (secrets.gemini_api_key) providers.push('google');
+            if (secrets.claude_api_key) providers.push('anthropic');
+            if (secrets.grok_api_key) providers.push('xai');
+        } else {
+            // Fallback to businesses table
+            const { data: biz } = await supabase
+                .from('businesses')
+                .select('gemini_api_key, claude_api_key, grok_api_key')
+                .eq('id', businessId)
+                .single();
+
+            if (biz) {
+                if (biz.gemini_api_key) providers.push('google');
+                if (biz.claude_api_key) providers.push('anthropic');
+                if (biz.grok_api_key) providers.push('xai');
+            }
+        }
+
+        res.json(providers);
+    } catch (err) {
+        console.warn('Providers fetch error:', err.message);
+        res.json(['local']);
+    }
+});
+
+
+
 // Chat with Maya (with history)
 router.post('/chat', async (req, res) => {
     try {
-        const { messages, businessId, provider, model, employeeId } = req.body;
+        const { messages, businessId, provider, employeeId, model } = req.body;
 
         if (!businessId) {
             return res.status(400).json({ error: 'businessId required (נדרש)' });
@@ -97,8 +186,21 @@ router.post('/chat', async (req, res) => {
             }
         }
 
-        const response = await chatWithMaya(messages, businessId, provider || 'local', employee, model);
-        res.json({ response, provider: provider || 'local', model: model || 'default', timestamp: new Date().toISOString() });
+        const result = await chatWithMaya(messages, businessId, provider || 'local', employee, model);
+
+        // Handle both string (old) and object (new) responses
+        if (typeof result === 'string') {
+            res.json({ response: result, provider: provider || 'local', timestamp: new Date().toISOString() });
+        } else {
+            // New structured response with usage
+            res.json({
+                response: result.content,
+                usage: result.usage,
+                model: result.model,
+                provider: result.provider || provider || 'local',
+                timestamp: new Date().toISOString()
+            });
+        }
 
     } catch (err) {
         console.error('Maya chat error:', err);
@@ -179,13 +281,16 @@ router.post('/verify-face', async (req, res) => {
             });
         }
 
-        // Convert array to Postgres vector format: "[0.1,0.2,...]"
-        const vectorString = `[${embedding.join(',')}]`;
+        // 🛡️ Apply Biometric Security Transformation before processing
+        const securedEmbedding = secureTransform(embedding);
 
-        // Call Supabase RPC function
+        // Convert array to Postgres vector format: "[0.1,0.2,...]"
+        const vectorString = `[${securedEmbedding.join(',')}]`;
+
+        // Call Supabase RPC function with explicit parameter types
         const { data, error } = await supabase.rpc('match_employee_face', {
             embedding: vectorString,
-            match_threshold: threshold,
+            match_threshold: Number(threshold),
             match_count: 5
         });
 
@@ -233,6 +338,49 @@ router.post('/verify-face', async (req, res) => {
 
     } catch (err) {
         console.error('Verify face error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/maya/enroll-face
+ * Enroll or update employee face embedding (Securely peppered)
+ */
+router.post('/enroll-face', async (req, res) => {
+    try {
+        const { employeeId, embedding, businessId } = req.body;
+
+        if (!employeeId || !embedding || !Array.isArray(embedding) || embedding.length !== 128) {
+            return res.status(400).json({ error: 'employeeId and 128-dim embedding required' });
+        }
+
+        // 🛡️ Apply Biometric Security Transformation before saving
+        const securedEmbedding = secureTransform(embedding);
+
+        // Update employee in database
+        const { data, error } = await supabase
+            .from('employees')
+            .update({ face_embedding: `[${securedEmbedding.join(',')}]` })
+            .eq('id', employeeId)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Face enrollment error:', error);
+            return res.status(500).json({ error: error.message });
+        }
+
+        // 📝 Audit log: Enrollment
+        await logFaceEnrollment(employeeId, req);
+
+        res.json({
+            success: true,
+            message: `Face enrolled successfully for ${data.name}`,
+            employeeId: data.id
+        });
+
+    } catch (err) {
+        console.error('Enroll face error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -446,7 +594,7 @@ router.post('/update-pin', async (req, res) => {
  */
 router.post('/clock-in', async (req, res) => {
     try {
-        const { employeeId, assignedRole, location } = req.body;
+        const { employeeId, assignedRole, location, businessId } = req.body;
 
         if (!employeeId || !assignedRole) {
             return res.status(400).json({
@@ -481,33 +629,52 @@ router.post('/clock-in', async (req, res) => {
             });
         }
 
-        // Create clock-in event
-        const { data, error } = await supabase
-            .from('time_clock_events')
-            .insert({
-                employee_id: employeeId,
-                event_type: 'clock_in',
-                assigned_role: assignedRole,
-                location: location || 'Unknown',
-                event_time: new Date().toISOString()
-            })
-            .select()
-            .single();
+        // 🛡️ Resolve Business ID (Required for insert)
+        let finalBusinessId = businessId;
+        if (!finalBusinessId) {
+            const { data: emp, error: empErr } = await supabase
+                .from('employees')
+                .select('business_id')
+                .eq('id', employeeId)
+                .single();
 
-        if (error) {
-            console.error('Clock-in insert error:', error);
-            return res.status(500).json({ error: error.message });
+            if (!empErr && emp) {
+                finalBusinessId = emp.business_id;
+            }
         }
+
+        // Create clock-in via RPC, which handles schema complexities and 'notes' column
+        let newEvent = null;
+
+        const { data: rpcData, error: rpcError } = await supabase.rpc('clock_in_employee', {
+            p_employee_id: employeeId,
+            p_business_id: finalBusinessId,
+            p_role: assignedRole, // Using p_role (RPC now supports both)
+            p_location: location || 'Unknown'
+        });
+
+        if (rpcError) {
+            console.error('❌ Clock-in RPC failed:', rpcError);
+            return res.status(500).json({ error: `Clock-in failed: ${rpcError.message}` });
+        }
+
+        if (rpcData && rpcData.error) {
+            console.error('❌ Clock-in Logic error:', rpcData.error);
+            return res.status(500).json({ error: `Database error: ${rpcData.error}` });
+        }
+
+        newEvent = rpcData;
 
         // 📝 Audit log: Clock-in
         await logClockIn(employeeId, assignedRole, req);
 
         res.json({
             success: true,
-            eventId: data.id,
-            eventTime: data.event_time,
-            assignedRole: data.assigned_role,
-            location: data.location,
+            eventId: newEvent.id,
+            eventTime: newEvent.event_time,
+            // Fallback to 'notes' or the input 'assignedRole' since DB column might not exist
+            assignedRole: newEvent.assigned_role || newEvent.notes || assignedRole,
+            location: newEvent.location,
             timestamp: new Date().toISOString()
         });
 
@@ -669,10 +836,12 @@ router.post('/verify-and-log-order', async (req, res) => {
         }
 
         // 1. Verify face embedding (identify cashier)
-        const vectorString = `[${embedding.join(',')}]`;
+        const securedEmbedding = secureTransform(embedding);
+        const vectorString = `[${securedEmbedding.join(',')}]`;
+
         const { data: matches, error: matchError } = await supabase.rpc('match_employee_face', {
             embedding: vectorString,
-            match_threshold: 0.35, // Slightly lower threshold for speed
+            match_threshold: 0.35,
             match_count: 1
         });
 
@@ -751,41 +920,94 @@ router.post('/verify-and-log-order', async (req, res) => {
 });
 
 /**
- * POST /api/maya/telemetry
- * Record N150 hardware health snapshot in Supabase
+ * GET /api/maya/orders
+ * Fetch latest orders for monitoring
  */
-router.post('/telemetry', async (req, res) => {
+router.get('/orders', async (req, res) => {
     try {
-        const telemetryData = req.body;
+        const { businessId, limit = 10 } = req.query;
 
-        if (!telemetryData.device_id) {
-            return res.status(400).json({ error: 'device_id required' });
+        let query = supabase
+            .from('orders')
+            .select(`
+                id,
+                order_number,
+                status,
+                created_at,
+                items_detail:order_items(name)
+            `)
+            .order('created_at', { ascending: false })
+            .limit(parseInt(limit));
+
+        if (businessId) {
+            query = query.eq('business_id', businessId);
         }
 
-        const { data, error } = await supabase
-            .from('n150_telemetry')
-            .insert({
-                device_id: telemetryData.device_id,
-                hostname: telemetryData.hostname || 'Unknown',
-                temp: telemetryData.temp || 0,
-                cpu_load: telemetryData.cpu_load || 0,
-                ram_usage: telemetryData.ram_usage || 0,
-                docker_ok: telemetryData.docker_ok ?? true,
-                metadata: telemetryData,
-                recorded_at: new Date().toISOString()
-            });
+        const { data, error } = await query;
 
-        if (error) {
-            console.error('Telemetry insert error:', error);
-            // Don't fail the request if it's just a logging error
-            // But return 500 so the client knows
-            return res.status(500).json({ error: error.message });
-        }
+        if (error) throw error;
 
-        res.json({ success: true, timestamp: new Date().toISOString() });
+        // Transform for dashboard compatibility
+        const transformed = data.map(o => {
+            const timeDiff = Math.floor((new Date() - new Date(o.created_at)) / 60000);
+            return {
+                id: o.order_number || o.id.toString().slice(0, 4),
+                items: o.items_detail?.map(i => i.name).join(', ') || 'No items',
+                status: o.status,
+                time: timeDiff < 60 ? `${timeDiff} min` : `${Math.floor(timeDiff / 60)} hours`
+            };
+        });
 
+        res.json(transformed);
     } catch (err) {
-        console.error('Telemetry error:', err);
+        console.error('Fetch orders error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ------------------------------------------------------------------
+// 🎙️ WHISPER ASR PROXY — POST /api/maya/transcribe
+// Forwards audio to local Whisper-ASR service on port 9000.
+// Using a backend proxy avoids CORS issues from the browser.
+// ------------------------------------------------------------------
+router.post('/transcribe', async (req, res) => {
+    const WHISPER_URL = process.env.WHISPER_ASR_URL || 'http://localhost:9000';
+
+    try {
+        // Pass the raw multipart/form-data body directly to Whisper
+        const language = req.query.language || 'he';
+
+        // Pipe the incoming request body to Whisper ASR
+        const fetch = (await import('node-fetch')).default;
+        const whisperRes = await fetch(
+            `${WHISPER_URL}/asr?language=${language}&output=json&task=transcribe`,
+            {
+                method: 'POST',
+                body: req,  // pipe incoming stream directly
+                headers: {
+                    'content-type': req.headers['content-type'],
+                    'content-length': req.headers['content-length'],
+                },
+                timeout: 30000,
+            }
+        );
+
+        if (!whisperRes.ok) {
+            const errText = await whisperRes.text();
+            return res.status(whisperRes.status).json({ error: `Whisper error: ${errText}` });
+        }
+
+        const result = await whisperRes.json();
+        // Normalise: Whisper returns { text: "..." }
+        res.json({ text: result.text || '' });
+    } catch (err) {
+        console.error('🎙️ Whisper proxy error:', err.message);
+        if (err.message?.includes('ECONNREFUSED') || err.message?.includes('fetch failed')) {
+            return res.status(503).json({
+                error: 'Whisper ASR service is not running.',
+                hint: 'Run: docker compose -f docker-compose.whisper.yml up -d'
+            });
+        }
         res.status(500).json({ error: err.message });
     }
 });

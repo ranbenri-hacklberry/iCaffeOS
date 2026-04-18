@@ -1,0 +1,86 @@
+{
+  "name": "qwen-coder-server",
+  "description": "MCP server for Qwen Coder running on Ollama",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "qwen_coder_chat",
+      "description": "Send a chat message to Qwen Coder and get a response",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "Array of chat messages",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["system", "user", "assistant"],
+                  "description": "Role of the message sender"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Content of the message"
+                }
+              },
+              "required": ["role", "content"]
+            }
+          },
+          "model": {
+            "type": "string",
+            "default": "qwen2.5-coder:7b",
+            "description": "Model to use for the chat"
+          },
+          "temperature": {
+            "type": "number",
+            "default": 0.7,
+            "description": "Temperature for sampling"
+          },
+          "max_tokens": {
+            "type": "number",
+            "default": 2000,
+            "description": "Maximum number of tokens to generate"
+          }
+        },
+        "required": ["messages"]
+      }
+    },
+    {
+      "name": "qwen_coder_generate",
+      "description": "Generate code using Qwen Coder with a prompt",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The prompt to send to Qwen Coder"
+          },
+          "model": {
+            "type": "string",
+            "default": "qwen2.5-coder:7b",
+            "description": "Model to use for generation"
+          },
+          "temperature": {
+            "type": "number",
+            "default": 0.7,
+            "description": "Temperature for sampling"
+          },
+          "max_tokens": {
+            "type": "number",
+            "default": 2000,
+            "description": "Maximum number of tokens to generate"
+          }
+        },
+        "required": ["prompt"]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "http://localhost:11434",
+      "description": "Qwen Coder API endpoint"
+    }
+  ]
+}
