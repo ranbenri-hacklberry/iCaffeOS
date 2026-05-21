@@ -1,169 +1,56 @@
 import { createClient } from '@supabase/supabase-js';
 
-const FALLBACK_URL = 'https://gxzsxvbercpkgxraiaex.supabase.co';
-const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4enN4dmJlcmNwa2d4cmFpYWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NjMyNzAsImV4cCI6MjA3NzEzOTI3MH0.6sJ7PJ2imo9-mzuYdqRlhQty7PCQAzpSKfcQ5ve571g';
-const LOCAL_URL = 'http://localhost:54321';
+// Configuration: Detect environment
+const isElectron = typeof window !== 'undefined' && window.navigator.userAgent.toLowerCase().includes('electron');
+const isLocalIp = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.startsWith('192.168.') ||
+    window.location.hostname.startsWith('10.') ||
+    window.location.hostname.startsWith('100.') ||
+    window.location.hostname.startsWith('172.')
+);
 
-const cloudUrl = import.meta.env?.VITE_SUPABASE_URL || FALLBACK_URL;
-const cloudKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || FALLBACK_KEY;
+const isStrictlyLocal = isElectron || isLocalIp || import.meta.env?.VITE_FORCE_LOCAL === 'true';
 
-// Standardized Hybrid Logic: Local vs Cloud
-// Standardized Hybrid Logic: Local vs Cloud
+// URLs
 const getLocalUrl = () => {
-    // 1. Electron/Localhost: Use explicit localhost
-    if (typeof window !== 'undefined' && (window.navigator?.userAgent?.includes('Electron') || window.location?.hostname === 'localhost' || window.location?.hostname === '127.0.0.1')) {
-        return 'http://127.0.0.1:54321';
-    }
-
-    // 2. LAN Access (iPad/Tablet): Use the detected IP address
-    if (typeof window !== 'undefined' && window.location?.hostname && (
-        window.location.hostname.startsWith('192.168.') ||
-        window.location.hostname.startsWith('10.') ||
-        window.location.hostname.startsWith('100.') ||
-        window.location.hostname.startsWith('172.')
-    )) {
+    if (typeof window !== 'undefined' && (window.location.hostname.startsWith('100.') || window.location.hostname.startsWith('192.'))) {
         return `http://${window.location.hostname}:54321`;
     }
-
-    // Fallback
-    return import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://localhost:54321';
+    return import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
 };
 
 const localUrl = getLocalUrl();
 const localKey = import.meta.env?.VITE_LOCAL_SUPABASE_ANON_KEY || 'no-key';
 
-if (!cloudUrl || !cloudKey) {
-    console.warn('🚨 Supabase Cloud environment variables missing! Using fallbacks.');
-}
-
-let activeClient = null;
-let isLocal = false;
-
-/**
- * Cloud-only client for global tasks (registration, discovery)
- */
-export const cloudSupabase = createClient(cloudUrl || 'http://localhost:54321', cloudKey || 'no-key');
-
-/**
- * Update the active client instance
- */
-const getClient = (url, key) => {
-    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-        console.error('🚨 getClient: Attempted to create client with invalid URL:', url);
-        // Return a dummy client that doesnt crash but fails gracefully
-        return createClient('http://127.0.0.1:54321', 'no-key');
-    }
-    if (activeClient && activeClient.supabaseUrl === url) return activeClient;
-    try {
-        return createClient(url, key, {
-            auth: {
-                persistSession: true,
-                storageKey: 'supabase.auth.token',
-                storage: window.localStorage,
-                autoRefreshToken: true,
-                detectSessionInUrl: true
-            }
-        });
-    } catch (e) {
-        console.error('🚨 getClient: createClient threw error:', e);
-        return createClient('http://127.0.0.1:54321', 'no-key');
-    }
-};
-
-const isElectron = window.navigator.userAgent.toLowerCase().includes('electron');
-
-// PRODUCTION CHECK: If we are on Vercel or any common deployment hostnames, use cloud.
-// But we allow LOCAL bypass if the user is on a Tailscale IP or common LAN IP.
-const isProductionHostname = window.location.hostname.includes('vercel.app') ||
-    window.location.hostname.includes('herokuapp.com') ||
-    window.location.hostname.includes('supabase.co');
-
-const isLocalIp = window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname.startsWith('192.168.') ||
-    window.location.hostname.startsWith('10.') ||
-    window.location.hostname.startsWith('100.') ||
-    window.location.hostname.startsWith('172.');
-
-const isProduction = !isElectron && isProductionHostname && !isLocalIp;
-
-// Lock to Local if explicitly on local IPs OR forced via query/env
-const isStrictlyLocal = isElectron || isLocalIp ||
-    window.location.search.includes('local=true') ||
-    import.meta.env?.VITE_FORCE_LOCAL === 'true';
-
-// --- ROBUST INITIALIZATION ---
-// We DO NOT FALLBACK to Cloud if we are strictly local. This prevents the "Frankfurt Loop"
-const finalUrl = isStrictlyLocal ? localUrl : cloudUrl;
-const finalKey = isStrictlyLocal ? localKey : cloudKey;
-
-console.log(`🚀 Supabase Init [Electron: ${isElectron}]: ${isProduction ? '☁️ PRODUCTION' : (isStrictlyLocal ? '🏠 STRICT LOCAL' : '☁️ CLOUD')}`);
-console.log(`🔗 Target URL: ${finalUrl}`);
-
-try {
-    activeClient = createClient(finalUrl || 'http://127.0.0.1:54321', finalKey || 'no-key', {
-        auth: {
-            persistSession: true,
-            storageKey: 'supabase.auth.token',
-            storage: window.localStorage,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-        }
-    });
-} catch (e) {
-    console.error('🚨 Failed to initialize strict client:', e);
-}
-
-isLocal = isStrictlyLocal;
-
-/**
- * NEW: Resolve Supabase URL dynamically to handle Tailscale/Local IP mismatches.
- * If the provided URL contains a local IP (192.168.x.x) but the browser is on a different network (e.g. Tailscale 100.x),
- * it rewrites the URL to use the current hostname.
- */
-export const resolveSupabaseUrl = (url) => {
-    if (!url || typeof url !== 'string') return url;
-
-    // Detect if the URL points to the known local IP of the M4/Mini-PC
-    const isLocalMachineIp = url.includes('192.168.0.55') || url.includes('10.0.0.5');
-    
-    if (isLocalMachineIp && typeof window !== 'undefined' && window.location.hostname) {
-        const currentHost = window.location.hostname;
-        
-        // Only rewrite if we are NOT on the local machine IP ourselves (e.g. we are on Tailscale)
-        if (currentHost !== '192.168.0.55' && currentHost !== '10.0.0.5' && currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-            // console.log(`🔗 [Supabase] Rewriting local IP in URL to current host: ${currentHost}`);
-            return url.replace(/192\.168\.0\.55|10\.0\.0\.5/g, currentHost);
-        }
-    }
-    return url;
-};
-
-export const supabase = new Proxy({}, {
-    get: (target, prop) => {
-        if (!activeClient) return undefined;
-        return activeClient[prop];
+// Initialize the primary client
+const client = createClient(localUrl, localKey, {
+    auth: {
+        persistSession: true,
+        storageKey: 'supabase.auth.token',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
     }
 });
 
-// Remove health check that was accidentally falling back to Cloud.
-// If Docker is down, the app should fail on LAN, not failover to Frankfurt and cause zombie UI.
-export const initSupabase = async () => {
-    return { isLocal: isStrictlyLocal, url: finalUrl };
-};
+// 🛡️ [STRICT LOCAL LOCK]
+// We use a Proxy to ensure 'supabase' is always available and 'cloudSupabase' also points local
+export const cloudSupabase = client;
+export const supabase = new Proxy(client, {
+    get: (target, prop) => {
+        return target[prop];
+    }
+});
 
-initSupabase().catch(err => console.error('Failed to init supabase:', err));
-
-/**
- * Returns a Supabase client scoped to the appropriate schema based on the user.
- * @param {object} user - The current logged-in user
- * @returns {object} - Supabase client
- */
-export const getSupabase = (user) => {
-    return supabase;
-};
+export const isLocalInstance = () => isStrictlyLocal;
+export const resolveSupabaseUrl = (url) => url;
+export const initSupabase = async () => ({ isLocal: true, url: localUrl });
 
 /**
- * NEW: Global helper to check if we are currently running local
+ * Legacy support for components expecting getSupabase
  */
-export const isLocalInstance = () => isLocal;
+export const getSupabase = (user) => supabase;
+
+export default supabase;

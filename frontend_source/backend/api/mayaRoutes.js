@@ -24,8 +24,13 @@ const router = express.Router();
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseKey = 
+    process.env.SUPABASE_SERVICE_KEY || 
+    process.env.LOCAL_SUPABASE_SERVICE_KEY || 
+    process.env.VITE_LOCAL_SERVICE_ROLE_KEY ||
+    process.env.VITE_LOCAL_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey || process.env.VITE_LOCAL_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY);
 
 // 🛡️ Biometric Security Transformation (Permutation + Inversion Mask) derived from master key
 // This protects against template inversion attacks while preserving Cosine Similarity.

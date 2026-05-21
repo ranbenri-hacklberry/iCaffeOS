@@ -10,6 +10,7 @@ const MUSIC_API_URL = getBackendApiUrl();
 
 import { MusicCacheManager } from '../services/musicCacheManager';
 import { MusicQueueManager } from '../services/musicQueueManager';
+import { useRantunesWs } from '../hooks/useRantunesWs';
 
 export const MusicProvider = ({ children }) => {
     const { currentUser } = useAuth();
@@ -45,6 +46,31 @@ export const MusicProvider = ({ children }) => {
 
     // Playback Destination (local browser or server output)
     const [playbackTarget, setPlaybackTarget] = useState(localStorage.getItem('music_playback_target') || 'local');
+
+    // ─── RanTunes WebSocket (Server Mode) ───────────────────────────────────────
+    // Always connect the WS hook so we receive library/drive events even in local mode.
+    // Commands are only routed through it when playbackTarget === 'server'.
+    const ws = useRantunesWs();
+
+    // Sync WS state → MusicContext state whenever server mode is active
+    useEffect(() => {
+        if (playbackTarget !== 'server') return;
+        const { state } = ws;
+        if (!state) return;
+
+        // Mirror server state into existing React state so all UI consumers work unchanged
+        setIsPlaying(state.isPlaying);
+        if (state.currentSong) setCurrentSong(state.currentSong);
+        setCurrentTime(state.position || 0);
+        setDuration(state.duration || state.currentSong?.duration_seconds || 0);
+        setVolumeState((state.volume || 75) / 100); // WS uses 0-100, local uses 0-1
+
+        // Sync queue so the Queue panel shows correct state
+        if (state.queue?.length > 0) {
+            setPlaylist(state.queue);
+            setPlaylistIndex(state.currentIndex || 0);
+        }
+    }, [ws.state, playbackTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Persist target selection
     useEffect(() => {
@@ -338,70 +364,26 @@ export const MusicProvider = ({ children }) => {
 
             const audioUrl = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(song.file_path || '')}&id=${song.id}`;
 
-            // Check if file is reachable (optional head check or just rely on error handler)
-            // For now, relies on error handler.
-
-            // Handle Server-Side Playback
+            // ── Server-Mode Playback via WebSocket ─────────────────────────────
             console.log('🎵 [MusicContext] playbackTarget current value:', playbackTarget);
 
             if (playbackTarget === 'server') {
-                console.log('🔈 [ServerPlay] [Action] Sending play command to Server:', song.title);
+                console.log('🔌 [ServerPlay] Sending WS PLAY command:', song.title);
 
-                // CRITICAL: Stop ANY local playback immediately to avoid overlap
-                player1.pause();
-                player1.src = '';
-                player1.load();
+                // Stop ANY local playback immediately to avoid overlap
+                player1.pause(); player1.src = ''; player1.load();
+                player2.pause(); player2.src = ''; player2.load();
+                if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
+                if (serverProgressIntervalRef.current) { clearInterval(serverProgressIntervalRef.current); serverProgressIntervalRef.current = null; }
 
-                player2.pause();
-                player2.src = '';
-                player2.load();
-
-                if (fadeIntervalRef.current) {
-                    clearInterval(fadeIntervalRef.current);
-                    fadeIntervalRef.current = null;
-                }
-
-                if (serverProgressIntervalRef.current) {
-                    clearInterval(serverProgressIntervalRef.current);
-                    serverProgressIntervalRef.current = null;
-                }
-
+                // Optimistic local state — WS state sync will confirm
                 setCurrentSong(song);
                 setDuration(song.duration_seconds || 0);
                 setCurrentTime(0);
                 setIsPlaying(true);
 
-                // Server play call
-                fetch(`${MUSIC_API_URL}/music/play-server`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        path: song.file_path,
-                        id: song.id,
-                        initialVolume: volume
-                    })
-                }).catch(err => console.error('❌ Server play failed:', err));
-
-                // ⏱️ Virtual Progress Tracker for Server Playback
-                // This simulates the progress since the server doesn't report back yet
-                if (song.duration_seconds) {
-                    const durationMs = song.duration_seconds * 1000;
-                    const startTime = Date.now();
-                    serverEndTimeRef.current = startTime + durationMs;
-
-                    serverProgressIntervalRef.current = setInterval(() => {
-                        const elapsed = (Date.now() - startTime) / 1000;
-                        setCurrentTime(elapsed);
-
-                        // Auto-crossfade trigger (Virtual)
-                        if (elapsed > song.duration_seconds - (crossfadeSeconds + 1)) {
-                            console.log('🎵 Virtual server-side auto-crossfade triggered');
-                            clearInterval(serverProgressIntervalRef.current);
-                            serverProgressIntervalRef.current = null;
-                            handleNextRef.current(true);
-                        }
-                    }, 1000);
-                }
+                // ✅ Send WS PLAY command (replaces dead /music/play-server REST call)
+                ws.play(song);
 
                 return;
             }
@@ -449,58 +431,12 @@ export const MusicProvider = ({ children }) => {
                 let step = 0;
                 const startVol = targetVolumeRef.current;
 
-                // 🆕 Server Crossfade Implementation
+                // Server crossfade: WS server handles this natively via auto-advance
+                // No client-side crossfade needed in server mode
                 if (playbackTarget === 'server') {
-                    // Start next track on server
-                    fetch(`${MUSIC_API_URL}/music/play-server`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            path: song.file_path,
-                            id: song.id,
-                            initialVolume: 0,
-                            crossfade: true
-                        })
-                    });
-
-                    fadeIntervalRef.current = setInterval(() => {
-                        step++;
-                        const progress = step / steps;
-                        const outVol = Math.max(0, startVol * (1 - progress));
-                        const inVol = Math.min(startVol, startVol * progress);
-
-                        // Update server volumes
-                        fetch(`${MUSIC_API_URL}/music/volume-server`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: currentSong?.id, volume: outVol })
-                        });
-                        fetch(`${MUSIC_API_URL}/music/volume-server`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: song.id, volume: inVol })
-                        });
-
-                        if (step >= steps) {
-                            clearInterval(fadeIntervalRef.current);
-                            fadeIntervalRef.current = null;
-                            isTransitionalRef.current = false;
-                            // Final cleanup: stop the previous song (implicitly handled if backend stops it or we just let it finish)
-                        }
-                    }, interval);
-
-                    // Also start the virtual progress tracker for the NEW song
-                    if (song.duration_seconds) {
-                        const startTime = Date.now();
-                        serverProgressIntervalRef.current = setInterval(() => {
-                            const elapsed = (Date.now() - startTime) / 1000;
-                            setCurrentTime(elapsed);
-                            if (elapsed > song.duration_seconds - (crossfadeSeconds + 1)) {
-                                clearInterval(serverProgressIntervalRef.current);
-                                handleNextRef.current(true);
-                            }
-                        }, 1000);
-                    }
+                    // Server handles crossfade via queue auto-advance — just update local UI state
+                    ws.play(song);
+                    isTransitionalRef.current = false;
                 } else {
                     // Local Audio Volume Ramp
                     fadeIntervalRef.current = setInterval(() => {
@@ -602,39 +538,16 @@ export const MusicProvider = ({ children }) => {
     // Play/Pause toggle
     const togglePlay = useCallback(() => {
         if (playbackTarget === 'server') {
-            // Safety: ensure local is quiet
+            // Ensure local audio is silent
             audio1Ref.current.pause();
             audio2Ref.current.pause();
 
             if (isPlaying) {
-                fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' });
+                ws.pause();          // ✅ WS PAUSE (replaces /music/stop-server)
                 setIsPlaying(false);
-                if (serverProgressIntervalRef.current) {
-                    clearInterval(serverProgressIntervalRef.current);
-                    serverProgressIntervalRef.current = null;
-                }
             } else if (currentSong) {
-                fetch(`${MUSIC_API_URL}/music/play-server`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: currentSong.file_path, initialVolume: volume })
-                });
+                ws.resume();         // ✅ WS RESUME
                 setIsPlaying(true);
-
-                // Resume virtual timer
-                if (currentSong.duration_seconds) {
-                    const remaining = currentSong.duration_seconds - currentTime;
-                    const startTime = Date.now() - (currentTime * 1000);
-                    serverProgressIntervalRef.current = setInterval(() => {
-                        const elapsed = (Date.now() - startTime) / 1000;
-                        setCurrentTime(elapsed);
-                        if (elapsed > currentSong.duration_seconds - (crossfadeSeconds + 1)) {
-                            clearInterval(serverProgressIntervalRef.current);
-                            serverProgressIntervalRef.current = null;
-                            handleNextRef.current(true);
-                        }
-                    }, 1000);
-                }
             }
             return;
         }
@@ -645,19 +558,19 @@ export const MusicProvider = ({ children }) => {
         } else {
             audio.pause();
         }
-    }, [activeAudio, playbackTarget, isPlaying, currentSong, MUSIC_API_URL]);
+    }, [activeAudio, playbackTarget, isPlaying, currentSong, ws]);
 
     // Pause
     const pause = useCallback(() => {
         if (playbackTarget === 'server') {
-            fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' });
+            ws.pause();              // ✅ WS PAUSE
             setIsPlaying(false);
             return;
         }
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         audio.pause();
         setIsPlaying(false); // Explicit sync
-    }, [activeAudio, playbackTarget, MUSIC_API_URL]);
+    }, [activeAudio, playbackTarget, ws]);
 
     // Stop local audio when target changes to server
     useEffect(() => {
@@ -681,17 +594,13 @@ export const MusicProvider = ({ children }) => {
     // Resume
     const resume = useCallback(() => {
         if (playbackTarget === 'server') {
-            fetch(`${MUSIC_API_URL}/music/play-server`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: currentSong?.file_path })
-            });
+            ws.resume();             // ✅ WS RESUME
             setIsPlaying(true);
             return;
         }
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         audio.play();
-    }, [activeAudio, playbackTarget, currentSong, MUSIC_API_URL]);
+    }, [activeAudio, playbackTarget, ws]);
 
     // Next song with forced crossfade option
     const handleNext = useCallback((forceCrossfade = true) => {
@@ -859,11 +768,8 @@ export const MusicProvider = ({ children }) => {
         targetVolumeRef.current = clampedVol;
 
         if (playbackTarget === 'server') {
-            fetch(`${MUSIC_API_URL}/music/volume-server`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ volume: clampedVol })
-            }).catch(err => console.error('❌ Server volume update failed:', err));
+            // ✅ WS VOLUME (0-1 → 0-100 conversion)
+            ws.setVolume(Math.round(clampedVol * 100));
         }
 
         // If not fading, update audio element volume directly
@@ -871,7 +777,7 @@ export const MusicProvider = ({ children }) => {
             audio1Ref.current.volume = activeAudio === 1 ? clampedVol : 0;
             audio2Ref.current.volume = activeAudio === 2 ? clampedVol : 0;
         }
-    }, [activeAudio, playbackTarget, MUSIC_API_URL]);
+    }, [activeAudio, playbackTarget, ws]);
 
     // Update remaining refs
     useEffect(() => {
@@ -884,7 +790,7 @@ export const MusicProvider = ({ children }) => {
     // Stop playback
     const stop = useCallback(() => {
         if (playbackTarget === 'server') {
-            fetch(`${MUSIC_API_URL}/music/stop-server`, { method: 'POST' }).catch(() => { });
+            ws.stop();               // ✅ WS STOP
         }
 
         if (fadeIntervalRef.current) {
@@ -902,7 +808,7 @@ export const MusicProvider = ({ children }) => {
         setCurrentSong(null);
         setIsPlaying(false);
         isTransitionalRef.current = false;
-    }, [playbackTarget, MUSIC_API_URL]);
+    }, [playbackTarget, ws]);
 
     // Remove from queue
     const removeFromQueue = useCallback(async (songId) => {
@@ -976,6 +882,18 @@ export const MusicProvider = ({ children }) => {
         });
     }, [playlistIndex, playSong]);
 
+    // handleNext/handlePrevious in server mode: delegate to WS
+    const handleNextWs = useCallback(() => {
+        if (playbackTarget === 'server') { ws.next(); return; }
+        handleNextRef.current(true);
+    }, [playbackTarget, ws]);
+
+    const handlePreviousWs = useCallback(() => {
+        if (playbackTarget === 'server') { ws.prev(); return; }
+        // handlePrevious is already defined above via handlePreviousRef
+        handlePreviousRef.current();
+    }, [playbackTarget, ws]);
+
     const value = {
         // State
         isPlaying,
@@ -989,13 +907,17 @@ export const MusicProvider = ({ children }) => {
         repeat,
         isLoading,
 
+        // WS connection status (useful for UI indicators)
+        wsConnected: ws.isConnected,
+        wsError: ws.connectionError,
+
         // Actions
-        playSong: (song, playlist, crossfade = true) => playSong(song, playlist, crossfade), // Default clicks to crossfade
+        playSong: (song, pl, crossfade = true) => playSong(song, pl, crossfade),
         togglePlay,
         pause,
         resume,
-        handleNext,
-        handlePrevious,
+        handleNext: handleNextWs,
+        handlePrevious: handlePreviousWs,
         seek,
         setVolume,
         rateSong,
@@ -1009,6 +931,9 @@ export const MusicProvider = ({ children }) => {
         addPlaylistToQueue,
         playbackTarget,
         setPlaybackTarget,
+
+        // Raw WS hook for components that need fine-grained WS control
+        rantunesWs: ws,
 
         // Refs
         audioRef: activeAudio === 1 ? audio1Ref : audio2Ref

@@ -353,52 +353,32 @@ export const useAlbums = () => {
     }, [currentUser]);
 
     // Fetch songs for an album (via backend service to bypass RLS)
+    // Fetch songs for an album (via backend service to bypass RLS)
     const fetchAlbumSongs = useCallback(async (albumId) => {
         try {
             setIsLoading(true);
-            const normalizePath = (p) => p?.replace(/\\/g, '/').toLowerCase() || '';
-            const normId = normalizePath(albumId);
 
-            // 1. Try local scan cache first (for immediate play after scan)
-            if (scanLibrary?.songs?.length) {
-                // If albumId is a UUID, try to find the folder_path from our albums state
-                const dbAlbum = albums.find(a => a.id === albumId);
-                const searchPath = dbAlbum?.folder_path ? normalizePath(dbAlbum.folder_path) : normId;
-
-                const albumMeta = scanLibrary?.albums?.find(a => normalizePath(a.id) === searchPath || normalizePath(a.folder_path) === searchPath);
-
-                // Match by folder path OR explicit album_id if set in scanLibrary
-                const matching = scanLibrary.songs
-                    .filter(s => {
-                        const sPath = normalizePath(s.file_path);
-                        const sAlbumId = normalizePath(s.album_id);
-                        return sPath.startsWith(searchPath) || sAlbumId === searchPath;
-                    })
-                    .sort((a, b) => {
-                        const trackSort = (a.track_number || 0) - (b.track_number || 0);
-                        if (trackSort !== 0) return trackSort;
-                        return (a.file_name || '').localeCompare(b.file_name || '');
-                    });
-
-                if (matching.length > 0) {
-                    const coverUrl = albumMeta?.cover_url || albumMeta?.cover_path || null;
-                    const albumName = albumMeta?.name || null;
-                    const artistName = albumMeta?.artist?.name || albumMeta?.artist_name || null;
-
-                    return matching.map(s => ({
-                        ...s,
-                        album: { name: albumName, cover_url: coverUrl },
-                        artist: { name: artistName || s.artist?.name || s.artist_name || null }
-                    }));
-                }
-            }
-
-            // 2. Fallback to Database
+            // 1. Fetch from Database (Source of Truth)
             const res = await fetch(`${MUSIC_API_URL}/music/library/albums/${encodeURIComponent(albumId)}/songs`);
             const json = await res.json();
+            
             if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch album songs');
-            const songs = json.songs || [];
+            
+            let songs = json.songs || [];
+
+            // 2. Fallback: If DB is empty but we JUST scanned, check the scan memory
+            if (songs.length === 0 && scanLibrary?.songs?.length) {
+                const dbAlbum = albums.find(a => a.id === albumId);
+                const albumName = dbAlbum?.name?.toLowerCase();
+                
+                songs = scanLibrary.songs.filter(s => 
+                    s.album_name?.toLowerCase() === albumName || 
+                    s.album_id === albumId
+                );
+            }
+
             const ratingMap = await fetchRatingsMap(songs.map(s => s.id).filter(Boolean));
+            
             return songs.map(s => ({ ...s, myRating: ratingMap.get(s.id) || 0 }))
                 .sort((a, b) => {
                     const trackSort = (a.track_number || 0) - (b.track_number || 0);
@@ -412,7 +392,7 @@ export const useAlbums = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser, scanLibrary]);
+    }, [albums, scanLibrary, fetchRatingsMap]);
 
     // Fetch all songs — uses backend API (service key) to bypass RLS on local Supabase
     const fetchAllSongs = useCallback(async () => {

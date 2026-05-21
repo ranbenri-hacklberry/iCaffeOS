@@ -39,23 +39,43 @@ export const useOrderPush = () => {
                     // Prepare Items
                     const items = await db.order_items.where('order_id').equals(order.id).toArray();
 
-                    // Construct Payload for RPC
+                    // Construct Payload for RPC - MUST MATCH index.jsx EXACTLY
                     const payload = {
-                        p_business_id: currentUser.business_id,
-                        p_order_id: order.id,
-                        p_payment_method: order.payment_method || 'cash',
-                        p_is_paid: order.is_paid !== false, // Default to true if undefined
+                        p_customer_phone: order.customer_phone || `OFFLINE_${order.id.slice(0, 8)}`,
+                        p_customer_name: order.customer_name || 'אורח אנונימי',
                         p_items: items.map(i => ({
-                            menu_item_id: i.menu_item_id,
-                            quantity: i.quantity || 1,
-                            mods: i.mods || [], 
+                            item_id: i.menu_item_id,
                             name: i.name,
-                            price: i.price,
+                            quantity: i.quantity || 1,
+                            price: i.price || 0,
+                            final_price: i.price || 0,
+                            discount_applied: 0,
+                            selected_options: i.mods || [],
+                            mods: i.mods || [],
                             item_status: i.item_status || 'in_progress',
-                            course_stage: i.course_stage || 1
+                            course_stage: i.course_stage || 1,
+                            is_hot_drink: !!i.is_hot_drink
                         })),
-                        // Pass status if RPC supports p_status? 
-                        // Usually submit_order_v3 defaults. We can try to update 'order_status' after creation if needed.
+                        p_is_paid: order.is_paid !== false,
+                        p_customer_id: order.customer_id || null,
+                        p_payment_method: order.payment_method || 'cash',
+                        p_refund: false,
+                        p_refund_amount: 0,
+                        p_refund_method: null,
+                        p_edit_mode: false,
+                        p_order_id: order.id, // CRITICAL: Use the same UUID to prevent duplicates!
+                        p_original_total: 0,
+                        p_cancelled_items: [],
+                        p_final_total: Number(order.total_amount) || 0,
+                        p_original_coffee_count: 0,
+                        p_is_quick_order: true,
+                        p_discount_id: order.discount_id || null,
+                        p_discount_amount: order.discount_amount || 0,
+                        p_business_id: currentUser.business_id,
+                        p_order_type: order.order_type || 'dine_in',
+                        p_delivery_address: order.delivery_address || null,
+                        p_delivery_fee: Number(order.delivery_fee) || 0,
+                        p_delivery_notes: order.delivery_notes || null
                     };
 
                     // We use submit_order_v3 because it handles inventory logic

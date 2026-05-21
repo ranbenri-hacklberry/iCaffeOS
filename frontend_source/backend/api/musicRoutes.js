@@ -55,9 +55,9 @@ const getSupabase = () => {
     if (supabase) return supabase;
 
     const localUrl = process.env.LOCAL_SUPABASE_URL || 'http://localhost:54321';
-    const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY;
-    const remoteUrl = process.env.SUPABASE_URL;
-    const remoteKey = process.env.SUPABASE_SERVICE_KEY;
+    const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY;
+    const remoteUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const remoteKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
     // Use local if available, else remote
     const url = localUrl && localKey ? localUrl : remoteUrl;
@@ -854,7 +854,7 @@ router.get('/stream', verifyAlbumToken, async (req, res) => {
                     const ytUrl = `https://www.youtube.com/watch?v=${songData.video_id}`;
                     console.log(`🎬 Streaming from YouTube: ${ytUrl}`);
                     const ytProcess = spawn('yt-dlp', ['-o', '-', '-f', 'bestaudio', '--no-playlist', ytUrl]);
-                    res.setHeader('Content-Type', 'audio/mpeg');
+                    res.setHeader('Content-Type', 'audio/webm'); // YouTube's bestaudio is often WebM/Opus, this is safer for modern browsers
                     ytProcess.stdout.pipe(res);
                     return;
                 }
@@ -1035,15 +1035,23 @@ router.post("/play-server", async (req, res) => {
         const { spawn } = await import('child_process');
 
         // Spawn mpv with specific flags for remote control
-        const proc = spawn('mpv', [
-            `--audio-device=alsa/${audioDevice}`,
+        const isMac = process.platform === 'darwin';
+        const mpvArgs = [
             '--no-video',
             '--input-terminal=no',
             `--volume=${serverVolume}`,
             '--idle=no',
             '--force-window=no',
             fullPath
-        ]);
+        ];
+
+        if (!isMac) {
+            mpvArgs.unshift(`--audio-device=alsa/${audioDevice}`);
+        } else {
+            console.log(`🍎 Mac detected, letting mpv handle default CoreAudio output`);
+        }
+
+        const proc = spawn('mpv', mpvArgs);
 
         const procId = id || Date.now();
         activeServerProcesses.set(procId, proc);

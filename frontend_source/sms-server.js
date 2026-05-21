@@ -1,8 +1,14 @@
 /**
- * icaffeOS SMS Gateway Server
- * WhatsApp Web Style SMS Dashboard Backend
+ * 🚨🚨🚨 DEPRECATED & UNUSED FILE 🚨🚨🚨
+ * 
+ * icaffeOS SMS Gateway Server (Old Node.js + SIM7670G 4G Modem version)
+ * This script is NO LONGER IN USE. 
+ * We now perform all SMS dispatch via GlobalSMS API inside the Python Cortex Gateway
+ * => (services/cortex-gateway/main.py at /api/sms/send)
  *
- * Interfaces with SIM7670G 4G Modem via Serial Port
+ * Left here purely for reference in case a 4G modem is re-connected in the future.
+ * DO NOT TRY TO RUN THIS TO SEND KDS SMS!
+ * 🚨🚨🚨
  */
 
 import 'dotenv/config'; // Make sure env vars are loaded 

@@ -142,13 +142,12 @@ const SplashScreen = ({ onFinish }) => {
                         const machineId = await window.electron.auth.getMachineId();
                         if (machineId) {
                             console.log('🔑 Hardware ID:', machineId);
-                            const { cloudSupabase } = await import('../lib/supabase');
-                            const { data, error } = await cloudSupabase.rpc('verify_kiosk_device', {
+                            const { data, error } = await supabase.rpc('verify_kiosk_device', {
                                 p_machine_id_hash: machineId
                             });
 
                             if (data?.success) {
-                                console.log('✅ Hardware ID Verified:', data.user.name);
+                                console.log('✅ Hardware ID Verified (Local):', data.user.name);
                                 // Store in localStorage for AuthContext to pick up immediately
                                 localStorage.setItem('kiosk_user', JSON.stringify({ ...data.user, is_device: true }));
                                 localStorage.setItem('kiosk_auth_time', Date.now().toString());

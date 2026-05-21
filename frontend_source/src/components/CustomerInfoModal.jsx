@@ -516,12 +516,11 @@ const CustomerInfoModal = ({
                 ? updateData.customer_id
                 : null;
 
-            const { error: rpcError } = await supabase.rpc('update_order_customer', {
-                p_order_id: cleanOrderId,
-                p_customer_id: validCustomerId,
-                p_customer_phone: updateData.customer_phone,
-                p_customer_name: updateData.customer_name
-            });
+            const { error: rpcError } = await supabase.from('orders').update({
+                customer_id: validCustomerId,
+                customer_phone: updateData.customer_phone,
+                customer_name: updateData.customer_name
+            }).eq('id', cleanOrderId);
 
             if (rpcError) {
                 console.error('❌ RPC Order Update Error:', rpcError);

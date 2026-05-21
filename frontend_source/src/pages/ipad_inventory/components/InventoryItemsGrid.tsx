@@ -23,10 +23,19 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
         const allCats = new Set<string>();
         items.forEach(item => {
             if (item.category) {
-                // Split by comma and trim each category
                 item.category.split(',').forEach(c => {
-                    const trimmed = c.trim();
-                    if (trimmed) allCats.add(trimmed);
+                    let trimmed = c.trim();
+                    if (!trimmed) return;
+                    
+                    // Normalize categories
+                    const lower = trimmed.toLowerCase();
+                    if (lower === 'dairy' || lower === 'חלב' || lower === 'מוצרי חלב') {
+                        trimmed = 'מוצרי חלב';
+                    } else if (trimmed === 'שימורים' || trimmed === 'רטבים' || trimmed === 'יבשים') {
+                        trimmed = 'יבשים';
+                    }
+                    
+                    allCats.add(trimmed);
                 });
             }
         });
@@ -35,7 +44,13 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
 
     const filteredItems = items.filter(item => {
         if (selectedCategory && selectedCategory !== 'הכל') {
-            const itemCats = item.category?.split(',').map(c => c.trim()) || [];
+            const itemCats = item.category?.split(',').map(c => {
+                const trimmed = c.trim();
+                const lower = trimmed.toLowerCase();
+                if (lower === 'dairy' || lower === 'חלב' || lower === 'מוצרי חלב') return 'מוצרי חלב';
+                if (trimmed === 'שימורים' || trimmed === 'רטבים' || trimmed === 'יבשים') return 'יבשים';
+                return trimmed;
+            }) || [];
             if (!itemCats.includes(selectedCategory)) return false;
         }
 
@@ -48,22 +63,40 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
             {/* Header: Categories & Local Search */}
             <div className="px-6 py-4 flex flex-col md:flex-row gap-4 items-center justify-between border-b border-slate-100 bg-white shadow-sm shrink-0 z-10">
                 {/* Categories */}
-                <div className="flex bg-slate-100/80 p-1 rounded-2xl gap-1 border border-slate-200 shadow-inner overflow-x-auto no-scrollbar max-w-full">
-                    {categories.length === 0 && (
-                        <div className="px-4 py-2 text-sm font-bold text-slate-400 italic">ללא קטגוריות</div>
-                    )}
-                    {categories.map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${selectedCategory === cat
-                                ? 'bg-white shadow-sm text-indigo-600 ring-1 ring-slate-900/5'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-                                }`}
+                {/* Categories - Buttons on Desktop, Select on Mobile */}
+                <div className="flex-1 w-full overflow-hidden">
+                    {/* Desktop View: Buttons */}
+                    <div className="hidden md:flex bg-slate-100/80 p-1 rounded-2xl gap-1 border border-slate-200 shadow-inner overflow-x-auto no-scrollbar max-w-full">
+                        {categories.length === 0 && (
+                            <div className="px-4 py-2 text-sm font-bold text-slate-400 italic">ללא קטגוריות</div>
+                        )}
+                        {categories.map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat)}
+                                className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${selectedCategory === cat
+                                    ? 'bg-white shadow-sm text-indigo-600 ring-1 ring-slate-900/5'
+                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                    }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Mobile View: Clean Select Dropdown */}
+                    <div className="md:hidden w-full">
+                        <select 
+                            value={selectedCategory || 'הכל'} 
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full bg-slate-100 border border-slate-200 rounded-xl py-3 px-4 text-sm font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-sm appearance-none text-center"
+                            style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'left 12px center', backgroundSize: '16px' }}
                         >
-                            {cat}
-                        </button>
-                    ))}
+                            {categories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 {/* Local Search */}
@@ -80,7 +113,7 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
             </div>
 
             {/* Grid Area */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 pb-24 no-scrollbar">
+            <div className="flex-1 overflow-y-auto px-10 py-6 pb-24 no-scrollbar">
                 {isLoading ? (
                     <div className="h-full flex items-center justify-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -101,7 +134,7 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
                         <span className="text-xl font-bold">לא נמצאו פריטים תואמים</span>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {filteredItems.map((item) => (
                             <InventoryItemCard
                                 key={item.id}
@@ -162,13 +195,13 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     return (
         <MotionDiv
             layout
-            className={`group grid grid-cols-[1fr_auto] items-center gap-4 py-3 px-4 rounded-2xl border transition-all duration-200 bg-white shadow-sm h-[76px] ${isLowStock ? 'ring-1 ring-amber-200 border-amber-200' : 'border-slate-100 hover:border-slate-200'}`}
+            className={`group grid grid-cols-[1fr_auto] items-center gap-4 py-3 px-4 rounded-2xl border transition-all duration-200 bg-white shadow-sm min-h-[82px] ${isLowStock ? 'ring-1 ring-amber-200 border-amber-200' : 'border-slate-100 hover:border-slate-200'}`}
         >
             {/* 1. RIGHT SIDE: Name & Info (First in JSX = Right in RTL) */}
             <div className="flex flex-col justify-center text-right overflow-hidden min-w-0 flex-1">
                 <div className="flex items-center gap-2 justify-start">
                     {isDirty && <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />}
-                    <h4 className="font-extrabold text-slate-800 text-[15.5px] leading-tight truncate text-right w-full" title={item.name}>
+                    <h4 className="font-extrabold text-slate-800 text-[15.5px] leading-tight text-right w-full line-clamp-2" title={item.name}>
                         {item.name}
                     </h4>
                     {isLowStock && <AlertTriangle size={16} className="text-amber-500 shrink-0" />}
