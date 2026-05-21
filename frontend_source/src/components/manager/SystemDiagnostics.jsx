@@ -113,43 +113,43 @@ const SystemDiagnostics = ({ businessId }) => {
     }, [view, uptimeDays, targetBusinessId]);
 
     return (
-        <div className="h-full overflow-hidden flex flex-col">
-            {/* View Switcher Tabs */}
-            <div className="px-6 pt-6 flex gap-1 bg-slate-950">
+        <div className="h-full overflow-hidden flex flex-col bg-slate-50 text-slate-800 font-heebo">
+            {/* View Switcher Tabs - Unified Light Style */}
+            <div className="px-6 pt-6 flex gap-1 bg-white border-b border-slate-200">
                 <button
                     onClick={() => setView('live')}
-                    className={`px-6 py-2 rounded-t-xl font-bold transition-all flex items-center gap-2 ${view === 'live' ? 'bg-blue-600 text-white border-t border-l border-r border-blue-400 shadow-[0_-4px_10px_rgba(37,99,235,0.2)]' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                    className={`px-6 py-3 rounded-t-2xl font-black text-sm transition-all flex items-center gap-2 ${view === 'live' ? 'bg-blue-600 text-white shadow-[0_-4px_12px_rgba(37,99,235,0.15)] translate-y-px' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                     📸 צפייה ב-KDS
                 </button>
                 <button
                     onClick={() => setView('checklist')}
-                    className={`px-6 py-2 rounded-t-xl font-bold transition-all ${view === 'checklist' ? 'bg-[#000] text-[#00ff00] border-t border-l border-r border-[#00ff00]' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                    className={`px-6 py-3 rounded-t-2xl font-black text-sm transition-all flex items-center gap-2 ${view === 'checklist' ? 'bg-emerald-600 text-white shadow-[0_-4px_12px_rgba(5,150,105,0.15)] translate-y-px' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                     📟 DEPLOYMENT CHECKLIST
                 </button>
                 <button
                     onClick={() => setView('logs')}
-                    className={`px-6 py-2 rounded-t-xl font-bold transition-all ${view === 'logs' ? 'bg-slate-900 text-white border-t border-l border-r border-slate-700' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                    className={`px-6 py-3 rounded-t-2xl font-black text-sm transition-all flex items-center gap-2 ${view === 'logs' ? 'bg-slate-800 text-white shadow-[0_-4px_12px_rgba(30,41,59,0.15)] translate-y-px' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
                 >
                     🛠️ ADVANCED DIAGNOSTICS
                 </button>
             </div>
 
             {view === 'live' ? (
-                <div className="flex-1 p-6 overflow-auto bg-slate-950 flex flex-col items-center">
+                <div className="flex-1 p-6 overflow-auto bg-slate-50 flex flex-col items-center">
                     <div className="w-full max-w-4xl">
                         <KDSObservability isEmbedded={true} />
                     </div>
                 </div>
             ) : view === 'checklist' ? (
-                <div className="flex-1 min-h-0 bg-black">
+                <div className="flex-1 min-h-0 bg-slate-50">
                     <DeploymentChecklist businessId={targetBusinessId} />
                 </div>
             ) : (
-                <div className="flex-1 p-4 md:p-6 overflow-auto flex flex-col gap-4 bg-slate-900">
+                <div className="flex-1 p-4 md:p-6 overflow-auto flex flex-col gap-4 bg-slate-50">
                     <div className="text-center md:text-right">
-                        <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+                        <h1 className="text-2xl md:text-3xl font-black text-slate-900">
                             🛠️ כלי דיאגנוסטיקה מתקדמים
                         </h1>
                         <p className="text-slate-500 text-sm">בדיקות עומק, סימולציות ובדיקת מערכת הנאמנות</p>
@@ -160,13 +160,13 @@ const SystemDiagnostics = ({ businessId }) => {
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 shadow-lg border border-purple-100"
+                                className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200"
                             >
                                 <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-purple-200">
                                     <span className="text-2xl">☕</span>
                                 </div>
-                                <h3 className="text-lg font-bold text-purple-800 mb-1">סימולציית 10 הזמנות</h3>
-                                <p className="text-xs text-purple-600/70 mb-4">יוצר הזמנות עם נקודות נאמנות</p>
+                                <h3 className="text-lg font-bold text-slate-800 mb-1">סימולציית 10 הזמנות</h3>
+                                <p className="text-xs text-slate-500 mb-4">יוצר הזמנות עם נקודות נאמנות</p>
                                 <button
                                     onClick={handleRunTrafficSim}
                                     disabled={isRunning}
@@ -179,12 +179,12 @@ const SystemDiagnostics = ({ businessId }) => {
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-5 shadow-lg border border-emerald-100"
+                                className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200"
                             >
                                 <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-emerald-200">
                                     <span className="text-2xl">🎬</span>
                                 </div>
-                                <h3 className="text-lg font-bold text-emerald-800 mb-1">בדיקת E2E לייב</h3>
+                                <h3 className="text-lg font-bold text-slate-800 mb-1">בדיקת E2E לייב</h3>
                                 <div className="flex flex-col gap-2">
                                     <button
                                         onClick={async () => {
@@ -208,56 +208,51 @@ const SystemDiagnostics = ({ businessId }) => {
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 rounded-2xl p-5 shadow-lg border border-blue-500/30 text-white"
+                                className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200"
                             >
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="w-12 h-12 bg-blue-500/20 text-blue-400 rounded-xl flex items-center justify-center shadow-inner">
-                                        <span className="text-xl">📡</span>
+                                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                                        <Activity size={24} />
                                     </div>
-                                    <div className="flex bg-slate-800/80 p-1 rounded-lg text-[10px] font-bold">
+                                    <div className="flex bg-slate-100 p-1 rounded-lg text-[10px] font-bold">
                                         <button
                                             onClick={() => setUptimeDays(1)}
-                                            className={`px-2 py-1 rounded ${uptimeDays === 1 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                                            className={`px-2 py-1 rounded ${uptimeDays === 1 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
                                         >24H</button>
                                         <button
                                             onClick={() => setUptimeDays(7)}
-                                            className={`px-2 py-1 rounded ${uptimeDays === 7 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                                            className={`px-2 py-1 rounded ${uptimeDays === 7 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
                                         >7D</button>
                                     </div>
                                 </div>
-                                <h3 className="text-lg font-bold text-blue-100 mb-1">זמינות המערכת (Uptime)</h3>
-                                <p className="text-[10px] text-blue-300/70 mb-4">* בשעות הפעילות של העסק בלבד</p>
+                                <h3 className="text-lg font-bold text-slate-800 mb-1">זמינות המערכת (Uptime)</h3>
+                                <p className="text-[10px] text-slate-500 mb-4">* בשעות הפעילות של העסק בלבד</p>
 
                                 <div className="space-y-4">
                                     {isUptimeLoading ? (
                                         <div className="animate-pulse flex flex-col gap-2">
-                                            <div className="h-2 bg-slate-700 rounded-full w-full"></div>
-                                            <div className="h-2 bg-slate-700 rounded-full w-2/3"></div>
+                                            <div className="h-2 bg-slate-100 rounded-full w-full"></div>
+                                            <div className="h-2 bg-slate-100 rounded-full w-2/3"></div>
                                         </div>
                                     ) : uptimeStats.length === 0 ? (
-                                        <p className="text-xs text-slate-500 text-center py-4 italic">אין נתוני היסטוריית חיבור עדיין</p>
+                                        <p className="text-xs text-slate-400 text-center py-4 italic">אין נתוני היסטוריית חיבור עדיין</p>
                                     ) : (
                                         uptimeStats.map((stat, i) => {
                                             const percent = parseFloat(stat.uptime_percentage);
                                             const colorClass = percent > 95 ? 'bg-emerald-500' : percent > 80 ? 'bg-amber-500' : 'bg-red-500';
-                                            const textColorClass = percent > 95 ? 'text-emerald-400' : percent > 80 ? 'text-amber-400' : 'text-red-400';
 
                                             return (
                                                 <div key={i} className="space-y-1">
                                                     <div className="flex justify-between text-[11px] font-bold">
-                                                        <span className="truncate max-w-[120px] opacity-80">{stat.device_type?.toUpperCase()} - {stat.device_id?.slice(-4)}</span>
-                                                        <span className={textColorClass}>{percent}%</span>
+                                                        <span className="truncate max-w-[120px] text-slate-500">{stat.device_type?.toUpperCase()} - {stat.device_id?.slice(-4)}</span>
+                                                        <span className={percent > 95 ? 'text-emerald-600' : 'text-slate-900'}>{percent}%</span>
                                                     </div>
-                                                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                         <motion.div
                                                             initial={{ width: 0 }}
                                                             animate={{ width: `${percent}%` }}
                                                             className={`h-full ${colorClass}`}
                                                         />
-                                                    </div>
-                                                    <div className="flex justify-between text-[9px] text-slate-500">
-                                                        <span>{stat.total_active_hours} שעות פעילות</span>
-                                                        <span>מתוך {stat.expected_hours}</span>
                                                     </div>
                                                 </div>
                                             );
@@ -267,7 +262,7 @@ const SystemDiagnostics = ({ businessId }) => {
 
                                 <button
                                     onClick={fetchUptimeData}
-                                    className="mt-4 w-full py-1.5 text-[10px] font-bold text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 transition-all uppercase tracking-wider"
+                                    className="mt-4 w-full py-1.5 text-[10px] font-bold text-slate-400 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all uppercase tracking-wider"
                                 >
                                     רענן נתונים 🔄
                                 </button>
@@ -277,19 +272,21 @@ const SystemDiagnostics = ({ businessId }) => {
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="lg:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col font-mono text-sm border border-slate-600"
+                            className="lg:col-span-2 bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col font-mono text-sm border border-slate-200"
                         >
-                            <div className="bg-slate-800/80 backdrop-blur px-4 py-3 border-b border-slate-600 flex justify-between items-center">
+                            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                                 <span className="text-slate-400 text-xs">📟 System Logs</span>
                                 {logs.length > 0 && (
-                                    <button onClick={handleCopy} className="bg-amber-500 text-white px-3 py-1 rounded text-xs">📋 העתק</button>
+                                    <button onClick={handleCopy} className={`px-3 py-1 rounded text-xs transition-all ${copied ? 'bg-emerald-500 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+                                        {copied ? 'הועתק!' : '📋 העתק'}
+                                    </button>
                                 )}
                             </div>
-                            <div className="flex-1 p-4 overflow-y-auto text-slate-300">
+                            <div className="flex-1 p-4 overflow-y-auto text-slate-600 bg-white">
                                 {logs.map((log, idx) => (
                                     <div key={idx} className="flex gap-2 py-0.5">
-                                        <span className="text-slate-500 text-[10px]">[{log.time}]</span>
-                                        <span className={log.msg.includes('❌') ? 'text-red-400' : log.msg.includes('✅') ? 'text-emerald-400' : ''}>
+                                        <span className="text-slate-300 text-[10px]">[{log.time}]</span>
+                                        <span className={log.msg.includes('❌') ? 'text-red-500' : log.msg.includes('✅') ? 'text-emerald-600 font-bold' : ''}>
                                             {log.msg}
                                         </span>
                                     </div>

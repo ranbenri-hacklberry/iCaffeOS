@@ -30,16 +30,6 @@ const ManagerDashboard = () => {
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
-    } else {
-      const accessLevel = (currentUser.access_level || '').toLowerCase();
-      const role = (currentUser.role || '').toLowerCase();
-      const isAuthorized = role === 'admin' || role === 'manager' || role === 'owner' ||
-        accessLevel === 'admin' || accessLevel === 'manager' || accessLevel === 'owner' ||
-        currentUser.is_admin;
-
-      if (!isAuthorized) {
-        navigate('/mode-selection');
-      }
     }
   }, [currentUser, navigate]);
 

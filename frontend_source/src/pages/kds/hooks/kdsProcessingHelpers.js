@@ -1,4 +1,4 @@
-const MAX_ACTIVE_ORDER_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days (keep tablet lightweight)
+const MAX_ACTIVE_ORDER_AGE_MS = 2 * 24 * 60 * 60 * 1000; // 2 days (lean diet)
 const MAX_READY_ORDER_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for ready items history 
 
 /**
@@ -283,7 +283,10 @@ export const processOrderItems = (order, menuMap) => {
                 category: item.menu_items?.category || freshMenuItem?.category || '',
                 course_stage: item.course_stage || 1,
                 item_fired_at: item.item_fired_at,
-                is_early_delivered: item.is_early_delivered || (['ready', 'completed'].includes(itemStatus) && !['ready', 'completed'].includes(order.order_status))
+                is_early_delivered: !!(item.early_delivered_at || item.is_early_delivered),
+                early_delivered_at: item.early_delivered_at || null,
+                urgent_at: item.urgent_at || null,
+                production_area: item.menu_items?.production_area || freshMenuItem?.production_area || null,
             };
         });
 };

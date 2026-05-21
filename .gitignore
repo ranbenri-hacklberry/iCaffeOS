@@ -37,3 +37,8 @@ frontend_source/public/music/
 *.flac
 *.mp3
 *.wav
+
+backend/music_cache/
+postgres_data/
+**/venv/
+**/.venv/

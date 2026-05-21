@@ -18,14 +18,82 @@ const SuppliersList: React.FC<SuppliersListProps> = ({
     onSelectSupplier,
     supplierCounts
 }) => {
+    // Today/Tomorrow logic
+    const today = new Date().getDay(); // 0=Sunday=ראשון
+    const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+
+    // Calculate days until a target day (wrapping around week)
+    const daysUntil = (targetDay: number) => {
+        const diff = targetDay - today;
+        return diff >= 0 ? diff : diff + 7;
+    };
+
+    const getDeliveryInfo = (supplier: any) => {
+        const schedule: { day: number, lead_days: number, cutoff: string | null }[] = supplier.schedule || [];
+        if (schedule.length === 0) return null;
+
+        // Find the most urgent action for today
+        // 1. Is there a delivery TODAY? → count on arrival
+        const todayDelivery = schedule.find(s => s.day === today);
+        if (todayDelivery) {
+            return { status: 'delivery_today' as const, cutoff: todayDelivery.cutoff, deliveryDay: DAY_NAMES[today], orderDay: null };
+        }
+
+        // 2. Is today an ORDER DAY for any upcoming delivery?
+        //    (delivery_day - lead_days = today)
+        const orderDueToday = schedule.find(s => {
+            const orderDay = (s.day - (s.lead_days || 1) + 7) % 7;
+            return orderDay === today;
+        });
+        if (orderDueToday) {
+            return {
+                status: 'order_today' as const,
+                cutoff: orderDueToday.cutoff,
+                deliveryDay: DAY_NAMES[orderDueToday.day],
+                orderDay: DAY_NAMES[today],
+                daysUntilDelivery: daysUntil(orderDueToday.day)
+            };
+        }
+
+        // 3. Find next upcoming event (delivery or order deadline)
+        let nearest = null as any;
+        let nearestDays = 999;
+        for (const entry of schedule) {
+            const orderDay = (entry.day - (entry.lead_days || 1) + 7) % 7;
+            const daysToOrder = daysUntil(orderDay);
+            const daysToDelivery = daysUntil(entry.day);
+            const nextEvent = Math.min(daysToOrder, daysToDelivery);
+            if (nextEvent < nearestDays && nextEvent > 0) {
+                nearestDays = nextEvent;
+                nearest = {
+                    status: 'upcoming' as const,
+                    cutoff: entry.cutoff,
+                    deliveryDay: DAY_NAMES[entry.day],
+                    orderDay: DAY_NAMES[orderDay],
+                    daysToOrder: daysToOrder,
+                    daysToDelivery: daysToDelivery
+                };
+            }
+        }
+        return nearest;
+    };
+
     // Filter out suppliers with 0 items
-    const suppliersWithItems = suppliers.filter(s => (supplierCounts[s.id] || 0) > 0);
+    const suppliersWithItems = suppliers.filter(s => (supplierCounts[String(s.id)] || 0) > 0);
 
     // Add uncategorized only if it has items
     const regularSuppliers = [
         ...suppliersWithItems,
-        ...(supplierCounts['uncategorized'] > 0 ? [{ id: 'uncategorized', name: 'כללי / ללא ספק' }] : [])
+        ...(supplierCounts['uncategorized'] > 0 ? [{ id: 'uncategorized', name: 'כללי / ללא ספק', delivery_days_arr: [], schedule: [] }] : [])
     ];
+
+    // Sort: delivery_today → order_today → upcoming → no schedule
+    const sortedSuppliers = [...regularSuppliers].sort((a, b) => {
+        const infoA = getDeliveryInfo(a);
+        const infoB = getDeliveryInfo(b);
+        const priority = (s: string | undefined) => s === 'delivery_today' ? 0 : s === 'order_today' ? 1 : s === 'upcoming' ? 2 : 3;
+        return priority(infoA?.status) - priority(infoB?.status);
+    });
 
     return (
         <div className="w-80 h-full bg-slate-50 border-l border-slate-200 overflow-y-auto no-scrollbar pb-20">
@@ -37,9 +105,10 @@ const SuppliersList: React.FC<SuppliersListProps> = ({
 
                 {/* Regular Suppliers */}
                 <div className="space-y-3 mb-6">
-                    {regularSuppliers.map((supplier) => {
-                        const count = supplierCounts[supplier.id] || 0;
-                        const isActive = selectedSupplierId === supplier.id;
+                    {sortedSuppliers.map((supplier: any) => {
+                        const count = supplierCounts[String(supplier.id)] || 0;
+                        const isActive = String(selectedSupplierId) === String(supplier.id);
+                        const info = getDeliveryInfo(supplier);
 
                         return (
                             <MotionButton
@@ -50,15 +119,30 @@ const SuppliersList: React.FC<SuppliersListProps> = ({
                                 className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${isActive
                                         ? 'bg-white shadow-md border-indigo-100 border'
                                         : 'hover:bg-slate-100 text-slate-600'
-                                    }`}
+                                    } ${info?.status === 'delivery_today' ? 'ring-2 ring-emerald-300' : ''} ${info?.status === 'order_today' ? 'ring-2 ring-amber-300' : ''}`}
                             >
-                                <div className="flex flex-col items-start">
+                                <div className="flex flex-col items-start gap-0.5">
                                     <span className={`font-bold transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-800'}`}>
                                         {supplier.name}
                                     </span>
                                     <span className="text-xs text-slate-500 font-medium">
                                         {count} פריטים
                                     </span>
+                                    {info?.status === 'delivery_today' && (
+                                        <span className="text-xs font-bold text-emerald-600 mt-0.5">
+                                            📦 אספקה היום — לספור בקבלה
+                                        </span>
+                                    )}
+                                    {info?.status === 'order_today' && (
+                                        <span className="text-xs font-bold text-amber-600 mt-0.5">
+                                            🚛 אספקה יום {info.deliveryDay} · הזמנה עד {info.cutoff || '—'}
+                                        </span>
+                                    )}
+                                    {info?.status === 'upcoming' && (
+                                        <span className="text-xs text-slate-400 mt-0.5">
+                                            אספקה {info.deliveryDay} · הזמנה {info.orderDay}{info.cutoff ? ` עד ${info.cutoff}` : ''}
+                                        </span>
+                                    )}
                                 </div>
                                 <ChevronLeft
                                     size={18}

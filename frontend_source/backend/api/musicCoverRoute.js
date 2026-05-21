@@ -47,9 +47,9 @@ function getSupabaseClient() {
 
     // Prioritize local for speed and offline support, fallback to remote
     const localUrl = process.env.LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
-    const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY;
-    const remoteUrl = process.env.SUPABASE_URL;
-    const remoteKey = process.env.SUPABASE_SERVICE_KEY;
+    const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY;
+    const remoteUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const remoteKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
     // Detection logic
     const useLocal = localUrl && localKey; // Simple check for now

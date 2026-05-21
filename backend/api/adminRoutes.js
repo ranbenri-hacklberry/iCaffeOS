@@ -13,7 +13,9 @@ import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+// Load backend/.env first, then project root .env.local
 dotenv.config({ path: join(__dirname, '../.env') });
+dotenv.config({ path: join(__dirname, '../../.env.local'), override: false });
 
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
@@ -22,13 +24,13 @@ const router = express.Router();
 
 // Cloud Supabase Client
 const cloudSupabase = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+    process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Docker Local Supabase Client
+// Local Supabase Client
 const DOCKER_URL = process.env.LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
-const DOCKER_KEY = process.env.LOCAL_SUPABASE_ANON_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const DOCKER_KEY = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_ANON_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const dockerSupabase = createClient(DOCKER_URL, DOCKER_KEY);
 
@@ -333,16 +335,23 @@ router.post('/sync-cloud-to-local', async (req, res) => {
                 }
 
                 // Clear Docker table first (for this business only)
-                console.log(`[CloudSync] Clearing Docker ${table.name}...`);
-                if (table.hasBusinessId) {
-                    await dockerSupabase.from(table.name).delete().eq('business_id', businessId);
-                } else if (table.name === 'businesses') {
-                    await dockerSupabase.from(table.name).delete().eq('id', businessId);
+                // ⚠️ IMPORTANT: menu_items and item_category use MERGE strategy (upsert without delete)
+                // to prevent wiping locally-added items that don't exist in Cloud yet.
+                const MERGE_ONLY_TABLES = ['menu_items', 'item_category', 'optiongroups'];
+                const useMerge = MERGE_ONLY_TABLES.includes(table.name);
+
+                if (!useMerge) {
+                    console.log(`[CloudSync] Clearing Docker ${table.name}...`);
+                    if (table.hasBusinessId) {
+                        await dockerSupabase.from(table.name).delete().eq('business_id', businessId);
+                    } else if (table.name === 'businesses') {
+                        await dockerSupabase.from(table.name).delete().eq('id', businessId);
+                    } else {
+                        // For tables without business_id (optionvalues, menuitemoptions, order_items)
+                        console.log(`[CloudSync] Skipping clear for ${table.name} (no business_id)`);
+                    }
                 } else {
-                    // For tables without business_id (optionvalues, menuitemoptions, order_items)
-                    // We need to be more careful - delete only what's related to this business
-                    // For now, we'll skip clearing these tables completely to avoid data loss
-                    console.log(`[CloudSync] Skipping clear for ${table.name} (no business_id)`);
+                    console.log(`[CloudSync] Using MERGE strategy for ${table.name} (no delete)`);
                 }
 
                 // Insert/Upsert into Docker

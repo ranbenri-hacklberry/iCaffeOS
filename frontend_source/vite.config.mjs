@@ -55,14 +55,57 @@ export default defineConfig(async ({ mode }) => {
       dedupe: ['react', 'react-dom'],
     },
     server: {
-      port: 4029,
+      port: 4028,
       host: "0.0.0.0",
-      strictPort: true,
+      strictPort: false,
       allowedHosts: 'all',
+      // Force no-cache so tablets always get fresh code after restart
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+      hmr: {
+        // Let Vite auto-detect host from window.location (works for LAN devices)
+        port: 4028,
+      },
       proxy: {
         "/item": { target: backendTarget, changeOrigin: true, secure: false },
         "/api/marketing": { target: backendTarget, changeOrigin: true, secure: false },
         "/api/maya": { target: backendTarget, changeOrigin: true, secure: false },
+        "/api/sms": {
+          target: "https://sapi.itnewsletter.co.il",
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api\/sms/, "/api/restApiSms"),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              let body = '';
+              req.on('data', chunk => body += chunk);
+              req.on('end', () => {
+                try {
+                  const data = JSON.parse(body);
+                  const time = new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
+                  const phone = data.destinations || '?';
+                  const msgPreview = (data.txtSMSmessage || '').slice(0, 50);
+                  console.log(`\n📱 ═══════════════════════════════════════`);
+                  console.log(`📱 SMS OUT  │ ${time}`);
+                  console.log(`📱 Phone    │ ${phone}`);
+                  console.log(`📱 Message  │ ${msgPreview}...`);
+                  console.log(`📱 Path     │ ${req.url}`);
+                  console.log(`📱 ═══════════════════════════════════════\n`);
+                } catch(e) { /* ignore parse errors */ }
+              });
+            });
+            proxy.on('proxyRes', (proxyRes, req) => {
+              let responseBody = '';
+              proxyRes.on('data', chunk => responseBody += chunk);
+              proxyRes.on('end', () => {
+                const status = proxyRes.statusCode;
+                const icon = status >= 200 && status < 300 ? '✅' : '❌';
+                console.log(`${icon} SMS Response │ Status: ${status} │ Body: ${responseBody.slice(0, 120)}`);
+              });
+            });
+          },
+        },
         "/api": { target: backendTarget, changeOrigin: true, secure: false },
         "/health": { target: backendTarget, changeOrigin: true, secure: false },
         "/music/volumes": { target: backendTarget, changeOrigin: true },

@@ -173,6 +173,9 @@ GEMINI_CONFIG = genai.types.GenerationConfig(
 #  ROUTES
 # ══════════════════════════════════════════════════════════════════════
 
+# ── SMS Gateway Decommissioned ──────────────────────────────────────
+# The SMS proxy has been migrated to the Vite Server middleware.
+
 # ── Health (public — no auth) ──────────────────────────────────────────
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])

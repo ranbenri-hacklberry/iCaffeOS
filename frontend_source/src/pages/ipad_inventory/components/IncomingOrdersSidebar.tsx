@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Truck, ChevronLeft, Calendar, Package } from 'lucide-react';
+import { Truck, ChevronLeft, Calendar, Package, ScanLine, FileText } from 'lucide-react';
 import { IncomingOrder } from '@/pages/ipad_inventory/types';
 
 const MotionButton = motion.button as any;
@@ -10,14 +10,29 @@ interface IncomingOrdersSidebarProps {
     selectedOrderId: string | null;
     onSelectOrder: (orderId: string) => void;
     isLoading: boolean;
+    onScanInvoice?: (file: File) => void;
+    isScanning?: boolean;
 }
 
 const IncomingOrdersSidebar: React.FC<IncomingOrdersSidebarProps> = ({
     orders,
     selectedOrderId,
     onSelectOrder,
-    isLoading
+    isLoading,
+    onScanInvoice,
+    isScanning = false
 }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && onScanInvoice) {
+            onScanInvoice(file);
+        }
+        // Reset so the same file can be selected again
+        if (e.target) e.target.value = '';
+    };
+
     if (isLoading) {
         return (
             <div className="w-80 h-full bg-slate-50 border-l border-slate-200 flex items-center justify-center">
@@ -29,17 +44,67 @@ const IncomingOrdersSidebar: React.FC<IncomingOrdersSidebarProps> = ({
     return (
         <div className="w-80 h-full bg-slate-50 border-l border-slate-200 overflow-y-auto no-scrollbar pb-20">
             <div className="p-6">
-                <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
                     <Truck size={22} className="text-indigo-600" />
-                    <span>משלוחים בדרך</span>
+                    <span>קבלת סחורה</span>
                 </h2>
 
+                {/* Scan Invoice Button */}
+                <MotionButton
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isScanning}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    className={`w-full flex items-center gap-3 p-4 rounded-2xl mb-6 transition-all border-2 border-dashed ${
+                        isScanning
+                            ? 'bg-indigo-50 border-indigo-300 cursor-wait'
+                            : 'bg-gradient-to-l from-indigo-50 to-purple-50 border-indigo-200 hover:border-indigo-400 hover:shadow-md cursor-pointer'
+                    }`}
+                >
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                        isScanning ? 'bg-indigo-100' : 'bg-white shadow-sm'
+                    }`}>
+                        {isScanning ? (
+                            <div className="w-6 h-6 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                        ) : (
+                            <ScanLine size={22} className="text-indigo-600" />
+                        )}
+                    </div>
+                    <div className="flex flex-col items-start">
+                        <span className="font-black text-sm text-indigo-700">
+                            {isScanning ? 'סורק חשבונית...' : 'סרוק חשבונית'}
+                        </span>
+                        <span className="text-[10px] text-indigo-400 font-medium">
+                            {isScanning ? 'ה-AI מנתח את הפריטים' : 'צלם או העלה תמונה של חשבונית'}
+                        </span>
+                    </div>
+                </MotionButton>
+
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*,application/pdf"
+                    capture="environment"
+                    onChange={handleFileChange}
+                />
+
+                {/* Divider with label */}
+                {orders.length > 0 && (
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="flex-1 h-px bg-slate-200" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">הזמנות פתוחות</span>
+                        <div className="flex-1 h-px bg-slate-200" />
+                    </div>
+                )}
+
                 {orders.length === 0 ? (
-                    <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Truck size={32} className="text-slate-300" />
+                    <div className="text-center py-8">
+                        <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <FileText size={28} className="text-slate-300" />
                         </div>
-                        <p className="text-slate-400 font-bold text-sm">אין משלוחים פעילים</p>
+                        <p className="text-slate-400 font-bold text-xs">אין הזמנות פתוחות</p>
+                        <p className="text-slate-300 text-[10px] mt-1">ניתן לקבל סחורה ע"י סריקת חשבונית</p>
                     </div>
                 ) : (
                     <div className="space-y-3">

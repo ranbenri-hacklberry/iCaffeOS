@@ -1089,7 +1089,7 @@ const SalesDashboard = () => {
               {displayedOrders.map(order => {
                 const isExpanded = expandedOrderIds.has(order.id);
                 const timeStr = new Date(order.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-                const orderNum = order.order_number || order.id.toString().slice(-4);
+                const orderNum = order.order_number || (order.id?.toString() || '').slice(-4) || 'N/A';
 
                 return (
                   <motion.div

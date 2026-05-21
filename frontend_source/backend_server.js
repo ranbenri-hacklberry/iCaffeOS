@@ -9,7 +9,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { SerialPort } from 'serialport';
-import { uploadBackupToDrive, getLastBackupTime } from './src/services/dbBackupService.js';
+import { uploadBackupToDrive, getLastBackupTime } from './src/services/dbBackupService.mjs';
 import { Bonjour } from 'bonjour-service';
 import net from 'net';
 import * as mm from 'music-metadata';
@@ -133,6 +133,17 @@ app.get('/health', (req, res) => {
         status: 'ok',
         hostname: hostname || 'N150'
     });
+});
+
+// 🧪 DEBUG: Direct Inventory Routes
+app.get('/api/admin/inventory/cross-business-report', async (req, res) => {
+    console.log('🧪 [Debug] Direct Cross-Business Report hit!');
+    res.json({ success: true, message: 'Direct route works!' });
+});
+
+app.get('/api/admin/inventory/duplicate-names-report', async (req, res) => {
+    console.log('🧪 [Debug] Direct Duplicate Names Report hit!');
+    res.json({ success: true, message: 'Direct route works!' });
 });
 
 // 🆕 Aggregated Health Endpoint
@@ -322,7 +333,7 @@ app.get('/api/system/capture-screenshot', (req, res) => {
 
 
 // === WHATSAPP & SMS MANAGER (LOCAL) ===
-import whatsAppManager from './src/services/whatsappManager.js';
+import whatsAppManager from './src/services/whatsappManager.mjs';
 
 // === MAYA API ROUTES ===
 import mayaRoutes from './backend/api/mayaRoutes.js';
@@ -963,8 +974,8 @@ app.post('/api/sms/send', async (req, res) => {
 const REMOTE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const REMOTE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-const LOCAL_URL = process.env.LOCAL_SUPABASE_URL;
-const LOCAL_KEY = process.env.LOCAL_SUPABASE_SERVICE_KEY;
+const LOCAL_URL = process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
+const LOCAL_KEY = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY;
 
 let remoteSupabase = null;
 let localSupabase = null;

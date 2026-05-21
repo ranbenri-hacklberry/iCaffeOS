@@ -6,7 +6,7 @@ const router = express.Router();
 // Hybrid Supabase Client (Standardized as in backend_server.js)
 const REMOTE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const REMOTE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY;
-const supabase = createClient(REMOTE_URL, REMOTE_KEY);
+const supabase = createClient(REMOTE_URL, REMOTE_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY);
 
 /**
  * 🍳 PREP KITCHEN (Claude Integration)

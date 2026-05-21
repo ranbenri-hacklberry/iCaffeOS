@@ -61,6 +61,9 @@ export class LocalAssetScanner {
                     await this._scanDir(fullPath, assets);
                 }
             } else if (entry.isFile()) {
+                // Ignore hidden files (starts with .) and macOS metadata files (starts with ._)
+                if (entry.name.startsWith('.')) continue;
+
                 const ext = path.extname(entry.name).toLowerCase();
                 if (SUPPORTED_EXTS.has(ext)) {
                     try {
@@ -83,21 +86,21 @@ export class LocalAssetScanner {
             const { common, format } = metadata;
             const stats = await fsPromises.stat(filePath);
 
-            // Logic: 
-            // 1. Tags
-            // 2. Folder depth (Album = parent, Artist = grandparent)
-            // 3. Defaults
-
-            const albumFallback = this._getFolderFallback(filePath, 1);
-            const artistFallback = this._getFolderFallback(filePath, 2);
+            // 📁 THE GOLDEN RULE: One Folder = One Album.
+            // We ignore metadata-based splitting to keep physical consistency.
+            const folderPath = path.dirname(filePath);
+            const albumName = path.basename(folderPath);
+            const artistName = common.albumartist || common.artist || 'Various Artists';
+            const albumKey = folderPath;
 
             return {
                 id: this._generateId(filePath),
                 file_path: filePath,
                 file_size: stats.size,
                 title: common.title || path.basename(filePath, path.extname(filePath)),
-                artist: common.artist || artistFallback || 'Unknown Artist',
-                album: common.album || albumFallback || 'Unknown Album',
+                artist: common.artist || artistName,
+                album: albumName,
+                album_id: albumKey,
                 genre: common.genre ? common.genre[0] : null,
                 year: common.year || null,
                 duration: format.duration || 0,
@@ -105,16 +108,17 @@ export class LocalAssetScanner {
             };
         } catch (error) {
             const stats = await fsPromises.stat(filePath).catch(() => ({ size: 0 }));
-            const albumFallback = this._getFolderFallback(filePath, 1);
-            const artistFallback = this._getFolderFallback(filePath, 2);
+            const albumFolder = path.dirname(filePath);
+            const artistFolder = path.dirname(albumFolder);
 
             return {
                 id: this._generateId(filePath),
                 file_path: filePath,
                 file_size: stats.size,
                 title: path.basename(filePath),
-                artist: artistFallback || 'Unknown',
-                album: albumFallback || 'Unknown',
+                artist: artistFolder !== this.rootPath ? path.basename(artistFolder) : 'Unknown',
+                album: path.basename(albumFolder),
+                album_id: albumFolder,
                 duration: 0,
                 scanned_at: new Date().toISOString()
             };

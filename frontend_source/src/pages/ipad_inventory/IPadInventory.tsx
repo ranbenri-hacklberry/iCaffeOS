@@ -37,6 +37,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [showReportModal, setShowReportModal] = useState(false);
     const [stockDeltas, setStockDeltas] = useState<Record<string, number>>({});
+    const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
     // Data Hooks
     const { items, suppliers, loading: dataLoading, refresh: refreshData } = useInventoryData(businessId);
@@ -68,7 +69,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     const supplierCounts = useMemo(() => {
         const counts: Record<string, number> = {};
         items.forEach(item => {
-            const id = item.supplier_id || 'uncategorized';
+            const id = String(item.supplier_id || 'uncategorized');
             counts[id] = (counts[id] || 0) + 1;
         });
         // Count prepared (this is usually dynamic or from menu_items, but for now we mirror ItemsGrid logic)
@@ -80,8 +81,8 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
         if (!selectedSupplierId) return [];
         return items.filter(i => {
             if (selectedSupplierId === 'prepared') return i.category?.includes('prep');
-            const supId = i.supplier_id || 'uncategorized';
-            return supId === selectedSupplierId;
+            const supId = String(i.supplier_id || 'uncategorized');
+            return supId === String(selectedSupplierId);
         });
     }, [items, selectedSupplierId]);
 
@@ -145,14 +146,57 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -20 }}
-                            className="flex-1 flex h-full"
+                            className="flex-1 flex h-full relative"
                         >
-                            <SuppliersList
-                                suppliers={suppliers}
-                                selectedSupplierId={selectedSupplierId}
-                                onSelectSupplier={setSelectedSupplierId}
-                                supplierCounts={supplierCounts}
-                            />
+                            {/* Desktop Sidebar */}
+                            <div className="hidden md:block">
+                                <SuppliersList
+                                    suppliers={suppliers}
+                                    selectedSupplierId={selectedSupplierId}
+                                    onSelectSupplier={setSelectedSupplierId}
+                                    supplierCounts={supplierCounts}
+                                />
+                            </div>
+
+                            {/* Mobile Sidebar (Overlay/Drawer) */}
+                            <AnimatePresence>
+                                {showMobileSidebar && (
+                                    <>
+                                        <motion.div 
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            onClick={() => setShowMobileSidebar(false)}
+                                            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] md:hidden"
+                                        />
+                                        <motion.div 
+                                            initial={{ x: '100%' }}
+                                            animate={{ x: 0 }}
+                                            exit={{ x: '100%' }}
+                                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                            className="fixed inset-y-0 right-0 w-80 bg-white z-[101] shadow-2xl md:hidden"
+                                        >
+                                            <SuppliersList
+                                                suppliers={suppliers}
+                                                selectedSupplierId={selectedSupplierId}
+                                                onSelectSupplier={(id) => {
+                                                    setSelectedSupplierId(id);
+                                                    setShowMobileSidebar(false);
+                                                }}
+                                                supplierCounts={supplierCounts}
+                                            />
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Mobile Sidebar Toggle Button */}
+                            <button 
+                                onClick={() => setShowMobileSidebar(true)}
+                                className="fixed bottom-24 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center z-50 md:hidden active:scale-90 transition-transform"
+                            >
+                                <Package size={24} />
+                            </button>
 
                             {selectedSupplierId === 'prepared' ? (
                                 <PreparedItemsView
@@ -185,6 +229,14 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                     if (order) initializeFromOrder(order);
                                 }}
                                 isLoading={ordersLoading}
+                                onScanInvoice={async (file) => {
+                                    const result = await scanInvoice(file);
+                                    if (result) {
+                                        setSelectedOrderId(null);
+                                        initializeSession(result);
+                                    }
+                                }}
+                                isScanning={isScanning}
                             />
 
                             {session ? (
@@ -206,8 +258,8 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                         <Package size={64} />
                                     </div>
                                     <div className="text-center">
-                                        <span className="text-2xl font-black text-slate-400 block mb-2">בחר משלוח</span>
-                                        <span className="text-slate-400 font-bold">בחר משלוח מהרשימה כדי להתחיל אימות</span>
+                                        <span className="text-2xl font-black text-slate-400 block mb-2">קבלת סחורה</span>
+                                        <span className="text-slate-400 font-bold">סרוק חשבונית או בחר הזמנה מהרשימה</span>
                                     </div>
                                 </div>
                             )}

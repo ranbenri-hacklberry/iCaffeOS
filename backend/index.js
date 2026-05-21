@@ -1,18 +1,32 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// Resolve paths relative to this file's location (backend/)
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Load env files in priority order:
+// 1. backend/.env (dev overrides)
+// 2. ../.env.local (project root — main credentials file)
+// 3. ../.env (project root fallback)
+dotenv.config({ path: resolve(__dirname, '.env') });
+dotenv.config({ path: resolve(__dirname, '../.env.local'), override: false });
+dotenv.config({ path: resolve(__dirname, '../.env'), override: false });
+
 
 console.log('--- [iCaffeOS Backend: Validating Environment] ---');
-const requiredEnvVars = [
-    { name: 'PORT', fallback: '8081' },
-    { name: 'VITE_SUPABASE_URL', fallback: 'None (CRITICAL)' },
-];
 
-const hasRoleKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.SUPABASE_SERVICE_KEY;
+const hasRoleKey = !!(
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.VITE_SUPABASE_SERVICE_KEY ||    // ← actual key in .env.local
+    process.env.LOCAL_SUPABASE_SERVICE_KEY
+);
 const hasStandardKey = !!process.env.SUPABASE_KEY;
 const hasAnonKey = !!process.env.VITE_SUPABASE_ANON_KEY;
 
 console.log(`- SUPABASE_URL: ${!!(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL)}`);
-console.log(`- SUPABASE_SERVICE_ROLE_KEY/SERVICE_KEY: ${hasRoleKey}`);
+console.log(`- Service Key (any form): ${hasRoleKey}`);
 console.log(`- SUPABASE_KEY: ${hasStandardKey}`);
 console.log(`- VITE_SUPABASE_ANON_KEY: ${hasAnonKey}`);
 console.log('------------------------------------------------');
@@ -20,6 +34,7 @@ console.log('------------------------------------------------');
 // Guard Execution
 if (!process.env.VITE_SUPABASE_URL && !process.env.SUPABASE_URL) {
     console.error('🚨 FATAL: Missing Supabase URL. Exiting to prevent crash loop.');
+
     process.exit(1);
 }
 if (!hasRoleKey && !hasStandardKey && !hasAnonKey) {
@@ -30,9 +45,10 @@ if (!hasRoleKey && !hasStandardKey && !hasAnonKey) {
 import os from 'os';
 import express from 'express';
 import cors from 'cors';
+import http from 'http';
 import driveRoutes from './api/driveRoutes.js';
 import ocrRoutes from './api/ocrRoutes.js';
-import musicRoutes from './api/musicRoutes.js';
+import musicRoutes, { setWsServerRef } from './api/musicRoutes.js';
 import spotifyRoutes from './api/spotifyRoutes.js';
 import mayaRoutes from './api/mayaRoutes.js';
 import marketingRoutes from './api/marketingRoutes.js';
@@ -42,6 +58,8 @@ import systemRoutes from './api/systemRoutes.js';
 import smsRoutes from './api/smsRoutes.js';
 import labRoutes from './api/labRoutes.js';
 import { CacheService } from './services/cacheService.js';
+import { RantunesWsServer } from './services/rantunesWsServer.js';
+import { DriveWatcher } from './services/driveWatcher.js';
 
 const app = express();
 const PORT = process.env.PORT || 8081;
@@ -86,8 +104,36 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
+// ──────────────── RanTunes Audio Engine ────────────────
+const rantunesWs = new RantunesWsServer(8082);
+rantunesWs.start().then(() => {
+    // Inject live WS server ref into musicRoutes for /playback/state endpoint
+    setWsServerRef(rantunesWs);
+    console.log('🎵 RanTunes WebSocket server started on ws://localhost:8082');
+}).catch(err => {
+    console.error('🚨 RanTunes WS server failed to start:', err.message);
+});
+
+const driveWatcher = new DriveWatcher(rantunesWs);
+driveWatcher.start();
+
+// ──────────────── HTTP Server ────────────────
+const server = http.createServer(app);
+server.listen(PORT, () => {
     console.log(`🚀 Backend server running on http://localhost:${PORT}`);
     console.log(`📂 Drive backup integration active`);
+    console.log(`🔌 RanTunes WS: ws://localhost:8082`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    driveWatcher.stop();
+    rantunesWs.stop();
+    server.close();
+});
+process.on('SIGINT', () => {
+    driveWatcher.stop();
+    rantunesWs.stop();
+    server.close();
+    process.exit(0);
 });

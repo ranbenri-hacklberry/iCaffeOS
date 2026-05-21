@@ -1,37 +1,54 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { PathManager } from '../utils/pathManager.js';
 import dotenv from 'dotenv';
 
-// 1. Ensure environment variables are loaded
-dotenv.config();
+// Load .env from backend dir AND project root .env.local
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../.env') });
+dotenv.config({ path: resolve(__dirname, '../../.env.local'), override: false });
 
-// 2. Fallback Chain for Supabase Keys
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+// Lazy Supabase client — credentials resolved on first use, not at parse time
+let _supabase = null;
 
-// Hierarchy: Service Role (Admin) -> Standard Server Key -> Anon Key
-const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY;
+function getSupabaseClient() {
+    if (_supabase) return _supabase;
 
-// 3. Early Failure if configurations are entirely missing (Defensive Architecture)
-if (!supabaseUrl || !supabaseKey) {
-    console.error('🚨 [SyncManager] CRITICAL ERROR: Supabase credentials missing during module initialization.');
-    console.error(`- supabaseUrl present: ${!!supabaseUrl}`);
-    console.error(`- supabaseKey present: ${!!supabaseKey}`);
-    process.exit(1);
+    const supabaseUrl =
+        process.env.LOCAL_SUPABASE_URL && process.env.LOCAL_SUPABASE_SERVICE_KEY
+            ? process.env.LOCAL_SUPABASE_URL
+            : (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL);
+
+    const supabaseKey =
+        process.env.LOCAL_SUPABASE_SERVICE_KEY ||
+        process.env.VITE_SUPABASE_SERVICE_KEY ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.SUPABASE_KEY ||
+        process.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+        console.warn('⚠️ [SyncManager] Supabase credentials not available — sync operations will fail.');
+        return null;
+    }
+
+    _supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false }
+    });
+    return _supabase;
 }
 
-// 4. Initialize the Singleton Supabase Client
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false
+// Named export kept for backwards compat
+export const supabase = new Proxy({}, {
+    get(_, prop) {
+        const client = getSupabaseClient();
+        if (!client) throw new Error('[SyncManager] Supabase not initialized — check credentials');
+        return client[prop];
     }
 });
+
 
 // 5. Explicit Named Export for the SyncManager
 export const SyncManager = {

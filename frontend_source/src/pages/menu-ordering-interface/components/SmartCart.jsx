@@ -69,6 +69,8 @@ const CartItem = React.memo(({ item, onRemove, onEdit, onToggleDelay, isRestrict
                 return !lower.includes('רגיל') &&
                     !lower.includes('default') &&
                     !lower.includes('standard') &&
+                    !lower.includes('kds_override') &&
+                    !lower.includes('kds_over') &&
                     lower.trim() !== '';
             });
 
