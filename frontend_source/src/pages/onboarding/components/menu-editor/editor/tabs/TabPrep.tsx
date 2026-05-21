@@ -63,23 +63,33 @@ const TabPrep = ({ localItem, setLocalItem }: TabPrepProps) => {
                                 { id: 'Kitchen', label: 'מטבח', icon: <ChefHat size={14} /> },
                                 { id: 'Bar', label: 'בר', icon: <Wine size={14} /> }
                             ].map(area => {
-                                const isSelected = (localItem.displayKDS || [localItem.productionArea || 'Checker']).includes(area.id);
+                                // Fallback parsing if backend returned csv string but local hasn't parsed it yet
+                                const storedKds = Array.isArray(localItem.displayKDS) 
+                                    ? localItem.displayKDS 
+                                    : (localItem.productionArea ? localItem.productionArea.split(',').map(s => s.trim()) : ['Checker']);
+                                
+                                const isSelected = storedKds.includes(area.id) || area.id === 'Checker';
                                 return (
                                     <button
                                         key={area.id}
                                         onClick={() => {
+                                            if (area.id === 'Checker') return; // Cannot toggle off Checker
+                                            
                                             const current = localItem.displayKDS || [localItem.productionArea || 'Checker'];
                                             let updated;
                                             if (current.includes(area.id)) {
                                                 updated = current.filter(id => id !== area.id);
-                                                if (updated.length === 0) updated = ['Checker'];
                                             } else {
                                                 updated = [...current, area.id];
                                             }
+                                            
+                                            // Enforce Checker is always present
+                                            updated = Array.from(new Set([...updated, 'Checker']));
+                                            
                                             setLocalItem({
                                                 ...localItem,
                                                 displayKDS: updated,
-                                                productionArea: updated[0]
+                                                productionArea: updated.join(',')
                                             });
                                         }}
                                         className={`flex flex-col items-center justify-center gap-1 p-3 rounded-xl border transition-all ${isSelected

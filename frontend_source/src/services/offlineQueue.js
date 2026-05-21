@@ -303,6 +303,14 @@ const processAction = async (action) => {
         return { skipped: true, reason: 'invalid_id_format' };
     }
 
+    // 🛡️ [PHANTOM ORDER PROTECTION] 
+    // We are disabling offline order queuing because it is the source of phantom orders.
+    // Every order must be placed while online to ensure consistency.
+    if (['CREATE_ORDER', 'UPDATE_ORDER_STATUS'].includes(action.type)) {
+        console.warn(`🛑 Action ${action.type} is DEPRECATED and BLOCKED to prevent phantom orders. Marking as done.`);
+        return { skipped: true, reason: 'deprecated_action_type' };
+    }
+
     // NEW: Handle generic CRUD actions
     if (['CREATE', 'UPDATE', 'DELETE'].includes(action.type)) {
         return processGenericAction(action);

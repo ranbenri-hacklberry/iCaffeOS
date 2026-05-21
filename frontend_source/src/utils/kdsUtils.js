@@ -120,6 +120,7 @@ export const groupOrderItems = (items) => {
             existing.totalPrice += item.price * item.quantity;
             // Keep the most "advanced" status and early delivered flag
             if (item.is_early_delivered) existing.is_early_delivered = true;
+            if (item.early_delivered_at) existing.early_delivered_at = item.early_delivered_at;
             // Keep lowest ID for stable sorting
             if (String(item.id) < String(existing._firstId)) {
                 existing._firstId = item.id;

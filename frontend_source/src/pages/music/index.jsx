@@ -112,7 +112,11 @@ const MusicPageContent = () => {
         handleReorder,
         removeFromQueue,
         addToQueue,
-        addPlaylistToQueue
+        addPlaylistToQueue,
+        playbackTarget,
+        setPlaybackTarget,
+        wsConnected,
+        wsError,
     } = useMusic();
 
     const [activeTab, setActiveTab] = useState('albums');
@@ -657,13 +661,45 @@ const MusicPageContent = () => {
                 forceMusicDark={true}
                 className="music-header"
                 rightContent={
-                    <div className="flex items-center gap-2 border-r border-white/10 pr-4 mr-4">
-                        {/* Source Indicator */}
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight shadow-sm w-fit mr-2 ml-2
+                    <div className="flex items-center gap-2">
+                        {/* Drive Source Indicator */}
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight shadow-sm
                             ${isMusicDriveConnected ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
                             {isMusicDriveConnected ? <HardDrive className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                             <span className="uppercase tracking-wider">{isMusicDriveConnected ? 'RANTUNES' : 'Local Disk'}</span>
                         </div>
+
+                        {/* Scan Button */}
+                        <button
+                            onClick={() => setShowScanner(true)}
+                            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all text-white shadow-lg"
+                            title="סריקת ספרייה"
+                        >
+                            <Search className="w-5 h-5 text-purple-400" />
+                        </button>
+
+                        <button
+                            onClick={() => navigate('/')}
+                            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all"
+                        >
+                            <Home className="w-5 h-5 text-white/70" />
+                        </button>
+
+                        {/* Server / Local Audio Toggle */}
+                        <button
+                            onClick={() => setPlaybackTarget(playbackTarget === 'server' ? 'local' : 'server')}
+                            title={playbackTarget === 'server' ? 'נגינה: שרת M4 (לחץ לעבור למקומי)' : 'נגינה: קסם מקומי (לחץ לעבור לשרת)'}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight transition-all active:scale-95
+                                ${playbackTarget === 'server'
+                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                    : 'bg-white/5 text-white/40 border-white/10 hover:text-white/70'}`}
+                        >
+                            {/* WS connection dot */}
+                            <span className={`w-1.5 h-1.5 rounded-full ${playbackTarget === 'server' ? (wsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400 animate-pulse') : 'bg-white/20'}`} />
+                            <span>{playbackTarget === 'server' ? (wsConnected ? 'M4 LIVE' : 'M4 OFF') : 'LOCAL'}</span>
+                        </button>
+
+                        <div className="w-px h-6 bg-white/10" />
 
                         {/* Library Tools / Edit Actions */}
                         {isEditMode ? (

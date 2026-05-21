@@ -6,7 +6,7 @@
 
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
-import { Clock, Edit, RotateCcw, Flame, Truck, Phone, MapPin, Package, Check, CheckCircle, Box, CreditCard } from 'lucide-react';
+import { Clock, Edit, RotateCcw, Flame, Truck, Phone, MapPin, Package, Check, CheckCircle, Box, CreditCard, MessageCircle } from 'lucide-react';
 import { sortItems } from '@/utils/kdsUtils';
 import { getShortName, getModColorClass } from '@/config/modifierShortNames';
 
@@ -89,11 +89,21 @@ const OrderCard = memo(({
   onReadyItems,
   onDeliverItems,
   onToggleEarlyDelivered,
+  onStationDeliver,
+  onRefireItem,
   onEditOrder,
   onCancelOrder,
-  onRefresh
+  onRefresh,
+  getSmsStatus,
+  isStationView = false,
+  isSentLane = false,
+  hasUrgent = false
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // 📱 SMS Status for this order
+  const orderId = order.originalOrderId || order.id;
+  const smsStatus = getSmsStatus ? getSmsStatus(orderId) : null;
 
   // --- 🔋 LITE MODE SUPPORT ---
   // Force Lite Mode optimizations if we are on a tablet-sized screen (width <= 1280px) OR if explicitly set
@@ -159,37 +169,29 @@ const OrderCard = memo(({
   }, [order.type, order.orderStatus, isHistory, order.isPaid, isLiteMode]);
 
   const { isLargeOrder, rightColItems, leftColItems, unifiedItems } = useMemo(() => {
-    // ⚠️ CRITICAL: NO sortItems here!
-    // Items arrive pre-sorted and must NOT be re-sorted on render
     const allItems = order.items || [];
-    const items = isHistory 
-      ? allItems 
-      : allItems.filter(item => 
-          item.isPrepRequired && 
-          item.kds_routing_logic !== 'GRAB_AND_GO' && 
-          item.kds_routing_logic !== 'prep_override'
-        );
 
-    const getItemRows = (item) => {
-      if (!item.modifiers) return 1;
-      const visibleModsCount = item.modifiers.filter(m => getShortName(m.text || m.valueName || m) !== null).length;
-      return visibleModsCount <= 1 ? 1 : 2;
-    };
+    // 🥤 SORT: Drinks (משקאות) first, then food — easier for checker to read
+    const sortedItems = [...allItems].sort((a, b) => {
+      const aIsDrink = (a.category || '').includes('משקאות');
+      const bIsDrink = (b.category || '').includes('משקאות');
+      if (aIsDrink && !bIsDrink) return -1;
+      if (!aIsDrink && bIsDrink) return 1;
+      return 0;
+    });
 
-    const totalRows = items.reduce((acc, item) => acc + getItemRows(item), 0);
-    // 🔋 LITE MODE: Maintain split logic for large orders to avoid bad scrolling
-    const splitNeeded = totalRows > 5 && !isHistory;
+    // 📐 SPLIT: More than 5 items → double-width card
+    const splitNeeded = sortedItems.length > 5 && !isHistory;
 
     const rCol = [];
     const lCol = [];
 
     if (splitNeeded) {
-      let currentRows = 0;
-      items.forEach(item => {
-        const rows = getItemRows(item);
-        if (currentRows + rows <= 5) {
+      // Fill right column: up to 5 items, rest go to left
+      const maxItems = 5;
+      sortedItems.forEach((item, i) => {
+        if (i < maxItems) {
           rCol.push(item);
-          currentRows += rows;
         } else {
           lCol.push(item);
         }
@@ -197,7 +199,7 @@ const OrderCard = memo(({
     }
 
     return {
-      unifiedItems: items,
+      unifiedItems: sortedItems,
       isLargeOrder: splitNeeded,
       rightColItems: rCol,
       leftColItems: lCol
@@ -247,6 +249,7 @@ const OrderCard = memo(({
   const renderItemRow = useCallback((item, idx, isLarge) => {
     // KDS: Early Delivery (Visual Strikethrough/Dimming)
     const isEarlyDelivered = !isReady && !isHistory && (item.is_early_delivered === true);
+    const isUrgentItem = !!item.urgent_at;
 
     // Readiness Status (Green Badge/Checkmark)
     // Applied when item is 'ready' or 'shipped'
@@ -263,26 +266,27 @@ const OrderCard = memo(({
     const isDimmed = (isReady || isHistory) && item.isPrepRequired === false;
 
     return (
-      <div key={`${item.menuItemId}-${item.modsKey || item.id || idx}`} className={`flex flex-col ${!isLiteMode ? 'transition-colors duration-300' : ''} ${isLarge ? 'border-b border-gray-50 pb-1.5' : 'border-b border-dashed border-gray-100 pb-1.5 last:border-0'} ${isEarlyDelivered ? '-mx-1 px-1 rounded-md mb-1 bg-gray-50/50' : ''} ${isEarlyDelivered && !isKanban ? 'opacity-60' : ''} ${(isPrepStarted || isPackedItem) ? 'bg-green-100/40 rounded-md -mx-1 px-1' : ''} ${isDimmed ? 'opacity-40 grayscale-[0.5]' : ''}`}>
+      <div key={`${item.menuItemId}-${item.modsKey || item.id || idx}`} className={`flex flex-col ${!isLiteMode ? 'transition-colors duration-300' : ''} ${isLarge ? 'border-b border-gray-50 pb-0.5' : 'border-b border-dashed border-gray-100 pb-0.5 last:border-0'} ${isEarlyDelivered ? '-mx-1 px-1 rounded-md mb-0.5 bg-green-100/70' : ''} ${(isPrepStarted || isPackedItem) ? 'bg-green-100/40 rounded-md -mx-1 px-1' : ''} ${isDimmed ? 'opacity-40 grayscale-[0.5]' : ''} ${isUrgentItem && isStationView ? 'bg-red-50 -mx-1 px-1 rounded-md border border-red-200' : ''}`}>
         <div className="flex items-start gap-[5px] relative">
 
-          {/* KDS: Early Delivery Indicator Line - DISABLED in Lite Mode */}
-          {isEarlyDelivered && !isKanban && !isLiteMode && (
-            <div className="absolute top-[13px] right-7 left-1 flex items-center pointer-events-none z-10">
-              <div className="w-full h-[3px] bg-green-600/30 rounded-full" />
-            </div>
-          )}
+
 
           <div
-            className={`flex items-start gap-[5px] flex-1 min-w-0 tracking-tight p-1.5 -m-1.5 rounded-lg`}
+            className={`flex items-start gap-[5px] flex-1 min-w-0 tracking-tight p-1 -m-1 rounded-lg`}
           >
             {/* Quantity Badge */}
-            <span className={`flex items-center justify-center rounded-lg font-black shrink-0 mt-0.5 ${badgeSizeClass} ${!isLiteMode ? 'shadow-sm' : ''} ${isPackedItem
-              ? 'bg-green-600 text-white ring-2 ring-green-200'
-              : (item.quantity > 1 ? 'bg-orange-600 text-white ring-2 ring-orange-200' : (order.type === 'delayed' ? 'bg-gray-300 text-gray-600' : 'bg-slate-900 text-white'))
+            <span className={`flex items-center justify-center rounded-lg font-black shrink-0 mt-0.5 ${badgeSizeClass} ${!isLiteMode ? 'shadow-sm' : ''} ${
+              item.quantity > 1 ? 'bg-orange-600 text-white ring-2 ring-orange-200' : (order.type === 'delayed' ? 'bg-gray-300 text-gray-600' : 'bg-slate-900 text-white')
               }`}>
               {item.quantity}
             </span>
+
+            {/* 🔥 Urgent Badge */}
+            {isUrgentItem && isStationView && (
+              <span className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold shadow animate-pulse shrink-0 mt-0.5">
+                🔥 דחוף
+              </span>
+            )}
 
             <div className="flex-1 pt-0.5 min-w-0 pr-0">
               {(() => {
@@ -290,10 +294,10 @@ const OrderCard = memo(({
                   return (
                     <div className="flex flex-col">
                       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-right leading-normal whitespace-normal break-words">
-                        <span className={`font-bold ${isEarlyDelivered ? 'text-slate-600 line-through' : (item.quantity > 1 ? 'text-orange-700' : 'text-gray-900')} ${nameSizeClass}`}>
+                        <span className={`font-bold ${isEarlyDelivered ? 'text-gray-900' : (item.quantity > 1 ? 'text-orange-700' : 'text-gray-900')} ${nameSizeClass}`}>
                           {getIcon(item.name)} {item.name}
                         </span>
-                        {isPackedItem && <Check size={14} className="text-green-600 stroke-[3]" />}
+
                       </div>
                     </div>
                   );
@@ -305,18 +309,25 @@ const OrderCard = memo(({
                     fullName: mod.text || mod.valueName || mod,
                     shortName: getShortName(mod.text || mod.valueName || mod)
                   }))
-                  .filter(mod => mod.fullName);
+                  .filter(mod => {
+                    const nameLower = (typeof mod.fullName === 'string' ? mod.fullName.toLowerCase() : '');
+                    // Filter out hidden functional modifiers
+                    if (nameLower.includes('kds_override') || nameLower.includes('kds overide') || nameLower.includes('__kds_over')) {
+                      return false;
+                    }
+                    return mod.fullName;
+                  });
 
                 return (
                   <div className="flex flex-col">
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-right leading-normal whitespace-normal break-words">
-                      <span className={`font-bold ${isEarlyDelivered ? 'text-slate-600 line-through' : (item.quantity > 1 ? 'text-orange-700' : 'text-gray-900')} ${nameSizeClass}`}>
+                      <span className={`font-bold ${isEarlyDelivered ? 'text-gray-900' : (item.quantity > 1 ? 'text-orange-700' : 'text-gray-900')} ${nameSizeClass}`}>
                         {getIcon(item.name)} {item.name}
                       </span>
-                      {isPackedItem && <Check size={14} className="text-green-600 stroke-[3]" />}
+
 
                       {visibleMods.map((mod, i) => (
-                        <span key={i} className={`mod-label inline-block ${getModColorClass(mod.fullName, mod.shortName)} ${modSizeClass} px-1.5 py-0.5 rounded leading-relaxed min-h-[auto] max-w-full text-right whitespace-pre-wrap break-words`}>
+                        <span key={i} className={`mod-label inline-block ${getModColorClass(mod.fullName, mod.shortName)} ${modSizeClass} px-1.5 py-px rounded leading-snug min-h-[auto] max-w-full text-right whitespace-pre-wrap break-words`}>
                           {mod.shortName}
                         </span>
                       ))}
@@ -346,7 +357,7 @@ const OrderCard = memo(({
   }, [order.items?.length]);
 
   return (
-    <div className={`kds-card ${cardWidthClass} flex-shrink-0 rounded-2xl px-[5px] pt-1.5 pb-2.5 ${isHistory ? 'mx-[2px]' : 'mx-2'} flex flex-col h-full font-heebo ${isHeld ? 'bg-amber-50/50 border-2 border-dashed border-amber-300' : (orderStatusLower === 'new' ? 'bg-gray-100' : 'bg-white')} ${statusStyles} ${agingClass} ${glowClass} ${shouldFlash && !isLiteMode ? 'animate-pulse ring-4 ring-black z-20' : ''} relative overflow-hidden`}>
+    <div className={`kds-card ${cardWidthClass} flex-shrink-0 rounded-2xl px-[2px] pt-1.5 pb-2.5 ${isHistory ? 'mx-[2px]' : 'mx-2'} flex flex-col h-full font-heebo ${isHeld ? 'bg-amber-50/50 border-2 border-dashed border-amber-300' : (orderStatusLower === 'new' ? 'bg-gray-100' : 'bg-white')} ${statusStyles} ${agingClass} ${glowClass} ${shouldFlash && !isLiteMode ? 'animate-pulse ring-4 ring-black z-20' : ''} relative overflow-hidden`}>
 
       {/* Header */}
       <div className="z-0 flex justify-between items-start mb-0.5 border-b border-gray-50 pb-0.5">
@@ -399,6 +410,17 @@ const OrderCard = memo(({
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-black transition-colors bg-gray-50 border-gray-200 text-gray-500">
               <span className="font-mono dir-ltr">{order.timestamp}</span>
             </div>
+            {/* 📱 SMS Status Badge */}
+            {smsStatus && (
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-bold transition-all ${
+                smsStatus === 'pending' ? 'bg-orange-50 border-orange-300 text-orange-600 animate-pulse' :
+                smsStatus === 'sent' ? 'bg-green-50 border-green-300 text-green-600' :
+                'bg-red-50 border-red-300 text-red-600'
+              }`}>
+                <MessageCircle size={10} />
+                <span>{smsStatus === 'pending' ? 'שולח...' : smsStatus === 'sent' ? 'נשלח ✓' : 'נכשל ✗'}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -473,56 +495,71 @@ const OrderCard = memo(({
             {isHistory && (
               <div className="mt-auto pt-2 border-t border-gray-100/50">
                 <div className="flex flex-col gap-1.5">
-                  <div className={`flex items-center gap-2 p-1 border rounded-xl transition-colors ${order.isPaid ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-                    <div className={`flex-1 flex items-center justify-between text-xs ${order.isPaid ? 'text-gray-500 bg-gray-50/80 border-gray-100' : 'text-orange-600 bg-white border-orange-600 shadow-sm -translate-y-0.5 cursor-pointer hover:bg-orange-50 transition-colors'} p-1.5 rounded-lg border`}>
-
-                      {!order.isPaid ? (
-                        <div className="flex items-center justify-between w-full" onClick={(e) => { e.stopPropagation(); if (onPaymentCollected) onPaymentCollected(order); }}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <img
-                              src="https://gxzsxvbercpkgxraiaex.supabase.co/storage/v1/object/public/Photos/cashregister.jpg"
-                              alt="קופה"
-                              className="w-6 h-6 object-contain"
-                            />
-                            <span className="font-bold">לתשלום</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 px-1">
-                            <span className="text-sm font-black text-amber-800 tracking-tight">
-                              ₪{(order.totalOriginalAmount || order.fullTotalAmount || order.totalAmount)?.toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <CheckCircle size={14} className="text-green-500 shrink-0" />
-                            <div className="flex flex-col">
-                              <span className="font-bold text-xs whitespace-normal break-words">
-                                {PAYMENT_LABELS[order.payment_method] || order.payment_method || 'שולם'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 px-1">
-                            <span className="text-sm font-black text-slate-800 tracking-tight">
-                              ₪{(order.totalOriginalAmount || order.fullTotalAmount || order.totalAmount)?.toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                  {/* 🎯 STATION MODE: Clean read-only tracking status */}
+                  {isStationView ? (
+                    <div className={`flex items-center justify-center gap-2 p-2.5 rounded-xl text-sm font-black transition-colors ${
+                      (order.orderStatus || '').toLowerCase() === 'completed' || (order.orderStatus || '').toLowerCase() === 'shipped'
+                        ? 'bg-green-50 border border-green-200 text-green-700'
+                        : 'bg-amber-50 border border-amber-200 text-amber-700'
+                    }`}>
+                      {(order.orderStatus || '').toLowerCase() === 'completed' || (order.orderStatus || '').toLowerCase() === 'shipped'
+                        ? <><CheckCircle size={16} className="text-green-500" /> <span>נמסר ללקוח ✅</span></>
+                        : <><span>ממתין בצ׳קר 🧑‍💼</span></>
+                      }
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* 🧑‍💼 CHECKER MODE: Full admin payment & edit UI */}
+                      <div className={`flex items-center gap-2 p-1 border rounded-xl transition-colors ${order.isPaid ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                        <div className={`flex-1 flex items-center justify-between text-xs ${order.isPaid ? 'text-gray-500 bg-gray-50/80 border-gray-100' : 'text-orange-600 bg-white border-orange-600 shadow-sm -translate-y-0.5 cursor-pointer hover:bg-orange-50 transition-colors'} p-1.5 rounded-lg border`}>
 
-                  {onEditOrder && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditOrder(order);
-                      }}
-                      className="w-full py-1.5 bg-slate-100/80 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
-                    >
-                      <Edit size={12} />
-                      עריכת הזמנה
-                    </button>
+                          {!order.isPaid ? (
+                            <div className="flex items-center justify-between w-full" onClick={(e) => { e.stopPropagation(); if (onPaymentCollected) onPaymentCollected(order); }}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-6 h-6 flex items-center justify-center bg-orange-100 rounded-lg">
+                                  <CreditCard className="w-4 h-4 text-orange-600" />
+                                </div>
+                                <span className="font-bold">לתשלום</span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 px-1">
+                                <span className="text-sm font-black text-amber-800 tracking-tight">
+                                  ₪{(order.totalOriginalAmount || order.fullTotalAmount || order.totalAmount)?.toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <CheckCircle size={14} className="text-green-500 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-xs whitespace-normal break-words">
+                                    {PAYMENT_LABELS[order.payment_method] || order.payment_method || 'שולם'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 px-1">
+                                <span className="text-sm font-black text-slate-800 tracking-tight">
+                                  ₪{(order.totalOriginalAmount || order.fullTotalAmount || order.totalAmount)?.toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {onEditOrder && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditOrder(order);
+                          }}
+                          className="w-full py-1.5 bg-slate-100/80 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
+                        >
+                          <Edit size={12} />
+                          עריכת הזמנה
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -604,12 +641,31 @@ const OrderCard = memo(({
                       disabled={isUpdating}
                       onClick={async (e) => {
                         e.stopPropagation();
+                        if (isUpdating) return;
                         setIsUpdating(true);
                         try {
                           const orderId = order.originalOrderId || order.id;
                           const flatIds = order.items.flatMap(i => i.ids || [i.id]);
 
-                          if (isHeld) {
+                          if (isStationView) {
+                               const { supabase } = await import('@/lib/supabase');
+                               const now = new Date().toISOString();
+                               const { error } = await supabase.from('order_items').update({ early_delivered_at: now }).in('id', flatIds);
+                               if (error) {
+                                  console.error('❌ Supabase Write Failed:', error);
+                               } else {
+                                  // ✅ CONFIRMED WRITE: Mirror to Dexie so useLiveQuery triggers re-render
+                                  const db = (await import('@/db/database')).default;
+                                  for (const itemId of flatIds) {
+                                    db.order_items.update(itemId, {
+                                      early_delivered_at: now,
+                                      is_early_delivered: true,
+                                      updated_at: now
+                                    }).catch(e => console.warn('Dexie mirror failed:', e));
+                                  }
+                               }
+                          }
+                          else if (isHeld) {
                              if (onFireItems) await onFireItems(orderId, flatIds);
                           } else if (orderStatusLower === 'in_progress' && onReadyItems) {
                              await onReadyItems(orderId, flatIds);
@@ -618,8 +674,9 @@ const OrderCard = memo(({
                           } else {
                              await onOrderStatusUpdate(orderId, order.orderStatus);
                           }
-                        }
-                        finally { setIsUpdating(false); }
+                        } catch (err) {
+                             console.error('🔥 OrderCard Action Failed (onClick):', err);
+                        } finally { setIsUpdating(false); }
                       }}
                       onTouchEnd={async (e) => {
                         e.preventDefault();
@@ -630,7 +687,25 @@ const OrderCard = memo(({
                           const orderId = order.originalOrderId || order.id;
                           const flatIds = order.items.flatMap(i => i.ids || [i.id]);
 
-                          if (isHeld) {
+                          if (isStationView) {
+                               const { supabase } = await import('@/lib/supabase');
+                               const now = new Date().toISOString();
+                               const { error } = await supabase.from('order_items').update({ early_delivered_at: now }).in('id', flatIds);
+                               if (error) {
+                                  console.error('❌ Supabase Write Failed:', error);
+                               } else {
+                                  // ✅ CONFIRMED WRITE: Mirror to Dexie so useLiveQuery triggers re-render
+                                  const db = (await import('@/db/database')).default;
+                                  for (const itemId of flatIds) {
+                                    db.order_items.update(itemId, {
+                                      early_delivered_at: now,
+                                      is_early_delivered: true,
+                                      updated_at: now
+                                    }).catch(e => console.warn('Dexie mirror failed:', e));
+                                  }
+                               }
+                          }
+                          else if (isHeld) {
                              if (onFireItems) await onFireItems(orderId, flatIds);
                           } else if (orderStatusLower === 'in_progress' && onReadyItems) {
                              await onReadyItems(orderId, flatIds);
@@ -639,12 +714,13 @@ const OrderCard = memo(({
                           } else {
                              await onOrderStatusUpdate(orderId, order.orderStatus);
                           }
-                        }
-                        finally { setIsUpdating(false); }
+                        } catch (err) {
+                             console.error('🔥 OrderCard Action Failed (onTouchEnd):', err);
+                        } finally { setIsUpdating(false); }
                       }}
                       className={`flex-1 rounded-xl font-black text-lg shadow-sm active:scale-[0.98] transition-all flex items-center justify-center ${actionBtnColor} ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''} outline-none`}
                     >
-                      {isUpdating ? 'מעדכן...' : nextStatusLabel}
+                      {isUpdating ? 'מעדכן...' : (isStationView ? ((order.items || []).every(i => i.early_delivered_at) ? 'נשלח ✓' : 'מוכן!') : nextStatusLabel)}
                     </button>
 
                     {!order.isPaid && (
@@ -687,6 +763,22 @@ const OrderCard = memo(({
             )}
           </>
         )}
+        {/* Station View: "Sent to Checker" button */}
+        {isStationView && !isSentLane && !isHistory && !isReady && onStationDeliver && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const orderId = order.originalOrderId || order.id;
+              onStationDeliver(orderId, order.items || []);
+            }}
+            className="w-full mt-1 py-2.5 bg-emerald-500 text-white text-sm font-bold rounded-xl active:scale-[0.98] transition-all shadow-sm"
+          >
+            ✅ יצא לצ׳קר
+          </button>
+        )}
+
+
+
       </div>
     </div>
   );
@@ -705,8 +797,16 @@ const OrderCard = memo(({
       const nextItem = nextProps.order.items[idx];
       return item.id === nextItem?.id &&
         item.item_status === nextItem?.item_status &&
-        item.is_early_delivered === nextItem?.is_early_delivered;
-    })
+        item.is_early_delivered === nextItem?.is_early_delivered &&
+        item.early_delivered_at === nextItem?.early_delivered_at &&
+        item.urgent_at === nextItem?.urgent_at;
+    }) &&
+    prevProps.isStationView === nextProps.isStationView &&
+    prevProps.isSentLane === nextProps.isSentLane &&
+    prevProps.hasUrgent === nextProps.hasUrgent &&
+    // SMS status comparison
+    (prevProps.getSmsStatus ? prevProps.getSmsStatus(prevProps.order.originalOrderId || prevProps.order.id) : null) ===
+    (nextProps.getSmsStatus ? nextProps.getSmsStatus(nextProps.order.originalOrderId || nextProps.order.id) : null)
   );
 });
 

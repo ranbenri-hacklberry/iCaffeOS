@@ -88,20 +88,13 @@ const ensureSupabase = (req, res, next) => {
 // List available volumes/drives
 router.get("/volumes", (req, res) => {
     try {
+        // Use PathManager for robust drive discovery
         const volumes = [];
-        const mountPoints = process.platform === 'darwin' ? ['/Volumes'] : ['/mnt', '/media'];
-
-        for (const root of mountPoints) {
-            if (fs.existsSync(root)) {
-                try {
-                    const entries = fs.readdirSync(root, { withFileTypes: true });
-                    for (const entry of entries) {
-                        if (entry.isDirectory() || entry.isSymbolicLink()) {
-                            volumes.push({ name: entry.name, path: path.join(root, entry.name) });
-                        }
-                    }
-                } catch (e) {
-                    console.error(`Error reading ${root}:`, e.message);
+        if (fs.existsSync('/Volumes')) {
+            const entries = fs.readdirSync('/Volumes', { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.isDirectory() || entry.isSymbolicLink()) {
+                    volumes.push({ name: entry.name, path: path.join('/Volumes', entry.name) });
                 }
             }
         }
@@ -111,18 +104,15 @@ router.get("/volumes", (req, res) => {
             volumes.push({ name: 'Local Staging', path: PathManager.STAGING_ROOT });
         }
 
-        // Ensure the active external drive is explicitly listed if not already there
+        // Ensure the active external drive is explicitly listed
         if (PathManager.isExternalMounted()) {
-            const extRoot = PathManager.getExternalRoot();
-            if (!volumes.some(v => v.path === extRoot)) {
-                volumes.push({ name: path.basename(extRoot) || 'RANTUNES', path: extRoot });
-            }
+            volumes.push({ name: 'External RANTUNES', path: PathManager.getExternalRoot() });
         }
 
-        res.json({ success: true, volumes });
+        res.json({ volumes });
     } catch (err) {
         console.error('Error listing volumes:', err);
-        res.status(500).json({ success: false, volumes: [] });
+        res.json({ volumes: [] });
     }
 });
 
@@ -133,17 +123,13 @@ const albumCache = new Map();
 async function registerInternal(asset) {
     const { artist, album, title, thumbnail, file_path, duration } = asset;
     const safeArtist = (artist || 'Unknown Artist').replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
-    const isSingle = !album || album === 'Single' || album === 'Singles' || album === 'Unknown Album';
-    const safeAlbum = isSingle ? null : album.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
-    const safeTitle = title.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
-    const fileName = path.basename(file_path);
-
     // Try to find or create artist
     let artistId = artistCache.get(safeArtist);
     if (!artistId) {
         let { data: artistData } = await getSupabase().from('music_artists').select('id').eq('name', safeArtist).maybeSingle();
         if (!artistData) {
             const { data: newArtist } = await getSupabase().from('music_artists').insert({ name: safeArtist }).select('id').single();
+            if (!newArtist) throw new Error(`Failed to create artist ${safeArtist}`);
             artistId = newArtist.id;
         } else {
             artistId = artistData.id;
@@ -151,26 +137,41 @@ async function registerInternal(asset) {
         artistCache.set(safeArtist, artistId);
     }
 
+    // 📁 STRICT FOLDER-BASED GROUPING
+    // The scanner passes the folderPath in asset.album_id. We use it to ensure one album per physical folder, 
+    // overriding any compilation separation.
+    const albumFolderKey = asset.album_id; 
+    const albumName = (album || 'Unknown Album').replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
     let albumId = null;
-    if (safeAlbum) {
-        const albumCacheKey = `${artistId}:${safeAlbum}`;
-        albumId = albumCache.get(albumCacheKey);
+    
+    if (albumFolderKey) {
+        albumId = albumCache.get(albumFolderKey);
+        
         if (!albumId) {
-            // Try to find or create album
-            let { data: albumData } = await getSupabase().from('music_albums').select('id').eq('name', safeAlbum).eq('artist_id', artistId).maybeSingle();
+            let { data: albumData } = await getSupabase()
+                .from('music_albums')
+                .select('id')
+                .eq('folder_path', albumFolderKey)
+                .maybeSingle();
+
             if (!albumData) {
                 const { data: newAlbum } = await getSupabase().from('music_albums').insert({
-                    name: safeAlbum,
+                    name: albumName,
                     artist_id: artistId,
-                    cover_url: thumbnail
+                    cover_url: thumbnail,
+                    folder_path: albumFolderKey
                 }).select('id').single();
+                if (!newAlbum) throw new Error(`Failed to create album ${albumName}`);
                 albumId = newAlbum.id;
             } else {
                 albumId = albumData.id;
             }
-            albumCache.set(albumCacheKey, albumId);
+            albumCache.set(albumFolderKey, albumId);
         }
     }
+
+    const safeTitle = title.replace(/[^\w\s\u0590-\u05FF-]/g, '').trim();
+    const fileName = path.basename(file_path);
 
     // Insert/Update Song
     const { data: songData, error: songError } = await getSupabase().from('music_songs').upsert({
@@ -197,10 +198,20 @@ router.post('/scan', ensureSupabase, async (req, res) => {
         const forceClean = req.body?.forceClean || false;
 
         if (forceClean) {
-            console.log("🧹 Force Clean requested. Clearing music tables...");
-            await getSupabase().from('music_songs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            await getSupabase().from('music_albums').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            await getSupabase().from('music_artists').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            console.log("🧹 [Scan] Force Clean requested. Cleaning music tables in order...");
+            // 1. Delete songs first (child records)
+            const { error: e1 } = await getSupabase().from('music_songs').delete().neq('file_path', 'FORCE_DELETE_ALL');
+            if (e1) console.error("⚠️ [Scan] Error deleting songs:", e1.message);
+            
+            // 2. Delete albums
+            const { error: e2 } = await getSupabase().from('music_albums').delete().neq('name', 'FORCE_DELETE_ALL');
+            if (e2) console.error("⚠️ [Scan] Error deleting albums:", e2.message);
+            
+            // 3. Delete artists
+            const { error: e3 } = await getSupabase().from('music_artists').delete().neq('name', 'FORCE_DELETE_ALL');
+            if (e3) console.error("⚠️ [Scan] Error deleting artists:", e3.message);
+            
+            console.log("✅ [Scan] Database cleared successfully.");
         }
 
         const scanner = new LocalAssetScanner(rootPath);
@@ -213,26 +224,19 @@ router.post('/scan', ensureSupabase, async (req, res) => {
         assets.forEach(asset => {
             const artistName = asset.artist || 'Unknown Artist';
             const albumName = asset.album || 'Unknown Album';
-            const songDir = path.dirname(asset.file_path);
-
-            // Album identifier: combination of artist, album name, and folder
-            // (Distinct folders for 'Unknown Album' should be treated as distinct albums)
-            const albumId = (albumName === 'Unknown Album' || albumName === 'Single' || albumName === 'Singles')
-                ? songDir
-                : `${artistName}:${albumName}`;
+            const songDir = asset.album_id; // THIS IS THE FOLDER PATH
+            const albumIdForPreview = songDir; // Group preview explicitly by folder!
 
             if (!artistsMap.has(artistName)) {
-                const parentDir = path.dirname(songDir);
-                const artistDir = (parentDir !== rootPath && parentDir !== path.dirname(rootPath)) ? parentDir : songDir;
                 artistsMap.set(artistName, {
                     name: artistName,
-                    folder_path: artistDir
+                    folder_path: path.dirname(songDir)
                 });
             }
 
-            if (!albumsMap.has(albumId)) {
-                albumsMap.set(albumId, {
-                    id: albumId,
+            if (!albumsMap.has(albumIdForPreview)) {
+                albumsMap.set(albumIdForPreview, {
+                    id: albumIdForPreview,
                     name: albumName,
                     artist_name: artistName,
                     folder_path: songDir,
@@ -241,7 +245,7 @@ router.post('/scan', ensureSupabase, async (req, res) => {
             }
 
             // Enrich asset with album link
-            asset.album_id = albumId;
+            asset.album_id = albumIdForPreview;
         });
 
         const data = {
@@ -361,8 +365,7 @@ router.get("/library/albums/:albumId/songs", ensureSupabase, async (req, res) =>
             .from('music_songs')
             .select('*, album:music_albums(id, name, cover_url), artist:music_artists(id, name)')
             .eq('album_id', albumId)
-            .order('track_number', { ascending: true })
-            .order('file_name', { ascending: true });
+            .order('track_number', { ascending: true });
         if (error) throw error;
         res.json({ success: true, songs: data || [] });
     } catch (err) {
@@ -692,37 +695,77 @@ router.get("/cover", async (req, res) => {
             }
         }
 
-        if (filePath && fs.existsSync(filePath)) {
-            const ext = path.extname(filePath).toLowerCase();
-            res.setHeader('Content-Type', ext === '.png' ? 'image/png' : 'image/jpeg');
-            return fs.createReadStream(filePath).pipe(res);
-        }
-
         // 🌐 Database/Remote Fallback
-        if (id) {
+        if (id && !filePath) {
             // Check if it's a song ID first
-            let { data: song } = await supabase
+            let { data: song } = await getSupabase()
                 .from('music_songs')
-                .select('cover_url, thumbnail_url, album:album_id(cover_url)')
+                .select('file_path, cover_url, thumbnail_url, album:album_id(cover_url)')
                 .eq('id', id)
                 .single();
 
             let remoteUrl = song?.cover_url || song?.album?.cover_url || song?.thumbnail_url;
+            
+            // If we have a local file_path but no remote URL, extract embedded art!
+            if (!remoteUrl && song?.file_path) {
+                filePath = song.file_path; // Let the fallback below handle it
+            }
 
-            if (!remoteUrl) {
+            if (!remoteUrl && !filePath) {
                 // Maybe it's an album ID
-                const { data: album } = await supabase
+                const { data: album } = await getSupabase()
                     .from('music_albums')
                     .select('cover_url')
                     .eq('id', id)
                     .single();
                 remoteUrl = album?.cover_url;
+
+                // Grab first song in this album to extract embedded art
+                if (!remoteUrl) {
+                    const { data: firstSong } = await getSupabase()
+                        .from('music_songs')
+                        .select('file_path')
+                        .eq('album_id', id)
+                        .limit(1)
+                        .single();
+                    if (firstSong?.file_path) {
+                        filePath = firstSong.file_path; // Fallback to embedded extractor
+                    }
+                }
             }
 
             if (remoteUrl && remoteUrl.startsWith('http')) {
                 return res.redirect(remoteUrl);
             }
         }
+        
+        // 🎵 Embedded Art Extraction (Handles both "?path=" and the DB fallbacks from above)
+        if (filePath && fs.existsSync(filePath)) {
+            const ext = path.extname(filePath).toLowerCase();
+            
+            // If it's an image file, serve it directly
+            if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+                res.setHeader('Content-Type', ext === '.png' ? 'image/png' : 'image/jpeg');
+                return fs.createReadStream(filePath).pipe(res);
+            }
+
+            // If it's an audio file, try to extract embedded art!
+            if (MIME_TYPES[ext]) {
+                try {
+                    const { parseFile } = await import('music-metadata');
+                    const metadata = await parseFile(filePath);
+                    const cover = metadata.common.picture?.[0];
+                    if (cover) {
+                        res.setHeader('Content-Type', cover.format);
+                        return res.send(cover.data);
+                    }
+                } catch (err) {
+                    console.warn(`⚠️ Failed to extract embedded art from ${filePath}:`, err.message);
+                }
+            }
+        }
+
+
 
         res.status(404).send('Not found');
     } catch (err) {
@@ -996,95 +1039,58 @@ router.get("/library/stats", async (req, res) => {
 
 // 📁 Manually Register a file in the library
 // POST /library/register - Manually register a file (e.g. from Electron download)
-
-// ──────────────────────────────────────────────────────────────
-// SERVER-SIDE AUDIO OUTPUT
-// ──────────────────────────────────────────────────────────────
-
-// Map to track active mpv processes by ID or role
-let activeServerProcesses = new Map(); // id -> process
-let serverVolume = 100;
-
-router.post("/play-server", async (req, res) => {
-    const { path: songPath, id, initialVolume, crossfade = false } = req.body;
-    if (!songPath) return res.status(400).json({ error: "Missing song path" });
-
-    if (initialVolume !== undefined) {
-        serverVolume = Math.round(initialVolume * 100);
-    }
-
+router.post("/library/register", ensureSupabase, async (req, res) => {
     try {
-        const musicDir = process.env.MUSIC_DIRECTORY || "/mnt/rantunes";
-        const audioDevice = process.env.AUDIO_DEVICE || "hw:1,0";
-
-        // If NOT crossfading, stop everything else
-        if (!crossfade) {
-            activeServerProcesses.forEach((proc, pid) => {
-                try { proc.kill('SIGKILL'); } catch (e) { }
-            });
-            activeServerProcesses.clear();
-        }
-
-        console.log(`🔈 [ServerPlay] Playing: ${songPath} on ${audioDevice} (Crossfade: ${crossfade})`);
-
-        const fullPath = path.isAbsolute(songPath) ? songPath : path.join(musicDir, songPath);
-        if (!fs.existsSync(fullPath)) {
-            return res.status(404).json({ error: "File not found on server storage." });
-        }
-
-        const { spawn } = await import('child_process');
-
-        // Spawn mpv with specific flags for remote control
-        const proc = spawn('mpv', [
-            `--audio-device=alsa/${audioDevice}`,
-            '--no-video',
-            '--input-terminal=no',
-            `--volume=${serverVolume}`,
-            '--idle=no',
-            '--force-window=no',
-            fullPath
-        ]);
-
-        const procId = id || Date.now();
-        activeServerProcesses.set(procId, proc);
-
-        proc.on('exit', (code) => {
-            console.log(`🔈 [ServerPlay] mpv (${procId}) exited with code ${code}`);
-            activeServerProcesses.delete(procId);
-        });
-
-        res.json({ success: true, message: "Playback started", id: procId });
+        const songData = await registerInternal(req.body);
+        res.json({ success: true, song: songData });
     } catch (err) {
-        console.error('❌ [ServerPlay] failed:', err);
+        console.error('❌ Register failed:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-router.post("/stop-server", (req, res) => {
-    activeServerProcesses.forEach((proc) => {
-        try { proc.kill('SIGKILL'); } catch (e) { }
-    });
-    activeServerProcesses.clear();
-    res.json({ success: true, message: "Server playback stopped" });
-});
+// ──────────────────────────────────────────────────────────────
+// RANTUNES PLAYBACK STATE  (WebSocket companion REST endpoint)
+// Used for initial page load before the WS connection is established.
+// index.js calls setWsServerRef(wsServer) after boot.
+// ──────────────────────────────────────────────────────────────
 
-router.post("/volume-server", (req, res) => {
-    const { volume, id } = req.body; // 0 to 1
-    if (volume === undefined) return res.status(400).json({ error: "Missing volume" });
+let _wsServerRef = null;
 
-    serverVolume = Math.round(volume * 100);
+/**
+ * Called by index.js to inject the live WS server reference into this route module.
+ * @param {import('../services/rantunesWsServer.js').RantunesWsServer} wsServer
+ */
+export function setWsServerRef(wsServer) {
+    _wsServerRef = wsServer;
+}
 
-    // If specific ID, only update that one, otherwise all
-    if (id && activeServerProcesses.has(id)) {
-        const proc = activeServerProcesses.get(id);
-        try { proc.stdin.write(`set volume ${serverVolume}\n`); } catch (e) { }
-    } else {
-        activeServerProcesses.forEach(proc => {
-            try { proc.stdin.write(`set volume ${serverVolume}\n`); } catch (e) { }
+// GET /api/music/playback/state
+router.get('/playback/state', (req, res) => {
+    if (!_wsServerRef) {
+        // WS server not yet initialized — return a safe "stopped" state
+        return res.json({
+            success: true,
+            state: {
+                isPlaying: false,
+                isPaused: false,
+                currentSong: null,
+                position: 0,
+                duration: 0,
+                queue: [],
+                currentIndex: 0,
+                queueLength: 0,
+                shuffled: false,
+                repeat: 'none',
+                volume: 75,
+            },
+            wsPort: 8082
         });
     }
 
-    res.json({ success: true, volume: serverVolume });
+    // Delegate to the live WS server's state builder
+    const state = _wsServerRef._buildState();
+    res.json({ success: true, state, wsPort: 8082 });
 });
 
 export default router;

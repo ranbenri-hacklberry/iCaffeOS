@@ -1,16 +1,56 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { PathManager } from '../utils/pathManager.js';
+import dotenv from 'dotenv';
 
-// Prefer local Supabase if available, fall back to remote
-const localUrl = process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL || 'http://localhost:54321';
-const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_SERVICE_KEY;
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+// Load .env from backend dir AND project root .env.local
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../.env') });
+dotenv.config({ path: resolve(__dirname, '../../.env.local'), override: false });
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Lazy Supabase client — credentials resolved on first use, not at parse time
+let _supabase = null;
 
+function getSupabaseClient() {
+    if (_supabase) return _supabase;
+
+    const supabaseUrl =
+        process.env.LOCAL_SUPABASE_URL && process.env.LOCAL_SUPABASE_SERVICE_KEY
+            ? process.env.LOCAL_SUPABASE_URL
+            : (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL);
+
+    const supabaseKey =
+        process.env.LOCAL_SUPABASE_SERVICE_KEY ||
+        process.env.VITE_SUPABASE_SERVICE_KEY ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.SUPABASE_KEY ||
+        process.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+        console.warn('⚠️ [SyncManager] Supabase credentials not available — sync operations will fail.');
+        return null;
+    }
+
+    _supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false }
+    });
+    return _supabase;
+}
+
+// Named export kept for backwards compat
+export const supabase = new Proxy({}, {
+    get(_, prop) {
+        const client = getSupabaseClient();
+        if (!client) throw new Error('[SyncManager] Supabase not initialized — check credentials');
+        return client[prop];
+    }
+});
+
+
+// 5. Explicit Named Export for the SyncManager
 export const SyncManager = {
     /**
      * Compares local staging with external library

@@ -13,14 +13,29 @@ export const useInventoryData = (businessId?: string) => {
         setLoading(true);
         setError(null);
         try {
-            // 1. Fetch Suppliers
+            // 1. Fetch Suppliers (delivery_schedule is now a JSONB column on suppliers)
             const { data: suppliersData, error: supError } = await supabase
                 .from('suppliers')
                 .select('*')
                 .eq('business_id', businessId)
                 .order('name');
             if (supError) throw supError;
-            setSuppliers(suppliersData || []);
+
+            // Enrich with parsed schedule arrays
+            const enrichedSuppliers = (suppliersData || []).map((s: any) => {
+                const schedule = (s.delivery_schedule || []).map((e: any) => ({
+                    day: e.day,
+                    lead_days: e.lead_days || 1,
+                    cutoff: e.cutoff || null,
+                    notes: e.notes || ''
+                }));
+                return {
+                    ...s,
+                    delivery_days_arr: schedule.map((e: any) => e.day),
+                    schedule
+                };
+            });
+            setSuppliers(enrichedSuppliers);
 
             // 2. Fetch Inventory Items
             const { data: itemsRaw, error: itemError } = await supabase

@@ -55,9 +55,9 @@ const getSupabase = () => {
     if (supabase) return supabase;
 
     const localUrl = process.env.LOCAL_SUPABASE_URL || 'http://localhost:54321';
-    const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_SERVICE_KEY;
-    const remoteUrl = process.env.SUPABASE_URL;
-    const remoteKey = process.env.SUPABASE_SERVICE_KEY;
+    const localKey = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY;
+    const remoteUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const remoteKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
     // Use local if available, else remote
     const url = localUrl && localKey ? localUrl : remoteUrl;
@@ -67,7 +67,7 @@ const getSupabase = () => {
         throw new Error("Supabase credentials missing");
     }
 
-    supabase = createClient(url, key); console.log('🎯 Supabase URL being used:', url);
+    supabase = createClient(url, key);
     console.log(`✅ [MusicRoutes] Supabase initialized in ${localKey ? 'LOCAL' : 'REMOTE'} mode`);
     return supabase;
 };
@@ -329,7 +329,7 @@ router.get("/library/artists", ensureSupabase, async (req, res) => {
 
         res.json({ success: true, artists });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -350,7 +350,7 @@ router.get("/library/albums", ensureSupabase, async (req, res) => {
 
         res.json({ success: true, albums });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -366,7 +366,7 @@ router.get("/library/albums/:albumId/songs", ensureSupabase, async (req, res) =>
         if (error) throw error;
         res.json({ success: true, songs: data || [] });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -376,7 +376,7 @@ router.get("/library/playlists", ensureSupabase, async (req, res) => {
         if (error) throw error;
         res.json({ success: true, playlists: data || [] });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -392,7 +392,7 @@ router.get("/library/playlists/:playlistId/songs", ensureSupabase, async (req, r
         const songs = (data || []).map(r => ({ ...(r.song || {}), playlist_entry_id: r.id, position: r.position }));
         res.json({ success: true, songs });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -406,7 +406,7 @@ router.post("/library/ratings", ensureSupabase, async (req, res) => {
         if (error) throw error;
         res.json({ success: true, ratings: data || [] });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -423,7 +423,7 @@ router.get("/library/favorites", ensureSupabase, async (req, res) => {
         const songs = (data || []).map(r => r.song).filter(Boolean).map(s => ({ ...s, myRating: 5 }));
         res.json({ success: true, songs });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -449,7 +449,7 @@ router.post("/rate", ensureSupabase, async (req, res) => {
         if (error) throw error;
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -572,7 +572,7 @@ router.get("/sync/status", ensureSupabase, async (req, res) => {
             pending
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -584,7 +584,7 @@ router.post("/sync/execute", ensureSupabase, async (req, res) => {
             results
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -854,7 +854,7 @@ router.get('/stream', verifyAlbumToken, async (req, res) => {
                     const ytUrl = `https://www.youtube.com/watch?v=${songData.video_id}`;
                     console.log(`🎬 Streaming from YouTube: ${ytUrl}`);
                     const ytProcess = spawn('yt-dlp', ['-o', '-', '-f', 'bestaudio', '--no-playlist', ytUrl]);
-                    res.setHeader('Content-Type', 'audio/mpeg');
+                    res.setHeader('Content-Type', 'audio/webm'); // YouTube's bestaudio is often WebM/Opus, this is safer for modern browsers
                     ytProcess.stdout.pipe(res);
                     return;
                 }
@@ -875,7 +875,7 @@ router.get("/cd/status", async (req, res) => {
         const info = await CDService.detectCD();
         res.json({ success: true, ...info });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -886,7 +886,7 @@ router.post("/cd/analyze", async (req, res) => {
         // For now, we return the token and let user search if needed
         res.json({ success: true, album_token: token });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -990,7 +990,7 @@ router.get("/library/stats", async (req, res) => {
         const stats = await PathManager.getLibraryStats();
         res.json({ success: true, stats });
     } catch (err) {
-        res.status(500).json({ success: false, message: "[MiniPC-Backend] " + err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -1035,15 +1035,23 @@ router.post("/play-server", async (req, res) => {
         const { spawn } = await import('child_process');
 
         // Spawn mpv with specific flags for remote control
-        const proc = spawn('mpv', [
-            `--audio-device=alsa/${audioDevice}`,
+        const isMac = process.platform === 'darwin';
+        const mpvArgs = [
             '--no-video',
             '--input-terminal=no',
             `--volume=${serverVolume}`,
             '--idle=no',
             '--force-window=no',
             fullPath
-        ]);
+        ];
+
+        if (!isMac) {
+            mpvArgs.unshift(`--audio-device=alsa/${audioDevice}`);
+        } else {
+            console.log(`🍎 Mac detected, letting mpv handle default CoreAudio output`);
+        }
+
+        const proc = spawn('mpv', mpvArgs);
 
         const procId = id || Date.now();
         activeServerProcesses.set(procId, proc);

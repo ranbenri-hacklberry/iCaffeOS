@@ -1,5 +1,3 @@
-import { createProxyMiddleware } from "http-proxy-middleware";
-
 import 'dotenv/config';
 import os from 'os';
 import express from "express";
@@ -11,6 +9,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { SerialPort } from 'serialport';
+import { uploadBackupToDrive, getLastBackupTime } from './src/services/dbBackupService.mjs';
 import { Bonjour } from 'bonjour-service';
 import net from 'net';
 import * as mm from 'music-metadata';
@@ -49,6 +48,7 @@ function findBestCoverArt(searchDirs) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -133,6 +133,17 @@ app.get('/health', (req, res) => {
         status: 'ok',
         hostname: hostname || 'N150'
     });
+});
+
+// 🧪 DEBUG: Direct Inventory Routes
+app.get('/api/admin/inventory/cross-business-report', async (req, res) => {
+    console.log('🧪 [Debug] Direct Cross-Business Report hit!');
+    res.json({ success: true, message: 'Direct route works!' });
+});
+
+app.get('/api/admin/inventory/duplicate-names-report', async (req, res) => {
+    console.log('🧪 [Debug] Direct Duplicate Names Report hit!');
+    res.json({ success: true, message: 'Direct route works!' });
 });
 
 // 🆕 Aggregated Health Endpoint
@@ -322,14 +333,17 @@ app.get('/api/system/capture-screenshot', (req, res) => {
 
 
 // === WHATSAPP & SMS MANAGER (LOCAL) ===
+import whatsAppManager from './src/services/whatsappManager.mjs';
 
 // === MAYA API ROUTES ===
+import mayaRoutes from './backend/api/mayaRoutes.js';
 import marketingRoutes from './backend/api/marketingRoutes.js';
 import adminRoutes from './backend/api/adminRoutes.js';
 import abrakadabraRoutes from './backend/api/abrakadabraRoutes.js';
 import musicRoutes from './backend/api/musicRoutes.js';
 import { startDockerWatchdog } from './backend/services/dockerWatchdog.js';
 
+app.use('/api/maya', mayaRoutes);
 app.use('/api/marketing', marketingRoutes);
 app.use('/api/admin', adminRoutes); // ✅ Admin routes (docker-health, sync, etc.)
 app.use('/api/abrakadabra', abrakadabraRoutes);
@@ -960,8 +974,8 @@ app.post('/api/sms/send', async (req, res) => {
 const REMOTE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const REMOTE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-const LOCAL_URL = process.env.LOCAL_SUPABASE_URL;
-const LOCAL_KEY = process.env.LOCAL_SUPABASE_SERVICE_KEY;
+const LOCAL_URL = process.env.LOCAL_SUPABASE_URL || process.env.VITE_LOCAL_SUPABASE_URL;
+const LOCAL_KEY = process.env.LOCAL_SUPABASE_SERVICE_KEY || process.env.VITE_LOCAL_SUPABASE_ANON_KEY;
 
 let remoteSupabase = null;
 let localSupabase = null;
@@ -5462,8 +5476,6 @@ app.get('/api/kds/orders', async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-app.use("/", createProxyMiddleware({ target: "http://127.0.0.1:54321", changeOrigin: true }));
-
 const PORT = process.env.PORT || 8081;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);

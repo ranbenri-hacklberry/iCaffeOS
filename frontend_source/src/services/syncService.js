@@ -463,9 +463,9 @@ export const syncOrders = async (businessId) => {
         return { success: false, reason: 'offline' };
     }
 
-    // Expansion: Sync 3 days of history (KDS/Active Orders only)
+    // Lean Diet: Sync 1 day of history (local Supabase has full history)
     const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - 3);
+    fromDate.setDate(fromDate.getDate() - 1);
     const fromDateISO = fromDate.toISOString();
     const toDateISO = new Date().toISOString();
 
@@ -577,7 +577,12 @@ export const syncOrders = async (businessId) => {
                             notes: item.notes,
                             item_status: item.item_status,
                             course_stage: item.course_stage || 1,
-                            created_at: item.created_at || order.created_at
+                            created_at: item.created_at || order.created_at,
+                            // 🎯 KDS HANDSHAKE FIELDS - Must be preserved or bulkPut erases them!
+                            early_delivered_at: item.early_delivered_at || null,
+                            is_early_delivered: !!(item.early_delivered_at || item.is_early_delivered),
+                            kds_routing_logic: item.kds_routing_logic || null,
+                            urgent_at: item.urgent_at || null
                         });
                     }
                 }
@@ -620,13 +625,15 @@ export const syncOrders = async (businessId) => {
                 console.log(`🛡️ [syncOrders] Server returned 0 orders. Skipping pruning to protect local data.`);
             }
 
-            // 3. DEEP CLEANUP: Remove ANY orders older than 60 days to keep Dexie fresh (Recommendation #4)
-            const sixtyDaysAgo = new Date();
-            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-            const staleOrders = allLocalOrders.filter(o => new Date(o.created_at) < sixtyDaysAgo);
+            // 3. DEEP CLEANUP: Remove ANY orders older than 1 day to keep Dexie lean
+            // Historical data is always available on-demand from Supabase
+            const oneDayAgoCleanup = new Date();
+            oneDayAgoCleanup.setDate(oneDayAgoCleanup.getDate() - 1);
+            oneDayAgoCleanup.setHours(5, 0, 0, 0); // Business day starts at 05:00
+            const staleOrders = allLocalOrders.filter(o => new Date(o.created_at) < oneDayAgoCleanup);
             if (staleOrders.length > 0) {
                 const staleIds = staleOrders.map(o => o.id);
-                console.log(`🧹 [syncOrders] DEEP CLEANUP: Removing ${staleIds.length} orders older than 60 days`);
+                console.log(`🧹 [syncOrders] DEEP CLEANUP: Removing ${staleIds.length} orders older than 1 business day`);
                 await db.orders.bulkDelete(staleIds);
                 await db.order_items.where('order_id').anyOf(staleIds).delete();
             }

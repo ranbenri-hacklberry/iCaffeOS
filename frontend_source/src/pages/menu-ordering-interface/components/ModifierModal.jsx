@@ -737,8 +737,8 @@ const ModifierModal = (props) => {
                       label="לקוח קיבל מוכן"
                       Icon={Package}
                       price={0}
-                      isSelected={clerkChoice === 'prep_override'}
-                      onClick={() => setClerkChoice('prep_override')}
+                      isSelected={clerkChoice === 'GRAB_AND_GO'}
+                      onClick={() => setClerkChoice('GRAB_AND_GO')}
                     />
                     <MilkCard
                       label="נדרשת הכנה"

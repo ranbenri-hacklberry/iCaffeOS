@@ -114,6 +114,7 @@ const MenuOrderingInterface = () => {
   const [showProductDetailModal, setShowProductDetailModal] = useState(false);
   const [selectedProductForDetails, setSelectedProductForDetails] = useState(null);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
+  const isSubmittingRef = useRef(false); // 🛡️ Synchronous guard against double-submit
   const [showConfirmationModal, setShowConfirmationModal] = useState(null);
   const [isEditMode, setIsEditMode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -608,7 +609,15 @@ const MenuOrderingInterface = () => {
       });
 
       const editDataToSet = {
-        orderId: order.id,
+        orderId: (() => {
+          const rpcId = order.id;
+          const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rpcId);
+          if (!isValidUUID) {
+            console.error('🚨 RPC returned non-UUID order.id:', rpcId, '— using cleanOrderId instead:', cleanOrderId);
+            return cleanOrderId; // Fallback to the UUID we used to query
+          }
+          return rpcId;
+        })(),
         orderNumber: order.order_number,
         originalTotal: order.total_amount, // Use actual paid amount (after discount) as baseline
         originalItems: loadedCartItems,
@@ -1691,6 +1700,13 @@ const MenuOrderingInterface = () => {
       console.log('⚠️ Edit mode with empty cart - assuming cancel operation');
     }
 
+    // 🛡️ DOUBLE-SUBMIT GUARD: useRef is synchronous (unlike useState) so it blocks race conditions
+    if (isSubmittingRef.current) {
+      console.warn('⚠️ [POS] Double-submit blocked!');
+      return;
+    }
+    isSubmittingRef.current = true;
+
     try {
       setIsProcessingOrder(true);
       setShowPaymentModal(false);
@@ -1760,16 +1776,21 @@ const MenuOrderingInterface = () => {
 
         // [CLEANED] Extract IDs
         // Fix for UUID-based menu items (which were being incorrectly stripped)
-        const isExistingOrderItem = Boolean(item.menu_item_id);
-        const itemId = isExistingOrderItem ? item.menu_item_id : item.id;
-        const currentOrderItemId = isExistingOrderItem ? item.id : null;
+        // 🛡️ CRITICAL FIX: isExistingOrderItem must check for a REAL order_item UUID (item.uniqueId),
+        // NOT just item.menu_item_id (which exists on ALL items including new ones from menu grid).
+        const hasValidOrderItemUUID = item.uniqueId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.uniqueId);
+        const isExistingOrderItem = hasValidOrderItemUUID;
+        const itemId = item.menu_item_id || item.id;
+        const currentOrderItemId = isExistingOrderItem ? item.uniqueId : null;
 
         // [CLEANED] Status & Stage Logic
         const isDelayed = item.isDelayed === true;
         const isPrep = isKitchenPrep(item);
         let finalStatus;
         
-        if (isDelayed && !['in_progress', 'ready', 'completed', 'shipped'].includes(item.originalStatus)) {
+        if (item.kds_routing_logic === 'GRAB_AND_GO' || item.kds_routing_logic === 'prep_override') {
+          finalStatus = 'completed';
+        } else if (isDelayed && !['in_progress', 'ready', 'completed', 'shipped'].includes(item.originalStatus)) {
           finalStatus = 'held';
         } else if (['in_progress', 'ready', 'completed', 'shipped'].includes(item.originalStatus)) {
           finalStatus = item.originalStatus;
@@ -1816,6 +1837,14 @@ const MenuOrderingInterface = () => {
 
 
       console.log('📝 Prepared Items for Backend:', preparedItems);
+
+      // 🛡️ PHANTOM ORDER GUARD: Never submit to server with zero items (unless it's a pure refund/edit)
+      if (preparedItems.length === 0 && !isRefund && !isEditMode) {
+        console.error('🛑 BLOCKED: preparedItems is empty — would create a phantom order!');
+        isSubmittingRef.current = false;
+        setIsProcessingOrder(false);
+        return;
+      }
 
       // Generate unique identifier for guests without phone
       const guestPhone = realPhone || `GUEST_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
@@ -1916,18 +1945,60 @@ const MenuOrderingInterface = () => {
       // [CLEANED]       });
 
       console.log('📤 Sending Order Payload:', JSON.stringify(orderPayload, null, 2));
-      // [CLEANED] console.log('💰 p_final_total sent:', orderPayload.p_final_total); // <--- בדיקה קריטית
       console.log('  - Items count:', orderPayload.p_items?.length || 0);
       console.log('  - Cancelled items count:', orderPayload.p_cancelled_items?.length || 0);
-      console.log('  - Edit mode:', orderPayload.edit_mode || false);
-      console.log('  - Order ID:', orderPayload.order_id || 'N/A');
+      console.log('  - Edit mode:', orderPayload.p_edit_mode || false);
+      console.log('  - Order ID (p_order_id):', orderPayload.p_order_id || 'N/A');
 
+      // 🔍 UUID AUDIT: Log ALL uuid-typed fields to find the source of "388" error
+      console.log('🔍 UUID AUDIT:', {
+        p_order_id: orderPayload.p_order_id,
+        p_customer_id: orderPayload.p_customer_id,
+        p_discount_id: orderPayload.p_discount_id,
+        p_business_id: orderPayload.p_business_id,
+        items_order_item_ids: orderPayload.p_items?.map((item, i) => ({
+          index: i,
+          item_id: item.item_id,
+          order_item_id: item.order_item_id,
+          name: item.name
+        })),
+        cancelled_ids: orderPayload.p_cancelled_items?.map(i => i.id)
+      });
+
+      // 🛡️ CRITICAL UUID VALIDATION: Prevent "invalid input syntax for type uuid" errors
+      const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+      if (orderPayload.p_edit_mode && orderPayload.p_order_id && !isUUID(orderPayload.p_order_id)) {
+        console.warn('⚠️ p_order_id is NOT a valid UUID:', orderPayload.p_order_id, '— Attempting to resolve...');
+        // Try to look up the real UUID by order_number
+        try {
+          const { data: lookedUp } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('order_number', orderPayload.p_order_id)
+            .eq('business_id', currentUser?.business_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (lookedUp?.id && isUUID(lookedUp.id)) {
+            console.log('✅ Resolved order_number', orderPayload.p_order_id, '→ UUID:', lookedUp.id);
+            orderPayload.p_order_id = lookedUp.id;
+            // Also fix editingOrderData for downstream usage
+            if (editingOrderData) editingOrderData.orderId = lookedUp.id;
+          } else {
+            console.error('❌ Could not resolve order_number to UUID:', orderPayload.p_order_id);
+            alert('שגיאה: מזהה הזמנה לא תקין. נסה לפתוח את ההזמנה מחדש.');
+            setIsProcessingOrder(false);
+            return;
+          }
+        } catch (lookupErr) {
+          console.error('❌ UUID lookup failed:', lookupErr);
+          alert('שגיאה: מזהה הזמנה לא תקין. נסה לפתוח את ההזמנה מחדש.');
+          setIsProcessingOrder(false);
+          return;
+        }
+      }
 
       console.log('📤 Calling submit_order_v3 with payload');
-      // [CLEANED] console.log('🔍 User Context for RPC:', {
-      // [CLEANED] phone: currentUser?.whatsapp_phone,
-      // [CLEANED]   isDemo: currentUser?.whatsapp_phone === '0500000000' || currentUser?.whatsapp_phone === '0501111111'
-      // [CLEANED]       });
 
       // OFFLINE-FIRST: Check if we're online before attempting to submit
       let orderResult = null;
@@ -1940,12 +2011,12 @@ const MenuOrderingInterface = () => {
         orderError = response.error;
 
         // --- 🚀 AUTO-ARCHIVE LOGIC ---
-        // If all items are GRAB_AND_GO or prep_override, move the order immediately to 'completed' status
+        // If all items are GRAB_AND_GO, move the order immediately to 'completed' status
         const allNonPrep = (preparedItems || []).every(item => 
           item.kds_routing_logic === 'GRAB_AND_GO' || item.kds_routing_logic === 'prep_override'
         );
         if (orderResult?.order_id && allNonPrep && !orderError) {
-          console.log('📦 Auto-Archiving order (All items are GRAB_AND_GO or prep_override)');
+          console.log('📦 Auto-Archiving order (All items are GRAB_AND_GO)');
           await supabase
             .from('orders')
             .update({ order_status: 'completed' })
@@ -2348,10 +2419,12 @@ const MenuOrderingInterface = () => {
         setCurrentCustomer(updatedCustomer);
       }
 
+      isSubmittingRef.current = false;
       setIsProcessingOrder(false);
     } catch (err) {
       console.error('❌ Error in handlePaymentSelect:', err);
       alert(`שגיאה בעיבוד ההזמנה: ${err.message}`);
+      isSubmittingRef.current = false;
       setIsProcessingOrder(false);
     }
   };

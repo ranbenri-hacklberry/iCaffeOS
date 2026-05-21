@@ -40,3 +40,7 @@ frontend_source/public/music/
 
 *.bak
 ~
+backend/music_cache/
+postgres_data/
+**/venv/
+**/.venv/

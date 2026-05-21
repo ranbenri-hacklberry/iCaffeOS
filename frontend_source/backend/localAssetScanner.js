@@ -50,13 +50,41 @@ export class LocalAssetScanner {
         }
 
         const assets = [];
-        await this._scanDir(this.rootPath, assets);
+        const fileQueue = [];
+
+        // Step 1: Just collect all file paths (fast)
+        await this._collectFiles(this.rootPath, fileQueue);
+        
+        console.log(`🔍 Found ${fileQueue.length} potential tracks. Extracting metadata...`);
+
+        // Step 2: Extract metadata in parallel with limited concurrency (20)
+        const CONCURRENCY_LIMIT = 20;
+        const chunks = [];
+        for (let i = 0; i < fileQueue.length; i += CONCURRENCY_LIMIT) {
+            chunks.push(fileQueue.slice(i, i + CONCURRENCY_LIMIT));
+        }
+
+        let completed = 0;
+        for (const chunk of chunks) {
+            const results = await Promise.all(chunk.map(async (filePath) => {
+                try {
+                    const metadata = await this._extractMetadata(filePath);
+                    completed++;
+                    if (completed % 100 === 0) console.log(`⏳ Progress: ${completed}/${fileQueue.length}...`);
+                    return metadata;
+                } catch (err) {
+                    console.warn(`⚠️ Failed to parse: ${path.basename(filePath)}`, err.message);
+                    return null;
+                }
+            }));
+            assets.push(...results.filter(Boolean));
+        }
 
         console.log(`✅ Scan complete. Found ${assets.length} tracks.`);
         return assets;
     }
 
-    async _scanDir(dir, assets) {
+    async _collectFiles(dir, fileQueue) {
         let entries;
         try {
             entries = await fsPromises.readdir(dir, { withFileTypes: true });
@@ -69,24 +97,14 @@ export class LocalAssetScanner {
             const fullPath = path.join(dir, entry.name);
 
             if (entry.isDirectory()) {
-                // Recursive step
-                // Ignore hidden dirs like .TRASH or .Spotlight-V100
                 if (!entry.name.startsWith('.')) {
-                    await this._scanDir(fullPath, assets);
+                    await this._collectFiles(fullPath, fileQueue);
                 }
             } else if (entry.isFile()) {
-                // Skip macOS resource fork files
                 if (entry.name.startsWith('._')) continue;
                 const ext = path.extname(entry.name).toLowerCase();
                 if (SUPPORTED_EXTS.has(ext)) {
-                    try {
-                        const metadata = await this._extractMetadata(fullPath);
-                        if (metadata) {
-                            assets.push(metadata);
-                        }
-                    } catch (err) {
-                        console.warn(`⚠️ Failed to parse: ${entry.name}`, err.message);
-                    }
+                    fileQueue.push(fullPath);
                 }
             }
         }
