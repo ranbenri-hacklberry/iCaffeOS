@@ -114,11 +114,10 @@ const SyncStatusModal = () => {
         setCurrentTable('מתחבר לשרת...');
 
         try {
-            const { triggerCloudToLocalSync } = await import('@/services/syncService');
-
-            const result = await triggerCloudToLocalSync(currentUser.business_id, {
-                clearLocal,
-                onProgress: (tableName, count, overallProgress, message) => {
+            // ⚠️ LOCAL-ONLY: No cloud sync! Just reload Dexie from local Docker Supabase.
+            const { initialLoad } = await import('@/services/syncService');
+            const result = await initialLoad(currentUser.business_id, {
+                onProgress: (tableName, count) => {
                     setCurrentTable(tableName);
                     if (count > 0) {
                         setProgress(prev => ({
@@ -126,7 +125,7 @@ const SyncStatusModal = () => {
                             [tableName]: count
                         }));
                     }
-                    setOverallProgress(overallProgress);
+                    setOverallProgress(prev => Math.min(prev + 10, 95));
                 }
             });
 

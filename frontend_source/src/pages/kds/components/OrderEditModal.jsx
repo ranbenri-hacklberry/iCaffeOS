@@ -73,9 +73,10 @@ const OrderEditModal = ({
                 
                 // 🚀 HERO: Unified delivery logic
                 const isDelivered = 
-                    routingLogic === 'prep_override' || 
+                    routingLogic === 'prep_override' || // Backwards compatibility for old data
                     routingLogic === 'GRAB_AND_GO' || 
-                    item.is_early_delivered === true ||
+                    item.is_early_delivered === true || // Backwards compatibility
+                    !!item.early_delivered_at ||
                     status === 'ready' || 
                     status === 'shipped' ||
                     status === 'completed';
@@ -88,6 +89,7 @@ const OrderEditModal = ({
                     quantity: 1,
                     price: item.price || 0,
                     status: status,
+                    early_delivered_at: item.early_delivered_at || null,
                     is_delivered: isDelivered,
                     kds_routing_logic: routingLogic,
                     was_conditional: item.was_conditional || false,
@@ -113,80 +115,89 @@ const OrderEditModal = ({
         
         // Items in the modal can represent multiple DB records (itemIds)
         const itemIds = item.ids && item.ids.length > 0 ? item.ids : [item.id];
-        const currentLogic = item.kds_routing_logic;
         
         setProcessingItemId(item.uniqueKey);
 
         try {
-            // Toggle between prep_override and MADE_TO_ORDER
-            const targetLogic = currentLogic === 'prep_override' ? 'MADE_TO_ORDER' : 'prep_override';
-            const targetStatus = targetLogic === 'prep_override' ? 'ready' : 'in_progress';
+            // Determine target state
+            const isCurrentlyDelivered = item.status === 'ready' || item.status === 'completed' || !!item.early_delivered_at || item.is_delivered;
+            const targetStatus = isCurrentlyDelivered ? 'in_progress' : 'ready';
+            const targetTimestamp = isCurrentlyDelivered ? null : new Date().toISOString();
             
-            // 1. Optimistic UI update
+            // ═══════════════════════════════════════════════════════════════
+            // 🏗️ SUPABASE-FIRST: Write to server BEFORE touching Dexie
+            // ═══════════════════════════════════════════════════════════════
+
+            // 1. Update items on Supabase
+            const { error: itemError } = await supabase
+                .from('order_items')
+                .update({ 
+                    item_status: targetStatus,
+                    early_delivered_at: targetTimestamp
+                })
+                .in('id', itemIds);
+
+            if (itemError) {
+                console.error('❌ Supabase item toggle FAILED:', itemError);
+                return; // ❌ DO NOT touch Dexie or UI
+            }
+
+            // 2. If unchecking → update parent order status on Supabase
+            if (targetStatus === 'in_progress') {
+                const { error: orderError } = await supabase
+                    .from('orders')
+                    .update({ order_status: 'in_progress' })
+                    .eq('id', orderData.id);
+                if (orderError) {
+                    console.error('❌ Supabase order status rollback FAILED:', orderError);
+                    // Items already updated on server, but order status failed.
+                    // Still proceed to mirror what succeeded.
+                }
+            }
+
+            console.log(`📤 Supabase toggle confirmed for ${itemIds.length} items -> ${targetStatus}`);
+
+            // ✅ CONFIRMED WRITE: Now update local UI state
             setItems(prevItems =>
                 prevItems.map(i => i.uniqueKey === item.uniqueKey 
                     ? { 
                         ...i, 
-                        kds_routing_logic: targetLogic, 
                         status: targetStatus,
-                        is_delivered: targetLogic === 'prep_override' 
+                        early_delivered_at: targetTimestamp,
+                        is_delivered: !isCurrentlyDelivered 
                       } 
                     : i
                 )
             );
 
-            // 2. Update Dexie immediately for instant KDS card refresh (Local-First)
+            // ✅ CONFIRMED WRITE: Now mirror to Dexie
             try {
                 const db = (await import('@/db/database')).default;
                 
-                // Update ALL individual records in this group
                 await Promise.all(itemIds.map(id => 
                     db.order_items.update(id, { 
-                        kds_routing_logic: targetLogic,
                         item_status: targetStatus,
-                        is_early_delivered: targetLogic === 'prep_override', // Sync legacy flag
+                        early_delivered_at: targetTimestamp,
                         updated_at: new Date().toISOString()
                     })
                 ));
 
-                // 🚀 HERO: If we are UNCHECKING an item, we MUST ensure the parent order 
-                // is NOT marked as 'completed' or 'ready' anymore, otherwise it won't show in Active KDS
-                if (targetLogic === 'MADE_TO_ORDER') {
+                if (targetStatus === 'in_progress') {
                     await db.orders.update(orderData.id, {
                         order_status: 'in_progress',
                         updated_at: new Date().toISOString()
                     });
                 }
 
-                console.log(`✅ [Dexie] Updated ${itemIds.length} items to ${targetLogic} (${targetStatus})`);
+                console.log(`✅ [Dexie] Mirrored ${itemIds.length} items to ${targetStatus}`);
             } catch (dexieErr) {
-                console.warn('⚠️ [Dexie] update failed (non-critical):', dexieErr);
-            }
-
-            // 3. Sync to Supabase (Cloud)
-            const { error: itemError } = await supabase
-                .from('order_items')
-                .update({ 
-                    kds_routing_logic: targetLogic,
-                    item_status: targetStatus,
-                    is_early_delivered: targetLogic === 'prep_override' // Sync legacy flag
-                })
-                .in('id', itemIds);
-            if (itemError) throw itemError;
-
-            // 🚀 HERO: Sync parent order status update to cloud
-            if (targetLogic === 'MADE_TO_ORDER') {
-                const { error: orderError } = await supabase
-                    .from('orders')
-                    .update({ order_status: 'in_progress' })
-                    .eq('id', orderData.id);
-                if (orderError) console.error('❌ Failed to sync order status back to in_progress:', orderError);
+                console.warn('⚠️ [Dexie] mirror failed (non-critical, server is authoritative):', dexieErr);
             }
 
             // Trigger refresh in parent
             onRefresh?.();
         } catch (err) {
-            console.error('❌ [OrderEditModal] Toggle failed:', err);
+            console.error('🔥 [OrderEditModal] Toggle FAILED:', err);
         } finally {
             setProcessingItemId(null);
         }
@@ -209,7 +220,16 @@ const OrderEditModal = ({
                         <h2 className="text-xl font-bold text-slate-800 leading-tight">פרטי הזמנה #{orderData?.order_number}</h2>
                         {!isHistoryMode && (
                             <button
-                                onClick={() => navigate(`/?editOrderId=${orderData.id}&from=kds`)}
+                                onClick={() => {
+                                    const editId = orderData.id;
+                                    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editId);
+                                    if (!isUUID) {
+                                        console.error('❌ Invalid order ID for edit (not a UUID):', editId);
+                                        alert(`שגיאה: מזהה הזמנה לא תקין (${editId}). נסה לרענן את הדף.`);
+                                        return;
+                                    }
+                                    navigate(`/?editOrderId=${editId}&from=kds`);
+                                }}
                                 className="text-blue-600 font-bold text-xs flex items-center gap-1 mt-0.5 hover:text-blue-700 transition-colors"
                             >
                                 <Edit3 size={12} />
@@ -230,7 +250,8 @@ const OrderEditModal = ({
                             .filter(mod => mod.shortName !== null);
 
                         const isDelivered = 
-                            item.kds_routing_logic === 'prep_override' || 
+                            item.early_delivered_at || // NEW Single Source of Truth
+                            item.kds_routing_logic === 'prep_override' || // Legacy
                             item.kds_routing_logic === 'GRAB_AND_GO' || 
                             item.status === 'ready' ||
                             item.status === 'completed';

@@ -232,7 +232,7 @@ const getKdsMods = (item) => {
 
 
 
-    if (lowerText.includes('רגיל') || lowerText.includes('default')) return;
+    if (lowerText.includes('רגיל') || lowerText.includes('default') || lowerText.includes('kds_override') || lowerText.includes('kds_over')) return;
 
 
 

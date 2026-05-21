@@ -81,9 +81,9 @@ export const PINPad: React.FC<PINPadProps> = ({
       let data = res.data;
       let error = res.error;
 
-      // 2. FALLBACK 1: If no match found for this business, try GLOBAL search
+      // 2. FALLBACK: If no match found for this business, try GLOBAL search in LOCAL DB
       if (!data || data.length === 0) {
-        console.log('🔍 [PIN] Trying global search...');
+        console.log('🔍 [PIN] Trying global local search...');
         const globalRes = await supabase.rpc('verify_employee_pin', {
           p_pin: targetPin,
           p_business_id: null
@@ -94,34 +94,7 @@ export const PINPad: React.FC<PINPadProps> = ({
         }
       }
 
-      // 3. FALLBACK 2: If still no match (e.g. Local is empty/broken), try CLOUD directly
-      if (!data || data.length === 0) {
-        console.log('☁️ [PIN] Trying direct Cloud RPC...');
-        const cloudRes = await cloudSupabase.rpc('verify_employee_pin', {
-          p_pin: targetPin,
-          p_business_id: null
-        });
-        if (cloudRes.data?.length > 0) {
-          data = cloudRes.data;
-          error = null;
-        } else if (cloudRes.error) {
-          error = cloudRes.error;
-        }
-      }
-
-      // 4. FALLBACK 3: Direct Table Query (Cloud)
-      if (!data || data.length === 0) {
-        console.log('🕵️ [PIN] Trying direct table query on Cloud...');
-        const { data: directData } = await cloudSupabase
-          .from('employees')
-          .select('id, name, access_level, is_super_admin, business_id')
-          .eq('pin_code', targetPin)
-          .limit(1);
-        if (directData && directData.length > 0) {
-          data = directData;
-          error = null;
-        }
-      }
+      // 3. REMOVED CLOUD FALLBACKS - System is now strictly local for PIN verification.
 
       // 5. MASTER RESCUE: If Rani's PIN (2102) but still failing
       if ((!data || data.length === 0) && targetPin === '2102') {

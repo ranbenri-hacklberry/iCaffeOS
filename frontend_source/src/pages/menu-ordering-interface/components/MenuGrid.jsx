@@ -1,8 +1,8 @@
 import React from 'react';
-import MenuItemCard from '@/pages/menu-ordering-interface/components/MenuItemCard';
+import MenuItemCard from './MenuItemCard';
 import { motion } from 'framer-motion';
-import Icon from '@/components/AppIcon';
-import { useTheme } from '@/context/ThemeContext';
+import Icon from '../../../components/AppIcon';
+import { useTheme } from '../../../context/ThemeContext';
 
 const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = null, categories = [] }) => {
   const { isDarkMode } = useTheme();

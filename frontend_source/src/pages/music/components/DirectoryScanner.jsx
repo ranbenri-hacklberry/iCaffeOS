@@ -126,9 +126,9 @@ const DirectoryScanner = ({ isOpen, onClose, onScan }) => {
                                 דיסקים זמינים במחשב
                             </label>
                             <div className="space-y-2">
-                                {availableVolumes.map((vol) => (
+                                {availableVolumes.map((vol, idx) => (
                                     <button
-                                        key={vol.path}
+                                        key={`vol-${vol.path}-${idx}`}
                                         onClick={() => setDirectoryPath(vol.path)}
                                         className="w-full flex items-center gap-3 px-4 py-3 bg-white/5 rounded-xl
                              hover:bg-white/10 transition-colors text-right"
@@ -172,10 +172,10 @@ const DirectoryScanner = ({ isOpen, onClose, onScan }) => {
                     <div className="mb-6">
                         <label className="text-white/60 text-sm block mb-2">נתיבים מהירים</label>
                         <div className="flex flex-wrap gap-2">
-                            {suggestions.map(({ path, label }) => (
+                            {suggestions.map(({ path: sPath, label }, idx) => (
                                 <button
-                                    key={path}
-                                    onClick={() => setDirectoryPath(path)}
+                                    key={`sug-${sPath}-${idx}`}
+                                    onClick={() => setDirectoryPath(sPath)}
                                     className="px-3 py-2 bg-white/10 rounded-xl text-white/60 text-sm
                            hover:bg-white/20 transition-colors"
                                 >

@@ -10,11 +10,62 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 
+console.log('📦 [AdminRoutes] Module loading...');
 const router = express.Router();
+
+/**
+ * GET /api/admin/inventory/cross-business-report
+ */
+router.get('/inventory/cross-business-report', async (req, res) => {
+    console.log('📊 [Admin] Generating Cross-Business Inventory Report...');
+    try {
+        const { data, error } = await dockerSupabase
+            .from('inventory_items')
+            .select('business_id, name');
+        if (error) throw error;
+        const report = {};
+        (data || []).forEach(item => {
+            const bId = item.business_id || 'UNKNOWN';
+            report[bId] = (report[bId] || 0) + 1;
+        });
+        res.json({ success: true, report, total: data?.length || 0 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/admin/inventory/duplicate-names-report
+ */
+router.get('/inventory/duplicate-names-report', async (req, res) => {
+    console.log('📊 [Admin] Generating Duplicate Names Report...');
+    try {
+        const { data, error } = await dockerSupabase
+            .from('inventory_items')
+            .select('business_id, name');
+        if (error) throw error;
+        const nameMap = {};
+        (data || []).forEach(item => {
+            const name = (item.name || '').trim();
+            if (!name) return;
+            if (!nameMap[name]) nameMap[name] = new Set();
+            nameMap[name].add(item.business_id);
+        });
+        const sharedNames = {};
+        Object.entries(nameMap).forEach(([name, businesses]) => {
+            if (businesses.size > 1) {
+                sharedNames[name] = Array.from(businesses);
+            }
+        });
+        res.json({ success: true, sharedNames, count: Object.keys(sharedNames).length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // 1. Cloud Supabase Client (Service Role)
 const REMOTE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const REMOTE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY; // Must be Service Role
+const REMOTE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY; // Must be Service Role if possible
 
 if (!REMOTE_KEY) console.warn("⚠️ [AdminRoutes] Missing SUPABASE_SERVICE_KEY. Sync might fail due to RLS.");
 
@@ -714,6 +765,224 @@ router.post('/full-bidirectional-sync', async (req, res) => {
             success: false,
             error: err.message
         });
+    }
+});
+
+/**
+ * GET /api/admin/mirror/dump
+ * Aggregated dump of ALL critical tables for system mirroring
+ */
+router.get('/mirror/dump', async (req, res) => {
+    const { businessId, recentDays } = req.query;
+    
+    console.log(`[Mirror] Starting aggregated dump (businessId: ${businessId || 'ALL'})`);
+
+    const TABLES_TO_DUMP = [
+        { name: 'businesses', hasBusinessId: false },
+        { name: 'employees', hasBusinessId: true },
+        { name: 'item_category', hasBusinessId: true },
+        { name: 'menu_items', hasBusinessId: true },
+        { name: 'optiongroups', hasBusinessId: true },
+        { name: 'optionvalues', hasBusinessId: false },
+        { name: 'menuitemoptions', hasBusinessId: false },
+        { name: 'customers', hasBusinessId: true },
+        { name: 'loyalty_cards', hasBusinessId: true },
+        { name: 'loyalty_transactions', hasBusinessId: true, recentDays: recentDays || 30 },
+        { name: 'inventory_items', hasBusinessId: true },
+        { name: 'prepared_items_inventory', hasBusinessId: true },
+        { name: 'suppliers', hasBusinessId: true },
+        { name: 'recurring_tasks', hasBusinessId: true },
+        { name: 'tasks', hasBusinessId: true },
+        { name: 'task_completions', hasBusinessId: true, recentDays: recentDays || 7 },
+        { name: 'orders', hasBusinessId: true, recentDays: recentDays || 7 },
+        { name: 'order_items', hasBusinessId: true, recentDays: recentDays || 7 },
+        { name: 'discounts', hasBusinessId: true },
+        { name: 'business_secrets', hasBusinessId: true }
+    ];
+
+    const dump = {};
+    const errors = [];
+
+    try {
+        for (const table of TABLES_TO_DUMP) {
+            try {
+                let query = dockerSupabase.from(table.name).select('*');
+
+                if (businessId && table.hasBusinessId) {
+                    query = query.eq('business_id', businessId);
+                } else if (businessId && table.name === 'businesses') {
+                    query = query.eq('id', businessId);
+                }
+
+                if (table.recentDays) {
+                    const days = parseInt(table.recentDays);
+                    const cutoffDate = new Date();
+                    cutoffDate.setDate(cutoffDate.getDate() - days);
+                    query = query.gte('created_at', cutoffDate.toISOString());
+                }
+
+                const { data, error } = await query;
+                
+                if (error) {
+                    console.error(`[Mirror] Error dumping ${table.name}:`, error.message);
+                    errors.push({ table: table.name, error: error.message });
+                } else {
+                    dump[table.name] = data || [];
+                    console.log(`[Mirror] ✓ Dumped ${dump[table.name].length} rows from ${table.name}`);
+                }
+            } catch (tableErr) {
+                errors.push({ table: table.name, error: tableErr.message });
+            }
+        }
+
+        return res.json({
+            success: true,
+            timestamp: new Date().toISOString(),
+            businessId: businessId || 'ALL',
+            tables: Object.keys(dump),
+            data: dump,
+            errors: errors.length > 0 ? errors : null
+        });
+
+    } catch (err) {
+        console.error('[Mirror] Fatal dump error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/mirror/pull
+ * Pulls a full dump from a source IP and upserts it into the local database
+ */
+router.post('/mirror/pull', async (req, res) => {
+    const { sourceIp, businessId, recentDays } = req.body;
+    
+    if (!sourceIp) {
+        return res.status(400).json({ success: false, error: 'sourceIp is required' });
+    }
+
+    const sourceUrl = `http://${sourceIp}:${process.env.PORT || 8081}/api/admin/mirror/dump?businessId=${businessId || ''}&recentDays=${recentDays || ''}`;
+    
+    console.log(`[Mirror] Pulling data from ${sourceUrl}...`);
+
+    try {
+        const response = await fetch(sourceUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch from source: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(`Source dump error: ${result.error}`);
+        }
+
+        const dumpData = result.data;
+        const syncResults = {};
+
+        const SYNC_ORDER = [
+            'businesses', 'employees', 'item_category', 'menu_items',
+            'optiongroups', 'optionvalues', 'menuitemoptions',
+            'customers', 'loyalty_cards', 'loyalty_transactions',
+            'inventory_items', 'prepared_items_inventory', 'suppliers',
+            'recurring_tasks', 'tasks', 'task_completions',
+            'orders', 'order_items', 'discounts', 'business_secrets'
+        ];
+
+        for (const table of SYNC_ORDER) {
+            const tableData = dumpData[table];
+            if (!tableData || tableData.length === 0) continue;
+
+            const onConflict = getConflictColumns(table);
+            
+            // Clean data
+            const cleanedData = tableData.map(row => {
+                const newRow = { ...row };
+                delete newRow.cost_per_1000_units;
+                return newRow;
+            });
+
+            // Upsert in chunks
+            const CHUNK_SIZE = 500;
+            let tableCount = 0;
+            for (let i = 0; i < cleanedData.length; i += CHUNK_SIZE) {
+                const chunk = cleanedData.slice(i, i + CHUNK_SIZE);
+                const { error } = await dockerSupabase.from(table).upsert(chunk, { onConflict });
+                if (error) {
+                    console.error(`[Mirror] Error upserting ${table}:`, error.message);
+                    throw error;
+                }
+                tableCount += chunk.length;
+            }
+            syncResults[table] = tableCount;
+        }
+
+        return res.json({
+            success: true,
+            message: 'Mirror pull completed successfully',
+            syncResults
+        });
+
+    } catch (err) {
+        console.error('[Mirror] Mirror pull failed:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/inventory/cleanup-duplicates
+ * Cleans up duplicate inventory items for a business, keeping only the most recent.
+ */
+router.post('/inventory/cleanup-duplicates', async (req, res) => {
+    try {
+        const { businessId } = req.body;
+        if (!businessId) return res.status(400).json({ error: 'Missing businessId' });
+
+        console.log(`🧹 [Cleanup] Removing duplicates for business ${businessId}...`);
+
+        // 1. Find the latest record for each name
+        const { data: latestItems, error: fetchErr } = await dockerSupabase
+            .from('inventory_items')
+            .select('id, name, updated_at')
+            .eq('business_id', businessId)
+            .order('name')
+            .order('updated_at', { ascending: false });
+
+        if (fetchErr) throw fetchErr;
+
+        const seenNames = new Set();
+        const idsToKeep = [];
+        const idsToDelete = [];
+
+        (latestItems || []).forEach(item => {
+            const name = (item.name || '').trim();
+            if (!name) return; // Skip unnamed items? Or handle them?
+
+            if (seenNames.has(name)) {
+                idsToDelete.push(item.id);
+            } else {
+                seenNames.add(name);
+                idsToKeep.push(item.id);
+            }
+        });
+
+        if (idsToDelete.length === 0) {
+            return res.json({ success: true, message: 'No duplicates found.', deletedCount: 0 });
+        }
+
+        // 2. Perform deletion
+        const { error: deleteErr } = await dockerSupabase
+            .from('inventory_items')
+            .delete()
+            .in('id', idsToDelete);
+
+        if (deleteErr) throw deleteErr;
+
+        console.log(`✅ [Cleanup] Deleted ${idsToDelete.length} duplicate items.`);
+        res.json({ success: true, message: `Deleted ${idsToDelete.length} duplicates.`, deletedCount: idsToDelete.length });
+
+    } catch (err) {
+        console.error('❌ [Cleanup] Error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 

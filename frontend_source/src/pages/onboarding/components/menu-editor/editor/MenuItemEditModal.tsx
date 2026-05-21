@@ -37,7 +37,7 @@ const MenuItemEditModal = ({ item, onClose }: MenuItemEditModalProps) => {
 
     // Fetch Inventory
     useEffect(() => {
-        if (!item.id) return;
+        if (!item.id || item.id.toString().startsWith('local-')) return;
         const fetchInventory = async () => {
             const { data } = await supabase
                 .from('prepared_items_inventory')

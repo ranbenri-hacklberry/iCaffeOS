@@ -217,6 +217,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                     visualDescription: ci.visual_description,
                     prompt: ci.ai_prompt,
                     productionArea: ci.production_area || 'Checker',
+                    displayKDS: (ci.production_area || 'Checker').split(',').map(s=>s.trim()),
                     categoryId: ci.category_id,
                     originalImageUrls: ci.original_image_urls || [],
                     preparationMode: ci.kds_routing_logic === 'GRAB_AND_GO' ? 'ready' :
@@ -333,7 +334,12 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 sale_price: item.salePrice || null,
                 image_url: item.imageUrl,
                 modifiers: item.modifiers || [],
-                production_area: item.productionArea || 'Checker', // Primary
+                // Enforce Checker lock before sending to DB
+                production_area: Array.from(new Set([
+                    ...(item.productionArea ? item.productionArea.split(',').map(s=>s.trim()) : []), 
+                    ...(item.displayKDS || []), 
+                    'Checker'
+                ])).join(','),
                 ingredients: item.ingredients || [],
                 visual_description: item.visualDescription,
                 ai_prompt: item.prompt,
@@ -362,6 +368,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                         if (data?.[0]) {
                             const newId = data[0].id.toString();
                             set(state => ({ items: state.items.map(i => i.id === itemId ? { ...i, id: newId } : i) }));
+                            get().saveSession(); // 🆕 Persist the new ID to local session
                             await syncModifiersToRelational(Number(newId), item.modifiers || [], businessId); // 🆕 Sync relational tables
                             await get().syncRecurringTasks(businessId, Number(newId), item);
                         }
@@ -413,7 +420,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     },
 
     addNewItem: (category = 'General') => {
-        const item: OnboardingItem = { id: `local-${Date.now()}`, name: 'New Item', category, description: '', price: 0, status: 'pending', productionArea: 'Kitchen', ingredients: [], modifiers: [] };
+        const item: OnboardingItem = { id: `local-${Date.now()}`, name: 'New Item', category, description: '', price: 0, status: 'completed', productionArea: 'Kitchen', ingredients: [], modifiers: [] };
         set(state => ({ items: [item, ...state.items] }));
         get().saveSession();
         return item;

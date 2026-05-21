@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }) => {
 
                         // 2. Validate against Backend (RPC)
                         // Note: validation should happen via our API route or Supabase RPC
-                        const { data, error } = await cloudSupabase.rpc('verify_kiosk_device', {
+                        const { data, error } = await supabase.rpc('verify_kiosk_device', {
                             p_machine_id_hash: machineId
                         });
 
@@ -122,7 +122,7 @@ export const AuthProvider = ({ children }) => {
                             // Support both snake_case (business_id) and camelCase (businessId) from RPC
                             const rawUser = data.user || data;
                             const bizId = rawUser.business_id || rawUser.businessId || null;
-                            console.log('✅ [Auth] Device Authorized:', rawUser.name, '| business_id:', bizId);
+                            console.log('✅ [Auth] Device Authorized (Local):', rawUser.name, '| business_id:', bizId);
 
                             let deviceUser = {
                                 ...rawUser,
@@ -140,7 +140,7 @@ export const AuthProvider = ({ children }) => {
                                     console.log('🔍 [Auth] Resolving primary employee for business:', bizId);
 
                                     // 1. Try super admins first
-                                    const { data: superAdmins, error: saErr } = await cloudSupabase
+                                    const { data: superAdmins, error: saErr } = await supabase
                                         .from('employees')
                                         .select('id, name, access_level, is_super_admin, is_admin, pin_code')
                                         .eq('business_id', bizId)
@@ -150,7 +150,7 @@ export const AuthProvider = ({ children }) => {
 
                                     // 2. Try owners/admins/managers (elevated roles only)
                                     // NOTE: DB may have mixed case (e.g. 'Manager' vs 'manager') — include both
-                                    const { data: elevated, error: owErr } = await cloudSupabase
+                                    const { data: elevated, error: owErr } = await supabase
                                         .from('employees')
                                         .select('id, name, access_level, is_super_admin, is_admin, pin_code')
                                         .eq('business_id', bizId)

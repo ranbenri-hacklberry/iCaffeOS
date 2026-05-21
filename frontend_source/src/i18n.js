@@ -1,16 +1,10 @@
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-
-// Import translation files
-import heSettings from './locales/he/settings.json';
-import enSettings from './locales/en/settings.json';
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+import translationEN from "./locales/en/translation.json";
 
 const resources = {
-  he: {
-    settings: heSettings,
-  },
   en: {
-    settings: enSettings,
+    translation: translationEN,
   },
 };
 
@@ -18,12 +12,10 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'he', // default language
-    fallbackLng: 'he',
-    ns: ['settings'],
-    defaultNS: 'settings',
+    lng: "en", 
+    fallbackLng: "en",
     interpolation: {
-      escapeValue: false,
+      escapeValue: false, 
     },
   });
 

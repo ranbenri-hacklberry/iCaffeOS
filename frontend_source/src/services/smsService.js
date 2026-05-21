@@ -1,4 +1,19 @@
 import { resolveUrl } from '@/utils/apiUtils';
+import { supabase } from '@/lib/supabase';
+
+// 📝 Internal helper: log SMS attempt to local DB (fire-and-forget)
+const _logSms = (phone, message, status, error = null) => {
+    supabase.from('sms_queue').insert({
+        phone,
+        message,
+        status,
+        error: error ? String(error).slice(0, 255) : null,
+        created_at: new Date().toISOString(),
+        sent_at: status === 'success' ? new Date().toISOString() : null,
+    }).then(({ error: dbErr }) => {
+        if (dbErr) console.warn('⚠️ SMS log write failed:', dbErr.message);
+    });
+};
 
 // SMS Service - Cloud Function Proxy (Production)
 // Production endpoint for sending SMS via Google Cloud Function
@@ -15,80 +30,72 @@ export const USE_CLOUD_FUNCTION = true;
  * @returns {Promise<{success: boolean, error?: string, data?: any}>}
  */
 export const sendSms = async (phone, message) => {
-    // Block specific test number (System Configuration)
+    // 1. Validation
     const cleanPhone = phone?.replace(/\D/g, '');
-
-    // Safety Check: If no phone number or invalid format, do not attempt to send
-    // Must start with '05' and be 10 digits long
     if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('05')) {
         console.log('🚫 SMS skipped: Invalid or missing phone number', { phone, cleanPhone });
         return { success: true, skipped: true };
     }
 
-    if (cleanPhone === '0548888888') {
-        console.warn('🚫 SMS blocked by system configuration (Test Number):', phone);
-        return { success: false, error: 'הודעה לא נשלחה כהגדרת מערכת', isBlocked: true };
-    }
+    const maxRetries = 3;
+    let attempt = 0;
 
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    while (attempt < maxRetries) {
+        attempt++;
         try {
-            console.log(`📨 Sending SMS (Attempt ${attempt}/${MAX_RETRIES}):`, { to: phone });
+            console.log(`📨 [SMS Attempt ${attempt}/${maxRetries}] Posting to Vite Proxy for ${phone}...`);
+            
+            // Use RELATIVE URL so it goes through the Vite proxy
+            // /api/sms → proxied to https://api.globalsms.co.il/sms/
+            let targetUrl = '/api/sms/sendSmsToRecipients';
 
-            const response = await fetch(CLOUD_FUNCTION_URL, {
+            const response = await fetch(targetUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, message }),
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8'
+                },
+                signal: AbortSignal.timeout(5000), // 5s timeout
+                body: JSON.stringify({
+                    ApiKey: '5v$YW#4k2Dn@w96306$H#S7cMp@8t$6R',
+                    txtOriginator: '0548317887',
+                    destinations: cleanPhone,
+                    txtSMSmessage: message,
+                    dteToDeliver: '',
+                    txtAddInf: ''
+                })
             });
 
-            // Parse JSON response
-            let data;
-            try {
-                data = await response.json();
-            } catch (e) {
-                // If JSON parsing fails, treat as server error if status is 5xx, else unknown
-                if (response.status >= 500) throw new Error(`Server Error ${response.status} (Invalid JSON)`);
-                return { success: false, error: `Invalid response from server (${response.status})` };
-            }
-
-            // Handle HTTP Errors
             if (!response.ok) {
-                // If 5xx error, throw to trigger retry
+                // If it's a server error (5xx), we might want to retry. 
+                // If it's a client error (4xx), it's probably a permanent failure.
                 if (response.status >= 500) {
-                    throw new Error(data?.error || `Server Error ${response.status}`);
+                    throw new Error(`Gateway Server Error: ${response.status}`);
+                } else {
+                    const errorData = await response.json();
+                    return { success: false, error: errorData.error || `Client Error: ${response.status}` };
                 }
-                // If 4xx error (e.g. Bad Request), do NOT retry
-                return { success: false, error: data?.error || `Client Error ${response.status}` };
             }
 
-            // Handle Business Logic Errors (returned as 200 OK but with error field)
-            if (data?.error) {
-                return { success: false, error: data.error };
-            }
-
-            // Success!
-            console.log('✅ SMS sent successfully:', data);
-
-            // Check balance silently
-            getSmsBalance().catch(e => console.warn('Silent balance check failed', e));
-
+            const data = await response.json();
+            console.log(`✅ SMS Dispatched (Attempt ${attempt}):`, data);
+            _logSms(cleanPhone, message, 'success');
             return { success: true, data };
-
+            
         } catch (err) {
-            console.error(`❌ SMS Attempt ${attempt} failed:`, err.message);
-
-            // If this was the last attempt, return failure
-            if (attempt === MAX_RETRIES) {
-                return { success: false, error: `Network/Server Error: ${err.message}` };
+            console.error(`❌ SMS attempt ${attempt} failed:`, err.message);
+            
+            if (attempt < maxRetries) {
+                const delay = attempt * 2000; // 2s, 4s... backoff
+                console.log(`⏳ Waiting ${delay}ms before next retry...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                _logSms(cleanPhone, message, 'failed', err.message);
+                return { success: false, error: `Failed after ${maxRetries} attempts: ${err.message}` };
             }
-
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         }
     }
 };
+
 
 /**
  * Check the remaining SMS balance.
