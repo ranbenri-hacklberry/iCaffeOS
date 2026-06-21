@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flux Studio - ממשק יצירה מתקדם</title>
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #08090e;
+            --card-bg: rgba(17, 20, 32, 0.7);
+            --accent-gradient: linear-gradient(135deg, #8b5cf6, #06b6d4);
+            --accent-color: #06b6d4;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(6, 182, 212, 0.5);
+            --glow-color: rgba(139, 92, 246, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Rubik', 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.08) 0%, transparent 40%);
+        }
+
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(8, 9, 14, 0.8);
+            backdrop-filter: blur(12px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--accent-gradient);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 20px;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
+        }
+
+        h1 {
+            font-size: 22px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        .main-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 450px 1fr;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 30px;
+            gap: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            color: #fff;
+            font-size: 15px;
+            resize: vertical;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        textarea:focus, input[type="text"]:focus, select:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 10px var(--glow-color);
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0 12px;
+            color: #fff;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .row-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        /* Slider styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            margin-top: 8px;
+            transition: all 0.3s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-gradient);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--glow-color);
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Drag and Drop Zone */
+        .upload-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.01);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 130px;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent-color);
+            background: rgba(6, 182, 212, 0.03);
+        }
+
+        .upload-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .upload-text span {
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+
+        .preview-container {
+            display: none;
+            width: 100%;
+            position: relative;
+            aspect-ratio: 16/9;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .preview-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+        }
+
+        .remove-btn:hover {
+            background: rgba(239, 68, 68, 0.8);
+        }
+
+        /* Preset Chips */
+        .preset-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .preset-chip {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .preset-chip:hover, .preset-chip.active {
+            background: var(--accent-gradient);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 4px 10px rgba(6, 182, 212, 0.2);
+        }
+
+        /* Generate Button */
+        .generate-btn {
+            background: var(--accent-gradient);
+            color: #fff;
+            border: none;
+            border-radius: 14px;
+            height: 52px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
+            margin-top: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .generate-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.2),
+                transparent
+            );
+            transition: 0.5s;
+        }
+
+        .generate-btn:hover::before {
+            right: 100%;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
+        }
+
+        .generate-btn:active {
+            transform: translateY(0);
+        }
+
+        .generate-btn:disabled {
+            background: #27272a;
+            color: #71717a;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Cancel Button */
+        .cancel-btn {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            color: #fff;
+            border: none;
+            border-radius: 14px;
+            height: 52px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+            margin-top: 10px;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .cancel-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);
+        }
+
+        .cancel-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Output Column */
+        .output-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .display-card {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            min-height: 500px;
+            backdrop-filter: blur(20px);
+        }
+
+        .placeholder-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .placeholder-icon {
+            font-size: 64px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: pulse 2s infinite alternate;
+        }
+
+        .result-image {
+            width: 100%;
+            height: 100%;
+            max-height: 75vh;
+            object-fit: contain;
+            display: none;
+            z-index: 2;
+        }
+
+        /* Scanning Laser Animation */
+        .scanner-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, rgba(6,182,212,0) 0%, rgba(6,182,212,1) 50%, rgba(6,182,212,0) 100%);
+            box-shadow: 0 0 15px #06b6d4;
+            animation: scan 3s infinite linear;
+            display: none;
+            z-index: 10;
+        }
+
+        /* Action Buttons */
+        .actions-bar {
+            display: none;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--text-secondary);
+        }
+
+        .action-btn.primary {
+            background: var(--accent-gradient);
+            border: none;
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+        }
+
+        .action-btn.primary:hover {
+            box-shadow: 0 6px 18px rgba(6, 182, 212, 0.3);
+            transform: translateY(-1px);
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            display: none;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes scan {
+            0% { top: 0%; }
+            50% { top: 100%; }
+            100% { top: 0%; }
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.4; transform: scale(0.98); }
+            to { opacity: 0.8; transform: scale(1.02); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon">⚡</div>
+            <div>
+                <h1>Flux Studio</h1>
+            </div>
+        </div>
+        <div class="server-status">
+            <div class="status-dot"></div>
+            <span>שרת Flux מחובר</span>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Control Panel -->
+        <div class="panel">
+            <div class="panel-title">הגדרות ג'נרציה</div>
+
+            <!-- Prompt -->
+            <div class="input-group">
+                <label for="prompt">פרומפט טקסטואלי</label>
+                <textarea id="prompt" placeholder="תאר את התמונה שברצונך ליצור באנגלית... (לדוגמה: A beautiful painting of a cottage in a forest)"></textarea>
+            </div>
+
+            <!-- Image-to-Image / Upload -->
+            <div class="input-group">
+                <label>תמונת מקור (תמונה לתמונה - אופציונלי)</label>
+                <label for="file-input" class="upload-zone" id="drop-zone">
+                    <div class="upload-icon">📷</div>
+                    <div class="upload-text">גרור תמונה לכאן או <span>לחץ לבחירה</span></div>
+                </label>
+                <input type="file" id="file-input" accept="image/*" style="display: none;">
+                <div class="preview-container" id="preview-wrapper">
+                    <img id="image-preview" class="preview-image" src="" alt="תצוגה מקדימה">
+                    <button class="remove-btn" id="remove-img-btn" type="button" title="הסר תמונה">✕</button>
+                </div>
+            </div>
+
+            <!-- Face Reference Image (PuLID) -->
+            <div class="input-group">
+                <label>תמונת פנים לייחוס (שמירה על דמות עקבית - PuLID)</label>
+                <label for="face-file-input" class="upload-zone" id="face-drop-zone">
+                    <div class="upload-icon">👤</div>
+                    <div class="upload-text">גרור תמונת פנים לכאן או <span>לחץ לבחירה</span></div>
+                </label>
+                <input type="file" id="face-file-input" accept="image/*" style="display: none;">
+                <div class="preview-container" id="face-preview-wrapper">
+                    <img id="face-image-preview" class="preview-image" src="" alt="תצוגה מקדימה פנים">
+                    <button class="remove-btn" id="remove-face-img-btn" type="button" title="הסר תמונה">✕</button>
+                </div>
+            </div>
+
+            <!-- PuLID Strength Slider -->
+            <div class="input-group" id="pulid-strength-group" style="display: none; margin-top: -8px;">
+                <label for="pulid-strength">עוצמת השפעת הפנים: <span id="pulid-strength-val">0.8</span></label>
+                <input type="range" id="pulid-strength" min="0.0" max="2.0" step="0.05" value="0.8">
+            </div>
+
+            <!-- LoRA Configuration -->
+            <div class="input-group">
+                <label for="lora">מודל LoRA (אופציונלי)</label>
+                <input type="text" id="lora" value="rani_girl_flux_lora.safetensors" placeholder="למשל: AntiLeecher/Flux-Klein-NSFW-Lora">
+                <div class="preset-container">
+                    <div class="preset-chip active" data-lora="rani_girl_flux_lora.safetensors">דמות עקבית (rani_girl)</div>
+                    <div class="preset-chip" data-lora="AntiLeecher/Flux-Klein-NSFW-Lora">NSFW / Uncensored</div>
+                    <div class="preset-chip" data-lora="">בסיס נקי (ללא LoRA)</div>
+                </div>
+            </div>
+
+            <!-- Parameters Grid -->
+            <div class="row-group">
+                <div class="input-group">
+                    <label for="steps">מספר צעדים (Steps)</label>
+                    <select id="steps">
+                        <option value="4">4 צעדים (טיוטה מהירה)</option>
+                        <option value="8">8 צעדים (מהיר)</option>
+                        <option value="12">12 צעדים (מאוזן)</option>
+                        <option value="20">20 צעדים (איכות גבוהה)</option>
+                        <option value="28" selected>28 צעדים (איכות מקסימלית 🎯)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="dimensions">רזולוציה</label>
+                    <select id="dimensions">
+                        <option value="512x512" selected>512 x 512 (ריבוע)</option>
+                        <option value="512x768">512 x 768 (לאורך 2:3)</option>
+                        <option value="768x512">768 x 512 (לרוחב 3:2)</option>
+                        <option value="768x768">768 x 768 (ריבוע)</option>
+                        <option value="1024x1024">1024 x 1024 (ריבוע)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <button class="generate-btn" id="generate-btn">
+                <span class="spinner" id="btn-spinner"></span>
+                <span id="btn-text">צור תמונה ⚡</span>
+            </button>
+
+            <!-- Cancel Button -->
+            <button class="cancel-btn" id="cancel-btn">
+                <span>🛑 בטל ג'נרציה</span>
+            </button>
+        </div>
+
+        <!-- Output Preview -->
+        <div class="output-container">
+            <div class="display-card" id="display-card">
+                <div class="scanner-bar" id="scanner"></div>
+                
+                <!-- Log Console Box (Unix Terminal Style) -->
+                <div id="log-console" style="display: none; background: rgba(5, 6, 12, 0.85); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 16px; width: 90%; max-width: 520px; font-family: 'Outfit', monospace; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(0,0,0,0.8); z-index: 5; overflow: hidden; backdrop-filter: blur(10px); transition: all 0.3s ease;">
+                    <!-- Terminal Header -->
+                    <div style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; direction: ltr;">
+                        <div style="display: flex; gap: 6px;">
+                            <span style="width: 10px; height: 10px; background-color: #ff5f56; border-radius: 50%; display: inline-block;"></span>
+                            <span style="width: 10px; height: 10px; background-color: #ffbd2e; border-radius: 50%; display: inline-block;"></span>
+                            <span style="width: 10px; height: 10px; background-color: #27c93f; border-radius: 50%; display: inline-block;"></span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.5px;">FLUX SERVER LOGS</div>
+                        <div style="width: 36px;"></div>
+                    </div>
+                    <!-- Terminal Body -->
+                    <div style="padding: 20px;">
+                        <div id="log-lines" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #38bdf8; scroll-behavior: smooth; text-align: left; direction: ltr;"></div>
+                    </div>
+                </div>
+                
+                <div class="placeholder-view" id="placeholder">
+                    <div class="placeholder-icon">🎨</div>
+                    <h3>התמונה המוג'נרטת תופיע כאן</h3>
+                    <p>הזן פרומפט, לחץ על כפתור הג'נרציה ותן ל-Flux לעשות את הקסם שלו.</p>
+                </div>
+
+                <img id="result-img" class="result-image" src="" alt="תוצאה">
+            </div>
+
+            <div class="actions-bar" id="actions-wrapper">
+                <button class="action-btn" id="open-btn">🔗 פתח בחלון חדש</button>
+                <button class="action-btn primary" id="download-btn">⬇️ הורד תמונה</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="error-toast">
+        <span style="font-size: 20px;">⚠️</span>
+        <span id="toast-message">שגיאה ביצירת התמונה. נסה שוב.</span>
+    </div>
+
+    <script>
+        // Global error tracking for debugging
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Global JS Error: ", message, " at ", source, ":", lineno);
+            alert("שגיאת תוכנה (JS Error): " + message + "\nשורה: " + lineno);
+            return false;
+        };
+
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewWrapper = document.getElementById('preview-wrapper');
+        const imagePreview = document.getElementById('image-preview');
+        const removeImgBtn = document.getElementById('remove-img-btn');
+        const promptInput = document.getElementById('prompt');
+        const loraInput = document.getElementById('lora');
+        const presetChips = document.querySelectorAll('.preset-chip');
+        const stepsSelect = document.getElementById('steps');
+        const dimensionsSelect = document.getElementById('dimensions');
+        const generateBtn = document.getElementById('generate-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const btnText = document.getElementById('btn-text');
+        const placeholder = document.getElementById('placeholder');
+        const resultImg = document.getElementById('result-img');
+        const scanner = document.getElementById('scanner');
+        const actionsWrapper = document.getElementById('actions-wrapper');
+        const openBtn = document.getElementById('open-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const errorToast = document.getElementById('error-toast');
+        const toastMessage = document.getElementById('toast-message');
+        const logConsole = document.getElementById('log-console');
+        const logLines = document.getElementById('log-lines');
+
+        // PuLID Face Reference DOM Elements
+        const faceDropZone = document.getElementById('face-drop-zone');
+        const faceFileInput = document.getElementById('face-file-input');
+        const facePreviewWrapper = document.getElementById('face-preview-wrapper');
+        const faceImagePreview = document.getElementById('face-image-preview');
+        const removeFaceImgBtn = document.getElementById('remove-face-img-btn');
+        const pulidStrengthGroup = document.getElementById('pulid-strength-group');
+        const pulidStrength = document.getElementById('pulid-strength');
+        const pulidStrengthVal = document.getElementById('pulid-strength-val');
+
+        let base64Image = null;
+        let base64FaceImage = null;
+        let activeImageUrl = null;
+
+        function appendLog(text, isError = false) {
+            if (!logLines) return;
+            const line = document.createElement('div');
+            line.style.marginBottom = '2px';
+            line.style.color = isError ? '#f87171' : '#38bdf8';
+            
+            const isHebrew = /[\u0590-\u05FF]/.test(text);
+            line.style.textAlign = isHebrew ? 'right' : 'left';
+            line.style.direction = isHebrew ? 'rtl' : 'ltr';
+            
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            logLines.appendChild(line);
+            logLines.scrollTop = logLines.scrollHeight;
+        }
+
+        // Image Drag & Drop Logic
+        fileInput.addEventListener('change', handleFileSelect);
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            }
+        });
+
+        function handleFileSelect() {
+            console.log("handleFileSelect: starting file load checks...");
+            if (!fileInput.files || fileInput.files.length === 0) {
+                console.log("handleFileSelect: no files in fileInput.files");
+                return;
+            }
+            const file = fileInput.files[0];
+            if (file) {
+                console.log("handleFileSelect: loading file:", file.name, "size:", file.size);
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    console.log("handleFileSelect: file read success");
+                    imagePreview.src = e.target.result;
+                    base64Image = e.target.result;
+                    dropZone.style.display = 'none';
+                    previewWrapper.style.display = 'block';
+                };
+                reader.onerror = function(err) {
+                    console.error("handleFileSelect: reader error:", err);
+                    alert("שגיאה בקריאת הקובץ: " + err);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        removeImgBtn.addEventListener('click', () => {
+            base64Image = null;
+            fileInput.value = '';
+            imagePreview.src = '';
+            previewWrapper.style.display = 'none';
+            dropZone.style.display = 'flex';
+        });
+
+        // PuLID Face Reference Drag & Drop Logic
+        faceFileInput.addEventListener('change', handleFaceFileSelect);
+
+        faceDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            faceDropZone.classList.add('dragover');
+        });
+
+        faceDropZone.addEventListener('dragleave', () => {
+            faceDropZone.classList.remove('dragover');
+        });
+
+        faceDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            faceDropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                faceFileInput.files = e.dataTransfer.files;
+                handleFaceFileSelect();
+            }
+        });
+
+        function handleFaceFileSelect() {
+            if (!faceFileInput.files || faceFileInput.files.length === 0) return;
+            const file = faceFileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    faceImagePreview.src = e.target.result;
+                    base64FaceImage = e.target.result;
+                    faceDropZone.style.display = 'none';
+                    facePreviewWrapper.style.display = 'block';
+                    pulidStrengthGroup.style.display = 'flex';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        removeFaceImgBtn.addEventListener('click', () => {
+            base64FaceImage = null;
+            faceFileInput.value = '';
+            faceImagePreview.src = '';
+            facePreviewWrapper.style.display = 'none';
+            faceDropZone.style.display = 'flex';
+            pulidStrengthGroup.style.display = 'none';
+        });
+
+        pulidStrength.addEventListener('input', (e) => {
+            pulidStrengthVal.textContent = e.target.value;
+        });
+
+        // Preset Chips Logic
+        presetChips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                presetChips.forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                loraInput.value = chip.dataset.lora;
+            });
+        });
+
+        // Show Toast Function
+        function showError(msg) {
+            toastMessage.textContent = msg;
+            errorToast.classList.add('show');
+            setTimeout(() => {
+                errorToast.classList.remove('show');
+            }, 5000);
+        }
+
+        // Generate Action
+        generateBtn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                showError("אנא הזן פרומפט טקסטואלי תחילה.");
+                promptInput.focus();
+                return;
+            }
+
+            // Toggle buttons: hide generate, show cancel
+            generateBtn.style.display = 'none';
+            cancelBtn.style.display = 'flex';
+            
+            placeholder.style.display = 'none';
+            resultImg.style.display = 'none';
+            actionsWrapper.style.display = 'none';
+
+            // Clear and show console
+            logLines.innerHTML = '';
+            logConsole.style.display = 'block';
+
+            let width = 512;
+            let height = 512;
+            if (dimensionsSelect.value.includes('x')) {
+                const parts = dimensionsSelect.value.split('x');
+                width = parseInt(parts[0]) || 512;
+                height = parseInt(parts[1]) || 512;
+            } else {
+                const size = parseInt(dimensionsSelect.value) || 512;
+                width = size;
+                height = size;
+            }
+            
+            const payload = {
+                prompt: prompt,
+                image: base64Image,
+                face_image: base64FaceImage,
+                pulid_strength: parseFloat(pulidStrength.value),
+                steps: parseInt(stepsSelect.value),
+                width: width,
+                height: height,
+                lora: loraInput.value.trim() || null
+            };
+
+            try {
+                appendLog("🔗 מתחבר לשרת הג'נרציה...");
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || "שגיאה בשרת הג'נרציה");
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let successData = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep the last partial line in the buffer
+                    
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.status === 'progress') {
+                                appendLog(data.message);
+                            } else if (data.status === 'error') {
+                                appendLog(`❌ שגיאה: ${data.message}`, true);
+                                throw new Error(data.message);
+                            } else if (data.status === 'success') {
+                                successData = data;
+                            }
+                        } catch (parseErr) {
+                            console.error("Error parsing stream line:", parseErr, line);
+                        }
+                    }
+                }
+
+                if (successData && successData.status === 'success') {
+                    appendLog("🎉 התמונה נוצרה בהצלחה!");
+                    const filename = successData.local_path.split(/[/\\]/).pop();
+                    const webImageUrl = `/images/${filename}`;
+                    activeImageUrl = webImageUrl;
+
+                    // Display image
+                    resultImg.src = webImageUrl;
+                    resultImg.style.display = 'block';
+                    actionsWrapper.style.display = 'flex';
+                    logConsole.style.display = 'none'; // Hide console on success
+                } else {
+                    throw new Error("הג'נרציה הסתיימה אך לא התקבל קובץ פלט תקין.");
+                }
+
+            } catch (err) {
+                console.error(err);
+                showError(`שגיאה בתהליך הג'נרציה: ${err.message}`);
+                placeholder.style.display = 'flex';
+                logConsole.style.display = 'none';
+            } finally {
+                // Reset states
+                generateBtn.style.display = 'flex';
+                cancelBtn.style.display = 'none';
+                scanner.style.display = 'none';
+            }
+        });
+
+        // Cancel Action
+        cancelBtn.addEventListener('click', async () => {
+            cancelBtn.disabled = true;
+            const originalText = cancelBtn.innerHTML;
+            cancelBtn.innerHTML = "<span>🛑 מבטל...</span>";
+            
+            try {
+                const response = await fetch('/cancel', { method: 'POST' });
+                if (response.ok) {
+                    appendLog("🛑 בקשת ביטול נשלחה לשרת.");
+                } else {
+                    const errText = await response.text();
+                    showError(`שגיאה בביטול: ${errText}`);
+                }
+            } catch (err) {
+                showError(`שגיאה בתקשורת עם השרת: ${err.message}`);
+            } finally {
+                cancelBtn.disabled = false;
+                cancelBtn.innerHTML = originalText;
+            }
+        });
+
+        // Action Buttons Click Handlers
+        openBtn.addEventListener('click', () => {
+            if (activeImageUrl) {
+                window.open(activeImageUrl, '_blank');
+            }
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (activeImageUrl) {
+                const link = document.createElement('a');
+                link.href = activeImageUrl;
+                link.download = activeImageUrl.split('/').pop();
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+    </script>
+</body>
+</html>

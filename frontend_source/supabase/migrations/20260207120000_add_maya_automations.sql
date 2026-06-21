@@ -1,7 +1,7 @@
 -- Add Automation Logs table for Maya AI
 CREATE TABLE IF NOT EXISTS automation_logs (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    business_id INTEGER NOT NULL REFERENCES businesses(id),
+    business_id UUID NOT NULL REFERENCES businesses(id),
     action TEXT NOT NULL,
     target TEXT,
     details JSONB DEFAULT '{}',
@@ -19,7 +19,7 @@ SELECT USING (
         business_id IN (
             SELECT business_id
             FROM employees
-            WHERE user_id = auth.uid()
+            WHERE auth_user_id = auth.uid()
         )
     );
 -- Allow backend (service role) to insert logs

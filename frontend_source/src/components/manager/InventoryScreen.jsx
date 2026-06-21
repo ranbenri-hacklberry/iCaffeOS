@@ -108,7 +108,8 @@ const InventoryScreen = () => {
         .from('suppliers')
         .select('*')
         .eq('business_id', currentUser.business_id)
-        .order('name');
+        .order('name')
+        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       if (supError) {
         console.error('Suppliers fetch error:', supError);
       }
@@ -121,7 +122,8 @@ const InventoryScreen = () => {
         const { data: employeesData } = await supabase
           .from('employees')
           .select('id, name')
-          .eq('business_id', currentUser.business_id);
+          .eq('business_id', currentUser.business_id)
+          .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         if (employeesData) employeesData.forEach(e => { employeeMap[e.id] = e.name; });
       } catch (e) { console.warn('Employees fetch failed', e); }
 
@@ -131,7 +133,8 @@ const InventoryScreen = () => {
         .select(`*, supplier:suppliers(*)`)
         .eq('business_id', currentUser.business_id)
         .order('name')
-        .range(0, 2000);
+        .range(0, 2000)
+        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
       if (itemError) {
         console.error('Items fetch error:', itemError);
@@ -143,7 +146,8 @@ const InventoryScreen = () => {
       const { data: menuData } = await supabase
         .from('menu_items')
         .select('id, name, image_url, category, kds_routing_logic, inventory_settings, prepared_items_inventory(current_stock, initial_stock, unit)')
-        .eq('business_id', currentUser.business_id);
+        .eq('business_id', currentUser.business_id)
+        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
       let trackedPreparedItems = [];
       if (menuData) {
@@ -187,7 +191,8 @@ const InventoryScreen = () => {
         const { data: catalogData, error: catalogError } = await supabase
           .from('catalog_items')
           .select('*')
-          .order('name');
+          .order('name')
+          .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         if (!catalogError && catalogData) {
           setGlobalCatalog(catalogData);
         }

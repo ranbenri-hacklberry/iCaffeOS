@@ -44,15 +44,20 @@ export const normalizeOptionGroups = (rawGroups: any[] = []): OptionGroup[] => {
                    : (Array.isArray(group?.items) ? group.items : []));
       const title = group?.title || group?.name || group?.group || 'אפשרות';
 
+      // Support both table format (is_required) and JSONB format (requirement: "M"/"O")
+      const isRequired = group?.is_required ?? group?.required ?? (group?.requirement === 'M' || group?.requirement === 'MANDATORY');
+      // Support both is_multiple_select and maxSelection > 1
+      const isMulti = group?.is_multiple_select ?? (Number(group?.maxSelection ?? 1) > 1);
+
       return {
-        id: String(group?.id ?? group?.group_id ?? group?.id ?? crypto.randomUUID?.() ?? Date.now()),
+        id: String(group?.id ?? group?.group_id ?? crypto.randomUUID?.() ?? Date.now()),
         title: title,
-        type: group?.is_multiple_select ? 'multi' : (group?.type || 'single'),
+        type: isMulti ? 'multi' : (group?.type || 'single'),
         category: group?.category || categorizeGroup(title),
-        required: Boolean(group?.is_required ?? group?.required),
-        is_required: Boolean(group?.is_required ?? group?.required),
-        min_selection: Number(group?.min_selection ?? (Boolean(group?.is_required ?? group?.required) ? 1 : 0)),
-        max_selection: Number(group?.max_selection ?? (group?.is_multiple_select ? 99 : 1)),
+        required: Boolean(isRequired),
+        is_required: Boolean(isRequired),
+        min_selection: Number(group?.min_selection ?? group?.minSelection ?? (isRequired ? 1 : 0)),
+        max_selection: Number(group?.max_selection ?? group?.maxSelection ?? (isMulti ? 99 : 1)),
         description: group?.description ?? null,
         values: values
           .filter(Boolean)
@@ -63,8 +68,10 @@ export const normalizeOptionGroups = (rawGroups: any[] = []): OptionGroup[] => {
               name: value?.name || value?.value_name || 'בחירה',
               price: price,
               priceAdjustment: price,
-              is_default: Boolean(value?.is_default),
+              is_default: Boolean(value?.is_default ?? value?.isDefault),
               inventory_item_id: value?.inventory_item_id ?? null,
+              replaces_inventory_item_id: value?.replaces_inventory_item_id ?? null,
+              inhibits_ingredient_id: value?.inhibits_ingredient_id ?? value?.replaces_inventory_item_id ?? null,
               quantity: value?.quantity ?? null,
               description: value?.description ?? null,
               metadata: value?.metadata ?? null,
@@ -110,78 +117,38 @@ export const fetchManagerItemOptions = async (itemId: string | number, businessI
     return optionsCache[cacheKey];
   }
 
+  const idNum = Number(itemId);
+  const idStr = String(itemId);
+
   // Strategy 1: Try Local Dexie DB first (Fastest & Offline)
+  // Reads modifiers JSONB directly from menu_items store
   try {
-    const idStr = String(itemId);
+    const localItem = await db.menu_items.get(isNaN(idNum) ? idStr : idNum);
+    const mods = localItem?.modifiers;
 
-    // 1. Get linked groups via menuitemoptions
-    const links = await db.menuitemoptions.where('item_id').equals(idStr).toArray();
-    const linkGroupIds = links.map(l => String(l.group_id));
-
-    // 2. Get groups defined specifically for this item (menu_item_id)
-    const specificGroups = await db.optiongroups.where('menu_item_id').equals(idStr).toArray();
-
-    // 3. Combine Group IDs & Fetch missing groups
-    const specificGroupIds = specificGroups.map(g => String(g.id));
-    const allGroupIds = [...new Set([...linkGroupIds, ...specificGroupIds])];
-
-    if (allGroupIds.length > 0) {
-      // Fetch the actual group objects for the linked IDs
-      // Note: anyOf is case-sensitive and type-sensitive in Dexie usually
-      const linkedGroups = await db.optiongroups.where('id').anyOf(linkGroupIds).toArray();
-
-      // Merge results (specificGroups already fetched)
-      // Use a Map to deduplicate by ID
-      const groupMap = new Map();
-      [...linkedGroups, ...specificGroups].forEach(g => groupMap.set(String(g.id), g));
-      const allGroups = Array.from(groupMap.values());
-
-      // 4. Fetch values for all groups
-      const groupsWithValues = await Promise.all(allGroups.map(async (group) => {
-        const values = await db.optionvalues.where('group_id').equals(String(group.id)).toArray();
-        return { ...group, values };
-      }));
-
-      if (groupsWithValues.length > 0) {
-        console.log('💾 Loaded Options from Dexie Local DB:', groupsWithValues.length);
-        const normalized = normalizeOptionGroups(groupsWithValues);
-        optionsCache[cacheKey] = normalized;
-        return normalized;
-      }
+    if (Array.isArray(mods) && mods.length > 0) {
+      console.log('💾 Loaded Modifiers from Dexie (JSONB):', mods.length, 'groups');
+      const normalized = normalizeOptionGroups(mods);
+      optionsCache[cacheKey] = normalized;
+      return normalized;
     }
   } catch (err) {
     console.warn('⚠️ Dexie lookup failed, falling back to network:', err);
   }
 
   // Strategy 2: Fallback to Supabase Direct (if online)
+  // Reads modifiers JSONB from menu_items table
   try {
-    console.log('🌐 Fetching Options from Supabase...');
-    const targetItemId = String(itemId);
+    console.log('🌐 Fetching Modifiers from Supabase (JSONB)...');
 
-    // 1. Get linked group IDs
-    const { data: links } = await supabase
-      .from('menuitemoptions')
-      .select('group_id')
-      .eq('item_id', targetItemId);
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('modifiers')
+      .eq('id', idStr)
+      .single();
 
-    const linkedIds = links?.map(l => l.group_id) || [];
-
-    // 2. Fetch Groups (Linked + Private)
-    // We want groups where id IN linkedIds OR menu_item_id == targetItemId
-    let query = supabase
-      .from('optiongroups')
-      .select('*, values:optionvalues(*)'); // Join values
-
-    if (linkedIds.length > 0) {
-      query = query.or(`id.in.(${linkedIds.join(',')}),menu_item_id.eq.${targetItemId}`);
-    } else {
-      query = query.eq('menu_item_id', targetItemId);
-    }
-
-    const { data: rawGroups, error } = await query;
-
-    if (!error && rawGroups) {
-      const normalized = normalizeOptionGroups(rawGroups);
+    if (!error && data?.modifiers && Array.isArray(data.modifiers) && data.modifiers.length > 0) {
+      const normalized = normalizeOptionGroups(data.modifiers);
       optionsCache[cacheKey] = normalized;
       return normalized;
     }
@@ -189,7 +156,7 @@ export const fetchManagerItemOptions = async (itemId: string | number, businessI
     console.error('❌ Supabase fetch failed:', err);
   }
 
-  console.warn('⚠️ No options found (Local & Remote)');
+  console.warn('⚠️ No modifiers found (Local & Remote) for item:', itemId);
   return [];
 };
 

@@ -15,10 +15,10 @@ const isStrictlyLocal = isElectron || isLocalIp || import.meta.env?.VITE_FORCE_L
 
 // URLs
 const getLocalUrl = () => {
-    if (typeof window !== 'undefined' && (window.location.hostname.startsWith('100.') || window.location.hostname.startsWith('192.'))) {
-        return `http://${window.location.hostname}:54321`;
+    if (import.meta.env?.VITE_LOCAL_SUPABASE_URL) {
+        return import.meta.env.VITE_LOCAL_SUPABASE_URL;
     }
-    return import.meta.env?.VITE_LOCAL_SUPABASE_URL || 'http://127.0.0.1:54321';
+    return 'http://127.0.0.1:54321';
 };
 
 const localUrl = getLocalUrl();

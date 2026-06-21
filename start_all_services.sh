@@ -1,5 +1,5 @@
 #!/bin/bash
-export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH=/Users/rani/.orbstack/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 # iCaffeOS Auto-Start Script
 # This script starts all necessary services for iCaffeOS
@@ -7,7 +7,7 @@ export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 echo "🚀 Starting iCaffeOS Services..."
 
 # Change to project directory
-cd /Users/icaffeos/icaffeos
+cd "$(dirname "$0")"
 
 # 1. Start Ollama (if not running)
 if ! pgrep -x "ollama" > /dev/null; then
@@ -27,20 +27,21 @@ cd ..
 
 # 3. Start Backend
 echo "⚙️ Starting Backend Server..."
-cd backend
-if [ ! -d "node_modules" ]; then
-    npm install > /dev/null 2>&1
-fi
-nohup npm start > ../backend.log 2>&1 &
+cd frontend_source
+nohup node backend_server.js > ../backend.log 2>&1 &
 cd ..
 
-# 4. Start Frontend Development Server
-echo "🌐 Starting Frontend Dev Server..."
+# 4. Start Frontend Production Server (optimized for network/Tailscale speed)
+echo "🌐 Starting Frontend Production Preview Server..."
 cd frontend_source
 if [ ! -d "node_modules" ]; then
     npm install > /dev/null 2>&1
 fi
-nohup npm run dev > ../frontend-dev.log 2>&1 &
+if [ ! -d "dist" ]; then
+    echo "📦 Building frontend bundle..."
+    npm run build > ../frontend-build.log 2>&1
+fi
+nohup npx vite preview --host --port 4028 > ../frontend-preview.log 2>&1 &
 cd ..
 
 # 5. Wait a bit for services to start

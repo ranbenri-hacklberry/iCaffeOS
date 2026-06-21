@@ -15,7 +15,6 @@ SELECT COUNT(*) INTO unmigrated_count
 FROM public.businesses b
 WHERE (
         b.gemini_api_key IS NOT NULL
-        OR b.grok_api_key IS NOT NULL
     )
     AND NOT EXISTS (
         SELECT 1

@@ -20,8 +20,11 @@ import { useAuth, APP_VERSION } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import UnifiedHeader from '../../components/UnifiedHeader';
 import Icon from '../../components/AppIcon';
+import ProductCamera from '../../components/ProductCamera';
+import ScanModeOverlay from '../../components/ScanModeOverlay';
 // Custom hooks
 import { useMenuItems, useLoyalty, useCart } from './hooks';
+import { useProductRecognition } from '../../hooks/useProductRecognition';
 
 const ORDER_ORIGIN_STORAGE_KEY = 'order_origin';
 const NURSERY_BIZ_ID = '8e4e05da-2d99-4bd9-aedf-8e54cbde930a';
@@ -47,8 +50,103 @@ const MenuOrderingInterface = () => {
     handleCategoryChange,
     isFoodItem,
     fetchMenuItems,
-    updateStockLocally
+    fetchCategories,
+    updateStockLocally,
+    updateMenuItemLocally
   } = useMenuItems(null, currentUser?.business_id);
+
+  // ── Background Photo Enhancement State ──
+  const [enhancingItems, setEnhancingItems] = useState({});  // { [itemId]: 'enhancing' | 'done' }
+
+  const startBackgroundEnhancement = useCallback(async (itemId, originalFile, businessIdForUpload) => {
+    console.log('🎨 [Background Enhance] Starting for item:', itemId);
+    setEnhancingItems(prev => ({ ...prev, [itemId]: 'enhancing' }));
+    
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      const base64 = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(originalFile);
+      });
+
+      // Send to ComfyUI Bridge via Vite proxy
+      const response = await fetch('/studio/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: 'product on clean white studio background, soft lighting, commercial photo',
+          image: base64,
+          strength: 0.45,
+          steps: 4,
+          width: 512,
+          height: 512,
+          seed: -1
+        })
+      });
+
+      if (!response.ok) throw new Error(`Bridge returned ${response.status}`);
+
+      // Parse SSE streaming
+      const streamReader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let resultPath = null;
+
+      while (true) {
+        const { done, value } = await streamReader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            if (event.status === 'success') {
+              resultPath = event.local_path.split('/').pop();
+            } else if (event.status === 'error') {
+              throw new Error(event.message);
+            }
+          } catch (e) {
+            // Ignore parse errors on progress lines
+          }
+        }
+      }
+
+      if (resultPath) {
+        // Fetch enhanced image
+        const imageResponse = await fetch(`/studio/images/${resultPath}`);
+        if (imageResponse.ok) {
+          const enhancedBlob = await imageResponse.blob();
+          const enhancedFile = new File([enhancedBlob], `studio_${Date.now()}.png`, { type: 'image/png' });
+          
+          // Upload to Supabase Storage
+          const fileName = `menu-items/${businessIdForUpload || 'default'}/${itemId}_studio_${Date.now()}.png`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('images')
+            .upload(fileName, enhancedFile, { cacheControl: '3600', upsert: true });
+          
+          if (!uploadError && uploadData) {
+            const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);
+            
+            // Update DB
+            await supabase.from('menu_items').update({ image_url: publicUrl }).eq('id', itemId);
+            
+            // Update local state
+            updateMenuItemLocally(itemId, { image_url: publicUrl });
+            console.log('✨ [Background Enhance] Complete! New URL:', publicUrl);
+          }
+        }
+      }
+      setEnhancingItems(prev => ({ ...prev, [itemId]: 'done' }));
+      setTimeout(() => setEnhancingItems(prev => { const n = {...prev}; delete n[itemId]; return n; }), 3000);
+    } catch (err) {
+      console.warn('⚠️ [Background Enhance] Failed:', err.message);
+      setEnhancingItems(prev => { const n = {...prev}; delete n[itemId]; return n; });
+    }
+  }, [updateMenuItemLocally]);
 
   const {
     cartItems,
@@ -113,7 +211,14 @@ const MenuOrderingInterface = () => {
   const [editingCartItem, setEditingCartItem] = useState(null);
   const [showProductDetailModal, setShowProductDetailModal] = useState(false);
   const [selectedProductForDetails, setSelectedProductForDetails] = useState(null);
+  const [aiDetectionData, setAiDetectionData] = useState(null);
+  const [scanMode, setScanMode] = useState(false);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
+  const [isCreatingNewProduct, setIsCreatingNewProduct] = useState(false);
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCategoryEditMode, setIsCategoryEditMode] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null); // null = create mode, object = edit mode
   const isSubmittingRef = useRef(false); // 🛡️ Synchronous guard against double-submit
   const [showConfirmationModal, setShowConfirmationModal] = useState(null);
   const [isEditMode, setIsEditMode] = useState(() => {
@@ -861,6 +966,57 @@ const MenuOrderingInterface = () => {
   const normalizeSelectedOptions = cartNormalizeOptions;
   const getCartItemSignature = cartGetSignature;
 
+  // ── AI Product Recognition ──────────────────────────────────────────
+  const {
+    cameraActive, setCameraActive, motionState, lastMatch,
+    setLastMatch, inferenceStage, isInferring,
+    startMotionDetection, stopMotionDetection,
+    confirmAndLearn, motionCanvasRef, setMenuItems: setAIMenuItems
+  } = useProductRecognition(currentUser?.business_id);
+
+  // Feed menu items to the recognition hook so it can match product IDs
+  useEffect(() => {
+    if (itemsWithCartStock?.length > 0) {
+      setAIMenuItems(itemsWithCartStock);
+    }
+  }, [itemsWithCartStock, setAIMenuItems]);
+
+  // Route AI recognition results
+  useEffect(() => {
+    if (!lastMatch || !lastMatch.action) return;
+
+    if (lastMatch.action === 'auto_add') {
+      // STAGE 3: Autonomous — bypass ModifierModal entirely
+      const item = itemsWithCartStock.find(i => String(i.id) === String(lastMatch.item?.id))
+                   || lastMatch.item; // fallback to match data
+      if (item) {
+        addItemWithHistory(item, [], 1);
+        console.log('🤖 Stage 3 Auto-add:', item.name);
+        setLastMatch(null);
+      }
+    } else if (lastMatch.action === 'confirm') {
+      // STAGE 2: Active Learning — open ModifierModal with AI banner
+      const item = itemsWithCartStock.find(i => String(i.id) === String(lastMatch.item?.id))
+                   || lastMatch.item; // fallback to match data
+      if (item) {
+        setAiDetectionData({
+          productName: lastMatch.match.product_name || item.name,
+          confidence: lastMatch.match.confidence_score,
+          vectorCount: lastMatch.match.existing_vector_count,
+          capturedBlob: lastMatch.capturedBlob,
+        });
+        setSelectedItemForMod(item);
+        setEditingCartItem(null);
+        setShowModifierModal(true);
+      }
+    }
+
+    // Always reset motion pipeline after handling a match so it can detect next product
+    setTimeout(() => {
+      setLastMatch(null);
+    }, 1500);
+  }, [lastMatch]);
+
   // תיקון סופי: ה-backend מצפה למערך של value_id (מספרים), לא אובייקטים
   const prepareItemsForBackend = (cartItems, originalItems = [], isEditMode = false) => {
     const currentIds = new Set(cartItems.map(item => item.signature || item.id));
@@ -937,6 +1093,127 @@ const MenuOrderingInterface = () => {
   // Use cart hook functions for history tracking
   const updateCartWithHistory = cartUpdateWithHistory;
   const handleUndoCart = cartHandleUndo;
+
+  // Handle adding a NEW product from the POS
+  const handleAddNewProduct = useCallback((categoryId) => {
+    console.log('🆕 [AddNewProduct] Creating blank item for category:', categoryId || activeCategory);
+    const effectiveCatId = categoryId || activeCategory;
+    // Find category name for display
+    const cat = categories.find(c => c.id === effectiveCatId);
+    const blankItem = {
+      id: `new-${Date.now()}`,
+      name: '',
+      price: 0,
+      image: null,
+      image_url: null,
+      category: effectiveCatId,
+      db_category: cat?.db_name || cat?.name || '',
+      modifiers: [],
+      business_id: currentUser?.business_id,
+      _isNewProduct: true,
+      _categoryId: effectiveCatId,
+    };
+    setSelectedItemForMod(blankItem);
+    setEditingCartItem(null);
+    setIsCreatingNewProduct(true);
+    setShowModifierModal(true);
+  }, [categories, currentUser?.business_id, activeCategory]);
+
+  // Handle adding a NEW category
+  const handleAddCategory = useCallback(async (name) => {
+    if (!name || !name.trim()) return;
+    const effectiveId = currentUser?.business_id;
+    if (!effectiveId) return;
+    try {
+      const maxPos = categories.reduce((max, c) => Math.max(max, c.position || 0), 0);
+      const { error } = await supabase
+        .from('item_category')
+        .insert({
+          business_id: effectiveId,
+          name: name.trim(),
+          name_he: name.trim(),
+          position: maxPos + 1,
+          is_hidden: false,
+          is_deleted: false,
+        });
+      if (error) throw error;
+      console.log('✅ [AddCategory] Created:', name.trim());
+      // Refresh categories to pick up new one
+      fetchCategories();
+    } catch (err) {
+      console.error('❌ [AddCategory] Failed:', err);
+      alert('שגיאה ביצירת קטגוריה: ' + (err.message || ''));
+    }
+  }, [currentUser?.business_id, categories, fetchCategories]);
+
+  // Handle UPDATING an existing category
+  const handleUpdateCategory = useCallback(async (categoryId, newName) => {
+    if (!newName || !newName.trim() || !categoryId) return;
+    try {
+      const { error } = await supabase
+        .from('item_category')
+        .update({ name: newName.trim(), name_he: newName.trim() })
+        .eq('id', categoryId);
+      if (error) throw error;
+      console.log('✅ [UpdateCategory] Updated:', categoryId, '->', newName.trim());
+      fetchCategories();
+    } catch (err) {
+      console.error('❌ [UpdateCategory] Failed:', err);
+      alert('שגיאה בעדכון קטגוריה: ' + (err.message || ''));
+    }
+  }, [fetchCategories]);
+
+  // Handle clicking a category in edit mode -> open modal pre-filled
+  const handleEditCategory = useCallback((category) => {
+    setEditingCategory(category);
+    setNewCategoryName(category?.name || '');
+    setShowNewCategoryModal(true);
+  }, []);
+
+  // Handle moving a category left/right (swap positions)
+  const handleMoveCategory = useCallback(async (categoryId, direction) => {
+    // categories are already sorted by position
+    const idx = categories.findIndex(c => c.id === categoryId);
+    if (idx === -1) return;
+
+    // In RTL: 'right' = earlier position (swap with previous), 'left' = later (swap with next)
+    const swapIdx = direction === 'right' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= categories.length) return;
+
+    const current = categories[idx];
+    const swapWith = categories[swapIdx];
+
+    // Swap their positions
+    const currentPos = current.position ?? idx;
+    const swapPos = swapWith.position ?? swapIdx;
+
+    try {
+      await Promise.all([
+        supabase.from('item_category').update({ position: swapPos }).eq('id', current.id),
+        supabase.from('item_category').update({ position: currentPos }).eq('id', swapWith.id),
+      ]);
+      console.log('✅ [MoveCategory] Swapped:', current.name, '↔', swapWith.name);
+      fetchCategories();
+    } catch (err) {
+      console.error('❌ [MoveCategory] Failed:', err);
+    }
+  }, [categories, fetchCategories]);
+
+  // Handle batch reorder from drag-and-drop
+  const handleReorderCategories = useCallback(async (reorderedCategories) => {
+    try {
+      const updates = reorderedCategories.map((cat, index) =>
+        supabase.from('item_category').update({ position: index }).eq('id', cat.id)
+      );
+      await Promise.all(updates);
+      console.log('✅ [ReorderCategories] Updated positions for', reorderedCategories.length, 'categories');
+      fetchCategories();
+    } catch (err) {
+      console.error('❌ [ReorderCategories] Failed:', err);
+      fetchCategories(); // Re-fetch to revert on error
+    }
+  }, [fetchCategories]);
+
 
   // Handle adding item to cart
   const handleAddToCart = (item) => {
@@ -1097,6 +1374,20 @@ const MenuOrderingInterface = () => {
     });
 
     setEditingCartItem(null);
+
+    // AI Active Learning: fire-and-forget vector storage
+    if (modifiedItem._aiConfirmation && modifiedItem._capturedBlob) {
+      confirmAndLearn(
+        modifiedItem,
+        modifiedItem._capturedBlob,
+        currentUser?.business_id
+      ).catch(err => console.error('🧠 AI Learning failed (non-blocking):', err));
+      setAiDetectionData(null);
+      setLastMatch(null);
+    } else {
+      // Even without AI confirmation, reset pipeline for next detection
+      setLastMatch(null);
+    }
   };
 
   // Handler for Salad Prep Decision
@@ -1774,6 +2065,25 @@ const MenuOrderingInterface = () => {
             .filter(Boolean)
           : [];
 
+        // Rich JSON objects for DB-level recipe/modifier inventory deduction
+        const modsPayload = Array.isArray(item.selectedOptions)
+          ? item.selectedOptions
+            .filter(opt => {
+              if (typeof opt === 'string') return opt.trim().length > 0;
+              return opt?.valueId && !opt.valueName?.includes('רגיל');
+            })
+            .map(opt => {
+              if (typeof opt === 'string') return opt;
+              return {
+                name: opt.valueName || opt.name,
+                inventory_item_id: opt.inventory_item_id || null,
+                quantity: opt.quantity || null,
+                inhibits_ingredient_id: opt.inhibits_ingredient_id || opt.replaces_inventory_item_id || null
+              };
+            })
+            .filter(Boolean)
+          : [];
+
         // [CLEANED] Extract IDs
         // Fix for UUID-based menu items (which were being incorrectly stripped)
         // 🛡️ CRITICAL FIX: isExistingOrderItem must check for a REAL order_item UUID (item.uniqueId),
@@ -1816,7 +2126,7 @@ const MenuOrderingInterface = () => {
           discount_applied: discountForItem || 0,
           selected_options: options,
           mods: [
-            ...options,
+            ...modsPayload,
             ...((item.kds_routing_logic === 'MADE_TO_ORDER' || item.is_hot_drink) ? ['__KDS_OVERRIDE__'] : []),
             ...((item.custom_note || item.mods?.custom_note) ? [`__NOTE__:${item.custom_note || item.mods.custom_note}`] : [])
           ],
@@ -2024,69 +2334,136 @@ const MenuOrderingInterface = () => {
         }
         // ------------------------------
 
-        // 📉 INVENTORY DECREMENT (Client-Side Logic for "Ready" Items)
+        // 📉 INVENTORY DECREMENT (Client-Side Logic — Recipe-Aware + Modifier Swap Support)
         if (orderResult && orderResult.order_id && !orderError) {
           try {
-            // 1. Filter items that should decrement stock
+            // 1. Filter cart items — skip kitchen-prep items (they decrement when KDS completes)
             const itemsToDecrement = cartItems.filter(item => {
-              // Fix: items coming from useMenuItems have current_stock if tracked, 
-              // but prepared_items_inventory was likely a typo or legacy property.
-              if (item.current_stock === null || item.current_stock === undefined) return false;
-              const isKitchenPrep = item.kds_override || item.mods?.kds_override ||
+              const isKitchenPrepItem = item.kds_override || item.mods?.kds_override ||
                 (Array.isArray(item.selectedOptions) && item.selectedOptions.some(o => o.valueId === 'prep'));
-              return !isKitchenPrep; // Only decrement if NOT sent to kitchen (Ready)
+              return !isKitchenPrepItem;
             });
 
             if (itemsToDecrement.length > 0) {
-              console.log(`📉 Processing stock decrement for ${itemsToDecrement.length} items...`);
+              console.log(`📉 Processing recipe-aware stock decrement for ${itemsToDecrement.length} cart items...`);
 
-              // 2. Group by ID to handle multiple entries of same item
-              const stockUpdates = {};
-              itemsToDecrement.forEach(item => {
-                const id = item.menu_item_id || item.id;
-                if (!stockUpdates[id]) {
-                  stockUpdates[id] = { id, name: item.name, qty: 0 };
-                }
-                stockUpdates[id].qty += (item.quantity || 1);
-              });
+              // 2. Collect ALL inventory_item_id deductions into a single map { invItemId → totalQtyToDeduct }
+              const inventoryDeductions = {}; // { [inventory_item_id]: { qty: number, names: string[] } }
 
-              // 3. Perform updates (Fetch latest stock first to avoid race conditions)
-              // 🛡️ NON-BLOCKING: We don't await the entire Promise.all to avoid sticking the UI if one call is slow/fails
-              Promise.all(Object.values(stockUpdates).map(async (update) => {
+              await Promise.all(itemsToDecrement.map(async (cartItem) => {
+                const menuItemId = cartItem.menu_item_id || cartItem.id;
+                const orderQty = cartItem.quantity || 1;
+
                 try {
-                  // Fetch LATEST stock from DB instead of using snapshotted value from cart
-                  const { data: currentRecord } = await supabase
-                    .from('prepared_items_inventory')
-                    .select('current_stock')
-                    .eq('item_id', update.id)
-                    .single();
+                  // A. Fetch ALL recipe ingredients for this menu item (not just limit 1!)
+                  const { data: recipeIngredients } = await supabase
+                    .from('recipe_ingredients')
+                    .select('inventory_item_id, quantity_used')
+                    .eq('recipe_id', menuItemId);
 
-                  const dbStock = currentRecord?.current_stock ?? 0;
-                  const newStock = dbStock - update.qty;
+                  // B. Collect modifier-based inventory overrides from selectedOptions
+                  //    Each modifier value may specify:
+                  //    - inventory_item_id: an additional inventory item to deduct (e.g., soy milk)
+                  //    - replaces_inventory_item_id: an inventory item to SKIP deducting (e.g., regular milk)
+                  const modifierAdditions = []; // { inventory_item_id, qty }
+                  const replacedItemIds = new Set(); // inventory_item_ids to SKIP
 
-                  const { error: updateErr } = await supabase
-                    .from('prepared_items_inventory')
-                    .update({
-                      current_stock: newStock,
-                      last_updated: new Date().toISOString()
-                    })
-                    .eq('item_id', update.id);
+                  if (Array.isArray(cartItem.selectedOptions)) {
+                    cartItem.selectedOptions.forEach(opt => {
+                      if (opt.replaces_inventory_item_id) {
+                        replacedItemIds.add(String(opt.replaces_inventory_item_id));
+                      }
+                      if (opt.inventory_item_id) {
+                        // If this modifier replaces a recipe ingredient, inherit its quantity_used.
+                        let quantity = 1;
+                        if (opt.replaces_inventory_item_id && recipeIngredients && recipeIngredients.length > 0) {
+                          const replacedIng = recipeIngredients.find(ri => String(ri.inventory_item_id) === String(opt.replaces_inventory_item_id));
+                          if (replacedIng) {
+                            quantity = Number(replacedIng.quantity_used) || 1;
+                          }
+                        }
+                        modifierAdditions.push({
+                          inventory_item_id: opt.inventory_item_id,
+                          qty: quantity
+                        });
+                      }
+                    });
+                  }
 
-                  if (updateErr) {
-                    console.error(`   ❌ Failed to decrement ${update.name} (ID: ${update.id}):`, updateErr);
-                  } else {
-                    console.log(`   ✅ Decremented ${update.name}: DB(${dbStock}) -> ${newStock}`);
-                    // 🚀 OPTIMISTIC UI FIX: Update local menu state immediately
-                    if (typeof updateStockLocally === 'function') {
-                      updateStockLocally(update.id, newStock);
+                  // C. Process recipe ingredients — deduct each ingredient × quantity_used × order quantity
+                  if (recipeIngredients && recipeIngredients.length > 0) {
+                    recipeIngredients.forEach(ri => {
+                      if (!ri.inventory_item_id) return;
+                      const riId = String(ri.inventory_item_id);
+
+                      // Skip if this ingredient is being replaced by a modifier swap
+                      if (replacedItemIds.has(riId)) {
+                        console.log(`   🔄 Skipping recipe ingredient ${riId} (replaced by modifier swap)`);
+                        return;
+                      }
+
+                      const qtyUsed = Number(ri.quantity_used) || 1;
+                      const totalDeduct = qtyUsed * orderQty;
+
+                      if (!inventoryDeductions[riId]) {
+                        inventoryDeductions[riId] = { qty: 0, names: [] };
+                      }
+                      inventoryDeductions[riId].qty += totalDeduct;
+                      if (!inventoryDeductions[riId].names.includes(cartItem.name)) {
+                        inventoryDeductions[riId].names.push(cartItem.name);
+                      }
+                    });
+                  }
+
+                  // D. Process modifier additions (e.g., soy milk added by modifier)
+                  modifierAdditions.forEach(ma => {
+                    const maId = String(ma.inventory_item_id);
+                    const totalDeduct = ma.qty * orderQty;
+
+                    if (!inventoryDeductions[maId]) {
+                      inventoryDeductions[maId] = { qty: 0, names: [] };
+                    }
+                    inventoryDeductions[maId].qty += totalDeduct;
+                    if (!inventoryDeductions[maId].names.includes(`${cartItem.name} (modifier)`)) {
+                      inventoryDeductions[maId].names.push(`${cartItem.name} (modifier)`);
+                    }
+                  });
+
+                  // E. Fallback: If no recipe ingredients found AND no modifier overrides,
+                  //    update prepared_items_inventory for simple counter items (display consistency)
+                  if ((!recipeIngredients || recipeIngredients.length === 0) && modifierAdditions.length === 0) {
+                    const { data: prepRecord } = await supabase
+                      .from('prepared_items_inventory')
+                      .select('current_stock')
+                      .eq('item_id', menuItemId)
+                      .maybeSingle();
+
+                    if (prepRecord) {
+                      const prepStock = prepRecord.current_stock ?? 0;
+                      const newPrepStock = Math.max(0, prepStock - orderQty);
+                      await supabase
+                        .from('prepared_items_inventory')
+                        .update({
+                          current_stock: newPrepStock,
+                          last_updated: new Date().toISOString()
+                        })
+                        .eq('item_id', menuItemId);
+                      console.log(`   ✅ Decremented ${cartItem.name}: prepared_items_inventory(${prepStock}) -> ${newPrepStock}`);
+
+                      if (typeof updateStockLocally === 'function') {
+                        updateStockLocally(menuItemId, newPrepStock);
+                      }
                     }
                   }
-                } catch (innerErr) {
-                  console.warn(`⚠️ Inventory update skipped for ${update.name} due to error:`, innerErr.message);
+
+                } catch (itemErr) {
+                  console.warn(`⚠️ Inventory processing skipped for ${cartItem.name}:`, itemErr.message);
                 }
-              })).then(() => {
-                console.log('📉 All inventory updates attempted.');
-              });
+              }));
+
+              // 3. Database deductions are handled atomically inside submit_order_v3 RPC.
+              // We do not perform redundant client-side updates to inventory_items to prevent double-deductions.
+              console.log('📉 Database handles recipe-aware inventory deductions atomically via submit_order_v3.');
             }
           } catch (invErr) {
             console.error('Inventory logic crash:', invErr);
@@ -2528,6 +2905,24 @@ const MenuOrderingInterface = () => {
             >
               <Icon name={isDarkMode ? "Sun" : "Moon"} size={18} />
             </button>
+
+            {/* AI Camera Toggle Button */}
+            <button
+              onClick={() => setCameraActive(prev => !prev)}
+              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all ${cameraActive ? 'text-cyan-400 bg-cyan-400/20 ring-1 ring-cyan-400/50' : isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-600 hover:bg-gray-100'}`}
+              title="סורק מוצרים AI"
+            >
+              <Icon name="Camera" size={18} />
+            </button>
+
+            {/* Table Scan Mode Button */}
+            <button
+              onClick={() => setScanMode(true)}
+              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all ${isDarkMode ? 'text-purple-400 hover:bg-slate-700' : 'text-slate-600 hover:bg-gray-100'}`}
+              title="סריקת שולחן"
+            >
+              <Icon name="ScanLine" size={18} />
+            </button>
           </div>
         }
       />
@@ -2565,26 +2960,64 @@ const MenuOrderingInterface = () => {
       <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] overflow-hidden">
 
         {/* Menu Panel - First in DOM = Right in RTL */}
-        <div className={`flex-1 flex flex-col ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'} h-full overflow-hidden`}>
-          {/* Category Filter - Fixed at top */}
-          <div className="shrink-0 z-20 relative">
-            <MenuCategoryFilter
-              activeCategory={activeCategory}
-              onCategoryChange={handleCategoryChange}
-              categories={categories}
-            />
-          </div>
+        <div className={`flex-1 flex flex-col relative ${isDarkMode ? 'bg-slate-900' : 'bg-gray-50'} h-full overflow-hidden`}>
+          {/* Category Filter - Fixed at top (hidden in scan mode) */}
+          {!scanMode && (
+            <div className="shrink-0 z-20 relative">
+              <MenuCategoryFilter
+                activeCategory={activeCategory}
+                onCategoryChange={handleCategoryChange}
+                categories={categories}
+                onAddCategory={() => { setEditingCategory(null); setNewCategoryName(''); setShowNewCategoryModal(true); }}
+                isEditMode={isCategoryEditMode}
+                onToggleEditMode={() => setIsCategoryEditMode(prev => !prev)}
+                onEditCategory={handleEditCategory}
+                onReorderCategories={handleReorderCategories}
+              />
+            </div>
+          )}
 
-          {/* Menu Grid - Scrollable Area */}
-          <div className={`flex-1 overflow-y-auto custom-scrollbar ${isRestrictedMode ? 'opacity-50 pointer-events-none' : ''}`}>
-            <MenuGrid
-              items={itemsWithCartStock}
-              groupedItems={groupedItems}
-              onAddToCart={handleAddToCart}
-              isLoading={isLoading}
-              categories={categories}
+          {/* Menu Grid or Table Scan Camera */}
+          {scanMode ? (
+            <ScanModeOverlay
+              isOpen={true}
+              onClose={() => setScanMode(false)}
+              onAddItem={addItemWithHistory}
+              onRemoveItem={handleRemoveItem}
+              cartItems={cartItems}
+              businessId={currentUser?.business_id}
+              menuItems={itemsWithCartStock}
+              inline={true}
             />
-          </div>
+          ) : (
+            <div className={`flex-1 overflow-y-auto custom-scrollbar ${isRestrictedMode ? 'opacity-50 pointer-events-none' : ''}`}>
+              <MenuGrid
+                items={itemsWithCartStock}
+                groupedItems={groupedItems}
+                onAddToCart={handleAddToCart}
+                isLoading={isLoading}
+                categories={categories}
+                enhancingItems={enhancingItems}
+              />
+            </div>
+          )}
+
+          {/* Floating Add Product button — bottom-left of menu panel */}
+          {!scanMode && !isRestrictedMode && (
+            <button
+              onClick={() => handleAddNewProduct(activeCategory)}
+              className={`absolute bottom-4 left-4 z-30 flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-dashed shadow-lg transition-all duration-200 text-sm font-bold
+                ${isDarkMode
+                  ? 'border-slate-600 text-slate-300 bg-slate-800/90 hover:border-sky-500 hover:text-sky-400 hover:bg-slate-800 backdrop-blur-sm'
+                  : 'border-slate-300 text-slate-500 bg-white/90 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 backdrop-blur-sm'
+                }
+              `}
+              title="הוסף מוצר חדש לקטגוריה"
+            >
+              <span className="text-lg leading-none">+</span>
+              <span>מוצר חדש</span>
+            </button>
+          )}
         </div>
 
         {/* Cart Panel - Second in DOM = Left in RTL */}
@@ -2636,19 +3069,45 @@ const MenuOrderingInterface = () => {
         />
       </div>
 
+      {/* AI Product Camera */}
+      {cameraActive && (
+        <ProductCamera
+          motionCanvasRef={motionCanvasRef}
+          motionState={motionState}
+          lastMatch={lastMatch}
+          isInferring={isInferring}
+          isActive={cameraActive}
+          onToggle={() => setCameraActive(false)}
+        />
+      )}
+
       {/* Modifier Modal - Used for ALL items now */}
       {selectedItemForMod && (
         <ModifierModal
           isOpen={showModifierModal}
-          selectedItem={itemsWithCartStock.find(i => i.id === selectedItemForMod.id) || selectedItemForMod}
+          selectedItem={isCreatingNewProduct ? selectedItemForMod : (itemsWithCartStock.find(i => i.id === selectedItemForMod.id) || selectedItemForMod)}
           allowAutoAdd={false}
+          aiDetection={aiDetectionData}
+          businessId={currentUser?.business_id}
+          initialEditMode={isCreatingNewProduct}
           onClose={() => {
             setShowModifierModal(false);
             setSelectedItemForMod(null);
+            setAiDetectionData(null);
+            setLastMatch(null);
+            setIsCreatingNewProduct(false);
           }}
           onAddItem={handleAddItemWithModifiers}
           optionsCache={modifierOptionsCache}
           onCacheUpdate={setModifierOptionsCache}
+          onItemUpdated={updateMenuItemLocally}
+          onNewProductCreated={(newId) => {
+            console.log('✅ [AddNewProduct] Product created with ID:', newId);
+            setIsCreatingNewProduct(false);
+            fetchMenuItems();
+          }}
+          onStartBackgroundEnhancement={startBackgroundEnhancement}
+          enhancingItems={enhancingItems}
         />
       )}
 
@@ -2762,10 +3221,69 @@ const MenuOrderingInterface = () => {
           </div>
         </div>
       )}
+      {/* Category Create/Edit Modal */}
+      {showNewCategoryModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setShowNewCategoryModal(false); setNewCategoryName(''); setEditingCategory(null); }}>
+          <div className={`rounded-2xl shadow-2xl p-6 w-[340px] ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-gray-800'}`} onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4 text-center">
+              {editingCategory ? '✏️ עריכת קטגוריה' : '➕ הוספת קטגוריה חדשה'}
+            </h3>
+            <input
+              autoFocus
+              type="text"
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newCategoryName.trim()) {
+                  if (editingCategory) {
+                    handleUpdateCategory(editingCategory.id, newCategoryName);
+                  } else {
+                    handleAddCategory(newCategoryName);
+                  }
+                  setShowNewCategoryModal(false);
+                  setNewCategoryName('');
+                  setEditingCategory(null);
+                }
+              }}
+              placeholder="שם הקטגוריה..."
+              dir="rtl"
+              className={`w-full px-4 py-3 rounded-xl border text-base mb-4 outline-none focus:ring-2 focus:ring-purple-500 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400' : 'bg-gray-50 border-gray-300 text-gray-800 placeholder-gray-400'}`}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowNewCategoryModal(false); setNewCategoryName(''); setEditingCategory(null); }}
+                className={`flex-1 py-3 rounded-xl font-bold transition ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+              >
+                ביטול
+              </button>
+              <button
+                onClick={() => {
+                  if (newCategoryName.trim()) {
+                    if (editingCategory) {
+                      handleUpdateCategory(editingCategory.id, newCategoryName);
+                    } else {
+                      handleAddCategory(newCategoryName);
+                    }
+                    setShowNewCategoryModal(false);
+                    setNewCategoryName('');
+                    setEditingCategory(null);
+                  }
+                }}
+                disabled={!newCategoryName.trim()}
+                className="flex-1 py-3 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {editingCategory ? 'עדכן' : 'צור קטגוריה'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Version Number */}
       <div className="fixed bottom-1 left-2 text-[10px] text-gray-400 font-mono z-50 pointer-events-none opacity-50">
         {APP_VERSION}
       </div>
+
 
     </div>
   );

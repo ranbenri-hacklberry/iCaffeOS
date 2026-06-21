@@ -17,6 +17,8 @@ export interface InventoryItem {
     last_counted_by?: string;
     last_counted_by_name?: string;
     location?: string;
+    unit?: string | null;
+    settings?: any;
 }
 
 export interface Supplier {

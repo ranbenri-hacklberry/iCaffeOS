@@ -130,17 +130,30 @@ const PreparedItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId: 
     const [lastCountedDate, setLastCountedDate] = useState(item.last_counted_at);
 
     const step = Number(item.inventory_count_step) || 1;
-    const displayStock = Math.floor((localStock + 0.00001) / step) * step;
+    const displayStock = Number(localStock.toFixed(4));
 
     const handleIncrement = () => {
-        const next = localStock + step;
-        setLocalStock(next);
+        const currentDisplay = localStock;
+        // Round UP to the next multiple of step
+        const nextDisplay = Math.ceil((currentDisplay + 0.00001) / step) * step;
+        const finalDisplay = (nextDisplay - currentDisplay < 0.001) 
+            ? nextDisplay + step 
+            : nextDisplay;
+
+        setLocalStock(finalDisplay);
         setIsDirty(true);
     };
 
     const handleDecrement = () => {
-        const next = Math.max(0, localStock - step);
-        setLocalStock(next);
+        const currentDisplay = localStock;
+        // Round DOWN to the previous multiple of step
+        const prevDisplay = Math.floor((currentDisplay - 0.00001) / step) * step;
+        const finalDisplay = (currentDisplay - prevDisplay < 0.001) 
+            ? prevDisplay - step 
+            : prevDisplay;
+
+        const finalDisplayClamped = Math.max(0, finalDisplay);
+        setLocalStock(finalDisplayClamped);
         setIsDirty(true);
     };
 

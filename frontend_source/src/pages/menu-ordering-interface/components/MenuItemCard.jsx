@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Flame } from 'lucide-react';
+import { Flame, Sparkles } from 'lucide-react';
 import { useCachedImage } from '@/hooks/useCachedImage';
 import { useTheme } from '@/context/ThemeContext';
 
-const MenuItemCard = ({ item, onAddToCart }) => {
+const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
   const { isDarkMode } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -82,6 +82,24 @@ const MenuItemCard = ({ item, onAddToCart }) => {
           onLoad={() => setImageLoaded(true)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-100" />
+        {/* Studio Enhancement Overlay */}
+        {enhancingStatus === 'enhancing' && (
+          <div className="absolute inset-0 z-30">
+            {/* Shimmer sweep */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent" style={{ animation: 'shimmer 2s infinite' }} />
+            {/* Badge */}
+            <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-600/90 text-white text-[10px] font-bold shadow-lg backdrop-blur-sm border border-indigo-400/30">
+              <Sparkles size={10} className="animate-pulse" />
+              <span>משדרג תמונה...</span>
+            </div>
+          </div>
+        )}
+        {enhancingStatus === 'done' && (
+          <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/90 text-white text-[10px] font-bold shadow-lg backdrop-blur-sm border border-green-400/30 animate-bounce">
+            <Sparkles size={10} />
+            <span>תמונה שודרגה!</span>
+          </div>
+        )}
       </div>
 
       {item?.available === false && (

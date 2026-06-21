@@ -52,7 +52,7 @@ export const useKDSSms = () => {
         const idempotencyKey = orderId ? `${orderId}-${cleanPhone}` : cleanPhone;
         const lastSent = sentLogRef.current.get(idempotencyKey);
         const now = Date.now();
-        const LOCKOUT_MS = 2 * 60 * 1000; // 2 minutes
+        const LOCKOUT_MS = 30 * 1000; // 30 seconds
 
         if (lastSent && (now - lastSent) < LOCKOUT_MS) {
             const remaining = Math.ceil((LOCKOUT_MS - (now - lastSent)) / 1000);
@@ -161,7 +161,7 @@ export const useKDSSms = () => {
         // Idempotency check
         const idempotencyKey = `${orderId}-${cleanPhone}`;
         const lastSent = sentLogRef.current.get(idempotencyKey);
-        if (lastSent && (Date.now() - lastSent) < 120000) {
+        if (lastSent && (Date.now() - lastSent) < 30000) {
             console.log(`🛡️ SMS recently sent for ${idempotencyKey}, skipping`);
             return;
         }

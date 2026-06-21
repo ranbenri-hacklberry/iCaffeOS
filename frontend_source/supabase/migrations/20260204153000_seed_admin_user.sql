@@ -27,8 +27,7 @@ INSERT INTO auth.users (
         email_change,
         email_change_token_new,
         recovery_token,
-        is_super_admin,
-        confirmed_at
+        is_super_admin
     )
 VALUES (
         '00000000-0000-0000-0000-000000000000',
@@ -48,9 +47,7 @@ VALUES (
         '',
         '',
         '',
-        true,
-        -- auth.users.is_super_admin
-        now()
+        true
     );
 RAISE NOTICE 'Admin user ranbenri@gmail.com created.';
 ELSE -- Update password and superadmin status if user already exists
@@ -61,6 +58,13 @@ SET encrypted_password = crypt('2102', gen_salt('bf')),
     updated_at = now()
 WHERE email = 'ranbenri@gmail.com';
 RAISE NOTICE 'Admin user ranbenri@gmail.com already exists, updated to Super Admin.';
+END IF;
+-- Ensure the Pilot Cafe business exists to prevent foreign key violation
+IF NOT EXISTS (
+    SELECT 1 FROM public.businesses WHERE id = '11111111-1111-1111-1111-111111111111'
+) THEN
+    INSERT INTO public.businesses (id, name)
+    VALUES ('11111111-1111-1111-1111-111111111111', 'Pilot Cafe');
 END IF;
 -- 2. Ensure the user exists in public.employees for application logic
 -- We'll link them to the Pilot Cafe (1111...) if it exists
@@ -91,7 +95,7 @@ SELECT gen_random_uuid(),
     -- is_super_admin
     id
 FROM auth.users
-WHERE email = 'ranbenri@gmail.com' ON CONFLICT (email) DO NOTHING;
+WHERE email = 'ranbenri@gmail.com';
 ELSE -- Update auth_user_id link and superadmin status
 UPDATE public.employees
 SET auth_user_id = (
@@ -107,6 +111,7 @@ WHERE email = 'ranbenri@gmail.com';
 END IF;
 END $$;
 -- 3. Update authenticate_employee RPC to return is_super_admin
+DROP FUNCTION IF EXISTS public.authenticate_employee(text, text);
 CREATE OR REPLACE FUNCTION public.authenticate_employee(p_email text, p_password text) RETURNS TABLE(
         id uuid,
         business_id uuid,
