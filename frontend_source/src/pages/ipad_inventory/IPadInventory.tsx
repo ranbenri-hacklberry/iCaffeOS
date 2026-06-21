@@ -111,20 +111,19 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
         }
     };
 
-    const handleStockDelta = (itemId: string, delta: number) => {
+    const handleStockDelta = (itemId: string, newStock: number) => {
         const item = items.find(i => i.id === itemId);
         if (!item) return;
 
-        const currentStock = item.current_stock || 0;
-        const newStock = Math.max(0, currentStock + delta);
+        const newStockClamped = Math.max(0, newStock);
 
         // Update the actual stock via the hook
-        updateStock(itemId, newStock);
+        updateStock(itemId, newStockClamped);
 
         // Track the delta for the modal
         setStockDeltas(prev => ({
             ...prev,
-            [itemId]: newStock
+            [itemId]: newStockClamped
         }));
     };
 

@@ -4,11 +4,12 @@ import { motion } from 'framer-motion';
 import Icon from '../../../components/AppIcon';
 import { useTheme } from '../../../context/ThemeContext';
 
-const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = null, categories = [] }) => {
+const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = null, categories = [], enhancingItems = {} }) => {
   const { isDarkMode } = useTheme();
 
   // 🚩 TRACE: MenuGrid Render Log
   console.log('📋 [MenuGrid Render]:', categories.length, 'categories');
+
 
   if (isLoading) {
     return (
@@ -67,13 +68,14 @@ const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = n
                 {group.title}
               </h3>
             )}
-            {/* Items in this group */}
+              {/* Items in this group */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 responsive-menu-grid">
               {group.items?.map((item) => (
                 <MenuItemCard
                   key={item?.id}
                   item={item}
                   onAddToCart={onAddToCart}
+                  enhancingStatus={enhancingItems[item?.id]}
                 />
               ))}
             </div>
@@ -92,6 +94,7 @@ const MenuGrid = ({ items = [], onAddToCart, isLoading = false, groupedItems = n
             key={item?.id}
             item={item}
             onAddToCart={onAddToCart}
+            enhancingStatus={enhancingItems[item?.id]}
           />
         ))}
       </div>

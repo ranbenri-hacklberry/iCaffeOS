@@ -41,7 +41,8 @@ const LowStockReportModal: React.FC<LowStockReportModalProps> = ({ isOpen, onClo
                 .from('businesses')
                 .select('sms_number, owner_name')
                 .eq('id', businessId)
-                .single();
+                .single()
+                .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
             if (error) {
                 console.error('LowStockReport: Fetch error', error);
@@ -102,20 +103,36 @@ const LowStockReportModal: React.FC<LowStockReportModalProps> = ({ isOpen, onClo
         lowStockItems.forEach(item => {
             const stock = currentStocks[item.id] !== undefined ? currentStocks[item.id] : (item.current_stock || 0);
 
-            let quantityDisplay = `${stock}`;
-            if (parseFloat(item.weight_per_unit) > 0) {
-                if (parseFloat(item.weight_per_unit) > 1) { // Pack
-                    quantityDisplay = `${stock.toFixed(2)} יח׳`;
-                } else { // Bulk (KG)
-                    quantityDisplay = stock >= 1000 ? `${(stock / 1000).toFixed(2)} ק״ג` : `${stock} גרם`;
+            const conversionFactor = (() => {
+                const fromSettings = parseFloat(item?.settings?.conversion_factor);
+                if (!isNaN(fromSettings) && fromSettings > 0) return fromSettings;
+                const fromWeight = parseFloat(item?.weight_per_unit as any);
+                if (!isNaN(fromWeight) && fromWeight > 0) return fromWeight;
+                // Fallback for base units of grams and ml:
+                const unit = (item?.base_unit || item?.unit || '').toLowerCase();
+                if (unit.includes('גרם') || unit.includes('מ"ל') || unit === 'g' || unit === 'ml') {
+                    return 1000;
                 }
-            } else if (item.unit === 'גרם' && stock >= 1000) {
+                return 1;
+            })();
+            const displayUnit = item?.display_unit || item?.settings?.display_unit || 
+                (((item?.base_unit || item?.unit || '').includes('גרם') || (item?.base_unit || item?.unit || '').includes('מ"ל')) ? 'יח\'' : null);
+            const baseUnit = item?.base_unit || item?.unit || 'יח\'';
+            const hasDisplayUnit = !!displayUnit && conversionFactor > 1;
+
+            let quantityDisplay = '';
+            if (hasDisplayUnit) {
+                const displayVal = stock / conversionFactor;
+                quantityDisplay = `${displayVal % 1 === 0 ? displayVal : displayVal.toFixed(2)} ${displayUnit}`;
+            } else if (baseUnit === 'גרם' && stock >= 1000) {
                 quantityDisplay = `${(stock / 1000).toFixed(2)} ק״ג`;
+            } else if (baseUnit === 'מ"ל' && stock >= 1000) {
+                quantityDisplay = `${(stock / 1000).toFixed(2)} ליטר`;
             } else {
-                quantityDisplay += ` ${item.unit}`;
+                quantityDisplay = `${stock} ${baseUnit}`;
             }
 
-            message += `- ${item.name}: ${quantityDisplay} (מינ׳ ${item.low_stock_threshold_units})\n`;
+            message += `- ${item.name}: ${quantityDisplay} (מינ׳ ${item.low_stock_threshold_units} ${hasDisplayUnit ? displayUnit : baseUnit})\n`;
         });
 
         message += `\nתודה!`;
@@ -213,11 +230,48 @@ const LowStockReportModal: React.FC<LowStockReportModalProps> = ({ isOpen, onClo
                                 <div className="grid gap-3">
                                     {lowStockItems.map(item => {
                                         const stock = currentStocks[item.id] !== undefined ? currentStocks[item.id] : (item.current_stock || 0);
-                                        const wpu = parseFloat(item.weight_per_unit) || 0;
-                                        const step = parseFloat(item.count_step) || (item.unit === 'יח׳' ? 1 : 1000);
 
-                                        // Determine delta for +/- buttons
-                                        const realStep = wpu > 0 ? (step * wpu) : step;
+                                        const conversionFactor = (() => {
+                                            const fromSettings = parseFloat(item?.settings?.conversion_factor);
+                                            if (!isNaN(fromSettings) && fromSettings > 0) return fromSettings;
+                                            const fromWeight = parseFloat(item?.weight_per_unit as any);
+                                            if (!isNaN(fromWeight) && fromWeight > 0) return fromWeight;
+                                            // Fallback for base units of grams and ml:
+                                            const unit = (item?.base_unit || item?.unit || '').toLowerCase();
+                                            if (unit.includes('גרם') || unit.includes('מ"ל') || unit === 'g' || unit === 'ml') {
+                                                return 1000;
+                                            }
+                                            return 1;
+                                        })();
+                                        const displayUnit = item?.display_unit || item?.settings?.display_unit || 
+                                            (((item?.base_unit || item?.unit || '').includes('גרם') || (item?.base_unit || item?.unit || '').includes('מ"ל')) ? 'יח\'' : null);
+                                        const baseUnit = item?.base_unit || item?.unit || 'יח\'';
+                                        const hasDisplayUnit = !!displayUnit && conversionFactor > 1;
+
+                                        const unitStep = Number(item.inventory_count_step) || 1;
+
+                                        // Calculate display units
+                                        const rawDisplayUnits = hasDisplayUnit ? stock / conversionFactor : stock;
+                                        const displayVal = Number(rawDisplayUnits.toFixed(4));
+
+                                        const handleIncrementClick = () => {
+                                            const nextDisplay = Math.ceil((rawDisplayUnits + 0.00001) / unitStep) * unitStep;
+                                            const finalDisplay = (nextDisplay - rawDisplayUnits < 0.001) 
+                                                ? nextDisplay + unitStep 
+                                                : nextDisplay;
+                                            const nextBase = hasDisplayUnit ? finalDisplay * conversionFactor : finalDisplay;
+                                            onUpdateStock(item.id, nextBase);
+                                        };
+
+                                        const handleDecrementClick = () => {
+                                            const prevDisplay = Math.floor((rawDisplayUnits - 0.00001) / unitStep) * unitStep;
+                                            const finalDisplay = (rawDisplayUnits - prevDisplay < 0.001) 
+                                                ? prevDisplay - unitStep 
+                                                : prevDisplay;
+                                            const finalDisplayClamped = Math.max(0, finalDisplay);
+                                            const nextBase = hasDisplayUnit ? finalDisplayClamped * conversionFactor : finalDisplayClamped;
+                                            onUpdateStock(item.id, nextBase);
+                                        };
 
                                         return (
                                             <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
@@ -225,7 +279,7 @@ const LowStockReportModal: React.FC<LowStockReportModalProps> = ({ isOpen, onClo
                                                     <h4 className="font-bold text-lg text-slate-800">{item.name}</h4>
                                                     <div className="flex items-center gap-4 mt-1 text-sm">
                                                         <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded-md">
-                                                            מינימום: {item.low_stock_threshold_units}
+                                                            מינימום: {item.low_stock_threshold_units} {hasDisplayUnit ? displayUnit : baseUnit}
                                                         </span>
                                                         <span className="text-gray-400">
                                                             ספק: {item.supplier_name || 'כללי'}
@@ -238,7 +292,7 @@ const LowStockReportModal: React.FC<LowStockReportModalProps> = ({ isOpen, onClo
                                                     <span className="text-xs font-bold text-gray-400 ml-1">בפועל:</span>
 
                                                     <button
-                                                        onClick={() => onUpdateStock(item.id, -realStep)}
+                                                        onClick={handleDecrementClick}
                                                         aria-label={`הפחת מלאי עבור ${item.name}`}
                                                         className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-red-50 hover:border-red-200 hover:text-red-500 active:scale-95 transition-all"
                                                     >
@@ -247,15 +301,15 @@ const LowStockReportModal: React.FC<LowStockReportModalProps> = ({ isOpen, onClo
 
                                                     <div className="w-24 text-center">
                                                         <span className="block text-2xl font-black text-slate-800 leading-none">
-                                                            {wpu > 0 ? (stock / wpu).toFixed(2) : (item.unit === 'גרם' && stock >= 1000 ? (stock / 1000).toFixed(2) : stock)}
+                                                            {displayVal % 1 === 0 ? displayVal : displayVal.toFixed(2)}
                                                         </span>
                                                         <span className="text-xs font-bold text-gray-400">
-                                                            {wpu > 0 ? 'יח׳' : (item.unit === 'גרם' && stock >= 1000 ? 'ק״ג' : item.unit)}
+                                                            {hasDisplayUnit ? displayUnit : baseUnit}
                                                         </span>
                                                     </div>
 
                                                     <button
-                                                        onClick={() => onUpdateStock(item.id, realStep)}
+                                                        onClick={handleIncrementClick}
                                                         aria-label={`הוסף מלאי עבור ${item.name}`}
                                                         className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-green-50 hover:border-green-200 hover:text-green-600 active:scale-95 transition-all"
                                                     >

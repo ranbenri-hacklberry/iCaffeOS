@@ -55,7 +55,7 @@ SELECT TO authenticated USING (
             SELECT 1
             FROM public.employees
             WHERE auth_user_id = auth.uid()
-                AND role IN ('admin', 'super_admin')
+                AND (is_admin = true OR is_super_admin = true)
         )
     );
 -- System insert policy

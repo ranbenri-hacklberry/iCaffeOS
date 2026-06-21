@@ -59,38 +59,9 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
         if (!effectiveId) return;
 
         try {
-            // 🚀 STEP 1: Instant Local Categories
-            const searchId = isNaN(effectiveId) ? effectiveId : Number(effectiveId);
-            const [localCatsNum, localCatsStr] = await Promise.all([
-                db.item_category.where('business_id').equals(searchId).toArray(),
-                db.item_category.where('business_id').equals(String(effectiveId)).toArray()
-            ]);
+            console.log('🚀 [Supabase Direct] Fetching categories for business:', effectiveId);
 
-            const localCats = localCatsNum.length > 0 ? localCatsNum : localCatsStr;
-
-            if (localCats.length > 0) {
-                const sortedLocal = [...localCats].sort((a, b) => (a.position || 0) - (b.position || 0));
-                setCategories(sortedLocal.map(cat => ({
-                    id: cat.id,
-                    name: cat.name_he || cat.name,
-                    name_he: cat.name_he,
-                    db_name: cat.name,
-                    icon: cat.icon || 'Folder',
-                    position: cat.position
-                })));
-                setCategoriesFetched(true); // Milestone reached
-            }
-        } catch (e) { console.warn('Local categories failed:', e); }
-
-        try {
-            // ☁️ STEP 2: Background Sync
-            const isInvalidId = !effectiveId || effectiveId === 'null' || effectiveId === 'undefined';
-            if (isInvalidId) {
-                 setCategoriesFetched(true);
-                 return;
-            }
-
-            const syncPromise = supabase
+            const { data } = await supabase
                 .from('item_category')
                 .select('id, name, name_he, icon, position, is_hidden')
                 .eq('business_id', effectiveId)
@@ -98,10 +69,8 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                 .or('is_hidden.is.null,is_hidden.eq.false')
                 .order('position', { ascending: true, nullsFirst: false });
 
-            // If we have categories, we don't await. If not, we await.
-            const { data } = await syncPromise;
-
             if (data && data.length > 0) {
+                console.log(`✅ [Supabase Direct] Got ${data.length} categories`);
                 setCategories(data.map(cat => ({
                     id: cat.id,
                     name: cat.name_he || cat.name,
@@ -110,15 +79,13 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                     icon: cat.icon || 'Folder',
                     position: cat.position
                 })));
-                await db.item_category.bulkPut(data.map(d => ({ ...d, business_id: effectiveId })));
+                // Passive backup to Dexie
+                db.item_category.bulkPut(data.map(d => ({ ...d, business_id: effectiveId }))).catch(() => {});
             }
-
-            // Mark categories as fetched regardless of result (if query completed)
             setCategoriesFetched(true);
         } catch (e) {
-            console.error('BG categories error:', e);
-        } finally {
-            setCategoriesFetched(true); // Ensure hydration unblocks even on failure
+            console.error('Categories fetch error:', e);
+            setCategoriesFetched(true);
         }
     }, [businessId]);
 
@@ -128,161 +95,52 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
         if (!effectiveId) {
             console.warn('⚠️ [Blocked] No Business ID.');
             setMenuLoading(false);
-            setItemsFetched(true); // Milestone reached (empty state)
+            setItemsFetched(true);
             return;
         }
 
         try {
-            // 🚀 STEP 1: Aggressive Local Fetch
-            const searchId = isNaN(effectiveId) ? effectiveId : Number(effectiveId);
-            console.log('⏱️ [T0] Start fetching from Dexie (Business:', searchId, ')');
+            console.log('🚀 [Supabase Direct] Fetching menu for business:', effectiveId);
 
-            // Try both numeric and string formats for maximum compatibility
-            const [localDataNum, localDataStr] = await Promise.all([
-                db.menu_items.where('business_id').equals(searchId).toArray(),
-                db.menu_items.where('business_id').equals(String(effectiveId)).toArray()
+            // Always fetch from Supabase first — it's local, fast, and authoritative
+            const [{ data: cloudData, error: menuError }, { data: cloudInventory }] = await Promise.all([
+                supabase.from('menu_items')
+                    .select('id, name, price, sale_price, category, category_id, is_hot_drink, kds_routing_logic, allow_notes, is_in_stock, description, modifiers, image_url, inventory_settings, is_deleted')
+                    .eq('business_id', effectiveId)
+                    .not('is_deleted', 'eq', true)
+                    .order('id', { ascending: true }),
+                supabase.from('prepared_items_inventory')
+                    .select('item_id, current_stock')
+                    .eq('business_id', effectiveId),
             ]);
 
-            const localData = localDataNum.length > 0 ? localDataNum : localDataStr;
+            if (menuError) throw menuError;
 
-            // 🔥 OPTIMIZED: Fetch inventory stock only for this business
-            const localInventory = await db.prepared_items_inventory.where('business_id').equals(searchId).toArray();
-            const inventoryMap = new Map(localInventory.map(inv => [inv.item_id, inv.current_stock]));
+            if (cloudData && cloudData.length > 0) {
+                console.log(`✅ [Supabase Direct] Got ${cloudData.length} items`);
 
-            const syncKey = `menu_sync_time_${effectiveId}`;
-            const lastSync = parseInt(localStorage.getItem(syncKey) || '0', 10);
-            const isStale = (Date.now() - lastSync) > 1000 * 60 * 5; // 5 mins
+                // Merge prepared_items_inventory stock into menu items
+                const invMap = new Map((cloudInventory || []).map(inv => [inv.item_id, inv.current_stock]));
+                const enrichedData = cloudData.map(item => ({
+                    ...item,
+                    current_stock: invMap.get(item.id) ?? null
+                }));
 
-            // If data is stale OR from KDS (detect via session or URL), we want to wait for network.
-            const fromKds = window.location.search.includes('from=kds') || sessionStorage.getItem('order_origin') === 'kds' || sessionStorage.getItem('order_origin') === 'kds-history';
-            const isOnline = navigator.onLine;
-            const shouldWaitForNetwork = fromKds && isOnline && localData.length === 0; // 🚀 MODIFIED: Only wait for network if no local data exists
-
-            const enrichedLocalData = localData.filter(i => !i.is_deleted).map(item => ({
-                ...item,
-                current_stock: inventoryMap.get(item.id) ?? item.current_stock
-            }));
-
-            console.log(`⏱️ [T1] Dexie returned ${localData.length} items (${enrichedLocalData.length} active)`);
-
-            if (localData.length > 0 && !shouldWaitForNetwork) {
-                console.log(`🚀 [Instant Load] Found ${localData.length} items locally for ${effectiveId} (Fresh)`);
-                setRawMenuData(enrichedLocalData);
-                setMenuLoading(false); // 🔓 Unblock UI immediately
-                setItemsFetched(true); // 🔓 Hydration milestone
-            } else if (localData.length > 0) {
-                console.log(`⏳ [Delayed Load] Local data is stale or from KDS. Waiting for cloud sync to prevent flash...`);
-                // Do NOT setMenuLoading false here, wait for the network layer below.
-            } else {
-                console.log(`⏳ [First Load] No local data. Waiting for cloud sync...`);
-            }
-
-            // ☁️ STEP 2: Background Sync (Non-blocking if local exists and fresh)
-            const isInvalidId = !effectiveId || effectiveId === 'null' || effectiveId === 'undefined';
-            if (isInvalidId) {
+                setRawMenuData(enrichedData);
                 setMenuLoading(false);
                 setItemsFetched(true);
-                return;
-            }
 
-            const syncPromise = supabase.from('menu_items')
-                .select('id, name, price, sale_price, category, category_id, is_hot_drink, kds_routing_logic, allow_notes, is_in_stock, description, modifiers, image_url, inventory_settings, is_deleted')
-                .eq('business_id', effectiveId)
-                .not('is_deleted', 'eq', true)
-                .order('id', { ascending: true });
+                // Passive backup to Dexie (fire-and-forget)
+                db.menu_items.bulkPut(cloudData).catch(() => {});
+                if (cloudInventory) db.prepared_items_inventory.bulkPut(cloudInventory).catch(() => {});
 
-            // Also fetch inventory from cloud
-            const inventoryPromise = supabase.from('prepared_items_inventory')
-                .select('item_id, current_stock')
-                .eq('business_id', effectiveId);
-
-            if (localData.length === 0 || shouldWaitForNetwork) {
-                console.log(`☁️ [${localData.length === 0 ? 'First Load' : 'Awaiting Sync'}] Creating Cloud Promises...`);
-
-                let isResolved = false;
-
-                const dataFetchPromise = Promise.all([syncPromise, inventoryPromise])
-                    .then(async ([{ data: cloudData }, { data: cloudInventory }]) => {
-                        if (isResolved) return true; // Ignore if timeout already triggered
-                        isResolved = true;
-
-                        if (cloudData && cloudData.length > 0) {
-                            console.log(`✅ [Awaited Sync] Pulled ${cloudData.length} items from server`);
-
-                            // Merge inventory
-                            const invMap = new Map((cloudInventory || []).map(inv => [inv.item_id, inv.current_stock]));
-                            const enrichedCloudData = cloudData.map(item => ({
-                                ...item,
-                                current_stock: invMap.get(item.id) ?? null
-                            }));
-
-                            setRawMenuData(enrichedCloudData);
-                            setMenuLoading(false); // 🔥 Unlock UI here!
-                            setItemsFetched(true);
-
-                            await db.menu_items.bulkPut(cloudData);
-                            if (cloudInventory) await db.prepared_items_inventory.bulkPut(cloudInventory);
-
-                            localStorage.setItem(syncKey, Date.now().toString());
-
-                            // 🖼️ Cache images lazily (after data is safe)
-                            import('@/services/imageSyncService').then(m => m.syncMenuImages(cloudData));
-                        } else {
-                            // Empty data or other issue, fallback
-                            if (localData.length > 0) setRawMenuData(enrichedLocalData);
-                            setMenuLoading(false); // 🔥 Unlock UI here!
-                        }
-                        return true;
-                    })
-                    .catch(err => {
-                        console.error('❌ [Awaited Sync] Cloud Fetch Failed:', err);
-                        if (!isResolved) {
-                            isResolved = true;
-                            if (localData.length > 0) setRawMenuData(enrichedLocalData);
-                            setMenuLoading(false); // 🔥 Unlock UI here!
-                            setItemsFetched(true);
-                        }
-                        return false;
-                    });
-
-                // 🛑 TIMEOUT PROTECTION: If network is slow, unblock UI after 10s but let fetch continue!
-                const timeoutPromise = new Promise(resolve => setTimeout(() => {
-                    if (!isResolved) {
-                        console.warn('⚠️ [Awaited Sync] Slow Network - Unblocking UI using fallback while fetch continues...');
-                        isResolved = true;
-                        if (localData.length > 0) {
-                            setRawMenuData(enrichedLocalData);
-                        }
-                        setMenuLoading(false); // 🔥 Unlock UI here!
-                        setItemsFetched(true);
-                    }
-                    resolve(false);
-                }, 10000)); // 10 seconds
-
-                // Wait for either data or timeout
-                await Promise.race([dataFetchPromise, timeoutPromise]);
+                // Cache images lazily
+                import('@/services/imageSyncService').then(m => m.syncMenuImages(cloudData)).catch(() => {});
             } else {
-                // Background update (run anyway to keep cache fresh, but UI already unblocked)
-                Promise.all([syncPromise, inventoryPromise]).then(async ([{ data: cloudData }, { data: cloudInventory }]) => {
-                    if (cloudData && cloudData.length > 0) {
-                        const invMap = new Map((cloudInventory || []).map(inv => [inv.item_id, inv.current_stock]));
-                        const enrichedCloudData = cloudData.map(item => ({
-                            ...item,
-                            current_stock: invMap.get(item.id) ?? null
-                        }));
-
-                        setRawMenuData(enrichedCloudData);
-                        await db.menu_items.bulkPut(cloudData);
-                        if (cloudInventory) await db.prepared_items_inventory.bulkPut(cloudInventory);
-
-                        localStorage.setItem(syncKey, Date.now().toString());
-
-                        // 🖼️ Cache images for offline use
-                        import('@/services/imageSyncService').then(m => m.syncMenuImages(cloudData));
-                    }
-                }).catch(err => {
-                    console.error('🔥 Background Sync Error:', err);
-                });
+                console.warn('⚠️ [Supabase Direct] No items returned');
+                setRawMenuData([]);
+                setMenuLoading(false);
+                setItemsFetched(true);
             }
         } catch (err) {
             console.error('🔥 Fetch Error:', err);
@@ -302,7 +160,7 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
         }
     }, [isHydrated, categories.length, rawMenuData.length]);
 
-    // REAL-TIME INVENTORY SUBSCRIPTION
+    // REAL-TIME INVENTORY SUBSCRIPTION (prepared_items_inventory only)
     useEffect(() => {
         if (!businessId) return;
 
@@ -341,6 +199,15 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
         }));
     }, []);
 
+    const updateMenuItemLocally = useCallback((itemId, updates) => {
+        setRawMenuData(prev => prev.map(item => {
+            if (item.id === itemId) {
+                return { ...item, ...updates };
+            }
+            return item;
+        }));
+    }, []);
+
     const menuItems = useMemo(() => {
         const seen = new Set();
         return rawMenuData
@@ -366,7 +233,7 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                 kds_routing_logic: item.kds_routing_logic,
                 db_category: item.category,
                 modifiers: item.modifiers || [],
-                // Ensure tracked items show 0 instead of null/hidden
+                // Only show stock badge ("מוכנים") for prepared items, not regular inventory
                 current_stock: (item.inventory_settings?.isPreparedItem || item.kds_routing_logic === 'hybrid')
                     ? (item.current_stock ?? 0)
                     : null,
@@ -406,21 +273,11 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
             if (item.db_category) usedCategories.add(String(item.db_category));
         });
 
-        // 1. Filter out hidden or unused categories
-        const filtered = categories.filter(cat =>
-            !cat.is_hidden && (
-                usedCategories.has(String(cat.id)) ||
-                usedCategories.has(String(cat.name)) ||
-                usedCategories.has(String(cat.name_he)) ||
-                usedCategories.has(String(cat.db_name))
-            )
-        );
+        // 1. Show ALL non-hidden categories (including empty ones so new categories appear)
+        const filtered = categories.filter(cat => !cat.is_hidden);
 
-        // 2. Fallback to categories even if no items found, but ONLY after hydration
-        const base = filtered.length > 0 ? filtered : categories;
-
-        // 3. Deduplicate visually by name to avoid empty ghost tabs
-        return deduplicate(base).sort((a, b) => (a.position || 0) - (b.position || 0));
+        // 2. Deduplicate visually by name to avoid empty ghost tabs
+        return deduplicate(filtered).sort((a, b) => (a.position || 0) - (b.position || 0));
     }, [categories, menuItems, menuLoading, isHydrated]);
 
     // Create a mapping from any variant (name, name_he, id) to the representative ID
@@ -486,7 +343,10 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
         categories: availableCategories,
         handleCategoryChange: setActiveCategory,
         isFoodItem,
-        updateStockLocally
+        fetchMenuItems,
+        fetchCategories,
+        updateStockLocally,
+        updateMenuItemLocally
     };
 };
 

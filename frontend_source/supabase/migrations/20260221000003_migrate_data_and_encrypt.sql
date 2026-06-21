@@ -34,12 +34,12 @@ SELECT b.id,
     b.google_token_expiry,
     b.google_drive_folder_id,
     b.gemini_api_key,
-    b.grok_api_key,
-    b.claude_api_key,
-    b.kling_access_key,
-    b.kling_secret_key,
-    b.global_sms_api_key,
-    b.whatsapp_api_key,
+    NULL::TEXT AS grok_api_key,
+    NULL::TEXT AS claude_api_key,
+    NULL::TEXT AS kling_access_key,
+    NULL::TEXT AS kling_secret_key,
+    NULL::TEXT AS global_sms_api_key,
+    NULL::TEXT AS whatsapp_api_key,
     b.youtube_api_key
 FROM public.businesses b ON CONFLICT (business_id) DO
 UPDATE

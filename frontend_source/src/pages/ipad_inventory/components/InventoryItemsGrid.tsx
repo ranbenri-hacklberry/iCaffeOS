@@ -150,8 +150,26 @@ const InventoryItemsGrid: React.FC<InventoryItemsGridProps> = ({
 };
 
 const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId: string, newStock: number) => void }> = ({ item, onUpdateStock }) => {
-    const wpu = parseFloat(item.weight_per_unit as any) || 0;
-    const thresholdGrams = (parseFloat(item.low_stock_threshold_units as any) || 0) * (wpu || 1);
+    const conversionFactor = useMemo(() => {
+        const fromSettings = parseFloat(item?.settings?.conversion_factor);
+        if (!isNaN(fromSettings) && fromSettings > 0) return fromSettings;
+        const fromWeight = parseFloat(item?.weight_per_unit as any);
+        if (!isNaN(fromWeight) && fromWeight > 0) return fromWeight;
+
+        // Fallback for base units of grams and ml:
+        const unit = (item?.base_unit || item?.unit || '').toLowerCase();
+        if (unit.includes('גרם') || unit.includes('מ"ל') || unit === 'g' || unit === 'ml') {
+            return 1000;
+        }
+        return 1; // 1:1 — no conversion
+    }, [item]);
+
+    const displayUnit = item?.display_unit || item?.settings?.display_unit || 
+        (((item?.base_unit || item?.unit || '').includes('גרם') || (item?.base_unit || item?.unit || '').includes('מ"ל')) ? 'יח\'' : null);
+    const baseUnit = item?.base_unit || item?.unit || 'יח\'';
+    const hasDisplayUnit = !!displayUnit && conversionFactor > 1;
+
+    const thresholdGrams = (parseFloat(item.low_stock_threshold_units as any) || 0) * conversionFactor;
     const isLowStock = thresholdGrams > 0 && item.current_stock <= thresholdGrams;
     const [localStock, setLocalStock] = useState(item.current_stock);
     const [isDirty, setIsDirty] = useState(false);
@@ -159,28 +177,36 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     const [lastCountedDate, setLastCountedDate] = useState(item.last_counted_at);
 
     // Calculate display units
-    const rawDisplayUnits = wpu > 0 ? localStock / wpu : localStock;
+    const rawDisplayUnits = hasDisplayUnit ? localStock / conversionFactor : localStock;
     const unitStep = Number(item.inventory_count_step) || 1;
     
-    // Pessimistic rounding: always round DOWN to the nearest whole step
-    // Add epsilon (0.00001) to handle floating point precision errors (e.g. 1.0/1.0 being 0.99999...)
-    const displayUnits = Math.floor((rawDisplayUnits + 0.00001) / unitStep) * unitStep;
+    // Show the actual fractional stock quantity for the display
+    const displayUnits = Number(rawDisplayUnits.toFixed(4));
 
     const handleIncrement = () => {
-        // Increment by count_step. If count_step is in units (e.g. 1 unit), 
-        // and we store grams, we multiply by wpu.
-        const gramStep = wpu > 0 ? unitStep * wpu : unitStep;
+        const currentDisplay = hasDisplayUnit ? localStock / conversionFactor : localStock;
+        // Round UP to the next multiple of unitStep
+        const nextDisplay = Math.ceil((currentDisplay + 0.00001) / unitStep) * unitStep;
+        const finalDisplay = (nextDisplay - currentDisplay < 0.001) 
+            ? nextDisplay + unitStep 
+            : nextDisplay;
 
-        const next = localStock + gramStep;
-        setLocalStock(next);
+        const nextBase = hasDisplayUnit ? finalDisplay * conversionFactor : finalDisplay;
+        setLocalStock(nextBase);
         setIsDirty(true);
     };
 
     const handleDecrement = () => {
-        const gramStep = wpu > 0 ? unitStep * wpu : unitStep;
+        const currentDisplay = hasDisplayUnit ? localStock / conversionFactor : localStock;
+        // Round DOWN to the previous multiple of unitStep
+        const prevDisplay = Math.floor((currentDisplay - 0.00001) / unitStep) * unitStep;
+        const finalDisplay = (currentDisplay - prevDisplay < 0.001) 
+            ? prevDisplay - unitStep 
+            : prevDisplay;
 
-        const next = Math.max(0, localStock - gramStep);
-        setLocalStock(next);
+        const finalDisplayClamped = Math.max(0, finalDisplay);
+        const nextBase = hasDisplayUnit ? finalDisplayClamped * conversionFactor : finalDisplayClamped;
+        setLocalStock(nextBase);
         setIsDirty(true);
     };
 
@@ -227,7 +253,7 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
                         <span className={`text-[15px] font-black ${isDirty ? 'text-indigo-600' : 'text-slate-800'} tabular-nums`}>
                             {displayUnits % 1 === 0 ? displayUnits : displayUnits.toFixed(2)}
                         </span>
-                        <span className="text-[9px] text-slate-400 font-bold uppercase">יח'</span>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase">{hasDisplayUnit ? displayUnit : baseUnit}</span>
                     </div>
                     <button
                         onClick={handleIncrement}

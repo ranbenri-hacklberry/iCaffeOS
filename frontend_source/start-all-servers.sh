@@ -143,7 +143,22 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════
-# 5. FRONTEND DEV SERVER (Port 4028) - Opens in new Terminal
+# 5. LOCAL STUDIO - Background Removal (Port 5002)
+# ════════════════════════════════════════════════════════════════
+echo ""
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BLUE}🎬 Local Studio (rembg)${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+STUDIO_SCRIPT="$(dirname "$SCRIPT_DIR")/backend/services/studio_local.py"
+if [ -f "$STUDIO_SCRIPT" ] && command -v python3 &> /dev/null; then
+    start_service "Local Studio" 5002 "python3 $STUDIO_SCRIPT"
+else
+    echo -e "${YELLOW}⚠️  studio_local.py not found or python3 missing - skipping${NC}"
+fi
+
+# ════════════════════════════════════════════════════════════════
+# 6. FRONTEND DEV SERVER (Port 4028) - Opens in new Terminal
 # ════════════════════════════════════════════════════════════════
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -184,6 +199,7 @@ echo ""
 services=(
     "Frontend Dev|4028|http://localhost:4028"
     "Backend API|8081|http://localhost:8081"
+    "Local Studio|5002|http://localhost:5002"
     "SMS Gateway|8085|http://localhost:8085"
     "Ollama|11434|http://localhost:11434"
     "Frigate|5050|http://localhost:5050"

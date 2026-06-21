@@ -18,7 +18,8 @@ export const useInventoryData = (businessId?: string) => {
                 .from('suppliers')
                 .select('*')
                 .eq('business_id', businessId)
-                .order('name');
+                .order('name')
+                .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             if (supError) throw supError;
 
             // Enrich with parsed schedule arrays
@@ -42,7 +43,8 @@ export const useInventoryData = (businessId?: string) => {
                 .from('inventory_items')
                 .select('*')
                 .eq('business_id', businessId)
-                .order('name');
+                .order('name')
+                .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             if (itemError) throw itemError;
 
             // Map DB columns to Frontend Interface if needed
@@ -56,7 +58,8 @@ export const useInventoryData = (businessId?: string) => {
             const { data: menuItemsData, error: menuError } = await supabase
                 .from('menu_items')
                 .select('*')
-                .eq('business_id', businessId);
+                .eq('business_id', businessId)
+                .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
             if (menuError) {
                 console.warn('Error fetching menu items for inventory:', menuError);
@@ -153,6 +156,34 @@ export const useInventoryData = (businessId?: string) => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    // Real-time subscription to inventory_items table changes
+    useEffect(() => {
+        if (!businessId) return;
+
+        console.log('🔌 Subscribing to real-time inventory_items updates for business:', businessId);
+        const channel = supabase
+            .channel('inventory_items_realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'inventory_items',
+                    filter: `business_id=eq.${businessId}`
+                },
+                (payload) => {
+                    console.log('🔄 Real-time inventory change detected:', payload);
+                    fetchData();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            console.log('🔌 Unsubscribing from real-time inventory_items updates');
+            supabase.removeChannel(channel);
+        };
+    }, [businessId, fetchData]);
 
     return { items, suppliers, loading, error, refresh: fetchData };
 };
