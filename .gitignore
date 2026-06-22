@@ -44,3 +44,8 @@ backend/music_cache/
 postgres_data/
 **/venv/
 **/.venv/
+backend/studio_output/
+backend/temp_uploads/
+backend/scratch/
+backend/scripts/
+
