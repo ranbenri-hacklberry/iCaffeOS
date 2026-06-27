@@ -23,9 +23,7 @@ const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
       e.stopPropagation();
       e.preventDefault();
     }
-    if (item?.available !== false) {
-      onAddToCart?.(item);
-    }
+    onAddToCart?.(item);
   }, [item, onAddToCart]);
 
   // 🛡️ Extra safety for touch devices to prevent bubbling to parent listeners
@@ -56,7 +54,7 @@ const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
       className={`relative group w-full aspect-square compact-card-ratio rounded-3xl overflow-hidden cursor-pointer select-none 
         border shadow-2xl transition-colors duration-300
         ${containerClass}
-        ${item?.available === false ? 'opacity-60 cursor-not-allowed grayscale' : ''}`}
+        ${(item?.available === false || item?.is_in_stock === false) ? 'opacity-60 grayscale' : ''}`}
       onClick={handleClick}
       onTouchEnd={(e) => {
         // Prevent synthetic click on mobile to avoid ghost clicks on the modal
@@ -64,9 +62,9 @@ const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
         handleClick(e);
       }}
       onKeyDown={handleKeyDown}
-      tabIndex={item?.available !== false ? 0 : -1}
+      tabIndex={0}
       role="button"
-      aria-label={`${item?.name} - ${item?.available !== false ? 'זמין' : 'לא זמין'}`}
+      aria-label={`${item?.name} - ${(item?.available !== false && item?.is_in_stock !== false) ? 'זמין' : 'לא זמין (לחץ לעריכה)'}`}
     >
       <div className={`absolute inset-0 z-0 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
         {!imageLoaded && (
@@ -102,7 +100,7 @@ const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
         )}
       </div>
 
-      {item?.available === false && (
+      {(item?.available === false || item?.is_in_stock === false) && (
         <div className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[2px] flex items-center justify-center">
           <div className="bg-red-500/90 text-white px-4 py-2 rounded-xl font-bold shadow-lg border border-red-400/30">
             לא זמין

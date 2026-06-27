@@ -12,6 +12,9 @@ import { fetchManagerItemOptions, clearOptionsCache } from '@/lib/managerApi';
 import { useProductTraining } from '@/hooks/useProductTraining';
 import PinCodeModal from '@/components/PinCodeModal';
 import { supabase } from '@/lib/supabase';
+import EditRecipePanel from './EditRecipePanel';
+import EditTrainingPanel from './EditTrainingPanel';
+import EditAdvancedPanel from './EditAdvancedPanel';
 
 const formatPrice = (price = 0) => {
   const numPrice = Number(price);
@@ -86,7 +89,7 @@ const getIconForValue = (valueName, groupName) => {
 };
 
 // Milk Card Component (Hero Section)
-const MilkCard = ({ label, Icon, price, isSelected, onClick }) => {
+const MilkCard = ({ label, Icon, price, isSelected, onClick, emoji }) => {
   return (
     <button
       onClick={onClick}
@@ -99,11 +102,15 @@ const MilkCard = ({ label, Icon, price, isSelected, onClick }) => {
         }
       `}
     >
-      <Icon
-        size={24}
-        strokeWidth={isSelected ? 2.5 : 2}
-        className={`transition-transform duration-200 ${isSelected ? "scale-110" : ""}`}
-      />
+      {emoji ? (
+        <span className={`text-2xl transition-transform duration-200 ${isSelected ? "scale-110" : ""}`}>{emoji}</span>
+      ) : (
+        <Icon
+          size={24}
+          strokeWidth={isSelected ? 2.5 : 2}
+          className={`transition-transform duration-200 ${isSelected ? "scale-110" : ""}`}
+        />
+      )}
       <span className="text-sm">{label}</span>
       {price > 0 && (
         <span className={`text-xs font-medium ${isSelected ? "text-orange-500" : "text-slate-400"}`}>
@@ -115,7 +122,7 @@ const MilkCard = ({ label, Icon, price, isSelected, onClick }) => {
 };
 
 // Modifier Pill Button
-const ModifierPill = ({ label, Icon, isSelected, onClick, variant = "default", price }) => {
+const ModifierPill = ({ label, Icon, isSelected, onClick, variant = "default", price, emoji }) => {
   const selectedStyles =
     variant === "purple"
       ? "bg-purple-600 text-white shadow-lg shadow-purple-200"
@@ -133,7 +140,11 @@ const ModifierPill = ({ label, Icon, isSelected, onClick, variant = "default", p
         }
       `}
     >
-      <Icon size={18} strokeWidth={isSelected ? 2.5 : 2} />
+      {emoji ? (
+        <span className="text-lg">{emoji}</span>
+      ) : (
+        <Icon size={18} strokeWidth={isSelected ? 2.5 : 2} />
+      )}
       <span className="text-sm">{label}</span>
       {price !== undefined && price > 0 && (
         <span className={`text-xs ${isSelected ? "text-white/80" : "text-slate-400"}`}>
@@ -203,27 +214,158 @@ const TrainingCameraPreview = ({ isActive }) => {
 };
 
 const GROUP_TEMPLATES = [
-  { icon: '🥛', name: 'סוג חלב', type: 'replacement' },
-  { icon: '☕', name: 'סוג קפה', type: 'replacement' },
-  { icon: '💪', name: 'חוזק', type: 'replacement' },
-  { icon: '🌡️', name: 'טמפרטורה', type: 'replacement' },
-  { icon: '🫧', name: 'קצף', type: 'replacement' },
-  { icon: '🍽️', name: 'הגשה', type: 'replacement' },
-  { icon: '🧊', name: 'בסיס', type: 'replacement' },
-  { icon: '➕', name: 'תוספות', type: 'additive' },
-  { icon: '✏️', name: 'מותאם אישית', type: 'replacement' },
+  { icon: '🥛', name: 'סוג חלב', type: 'replacement', requirement: 'M' },
+  { icon: '☕', name: 'סוג קפה', type: 'replacement', requirement: 'M' },
+  { icon: '💪', name: 'חוזק', type: 'replacement', requirement: 'O' },
+  { icon: '🌡️', name: 'טמפרטורה', type: 'replacement', requirement: 'O' },
+  { icon: '🫧', name: 'קצף', type: 'replacement', requirement: 'O' },
+  { icon: '🍽️', name: 'הגשה', type: 'replacement', requirement: 'O' },
+  { icon: '🧊', name: 'בסיס', type: 'replacement', requirement: 'O' },
+  { icon: '➕', name: 'תוספות', type: 'additive', requirement: 'O' },
+  { icon: '✏️', name: 'מותאם אישית', type: 'replacement', requirement: 'O' },
+];
+
+// ── Auto Icon Detection ──
+// Comprehensive keyword → emoji mapping for automatic icon assignment
+const ICON_MAP = [
+  // Dairy & Milk
+  ['🥛', ['חלב', 'milk', 'רגיל חלב']],
+  ['⬜', ['בולגרית', 'קוטג', 'cottage', 'לבנה', 'labneh', 'פטה', 'feta', 'טבעוני גבינה']],
+  ['🧀', ['גבינה', 'cheese', 'מוצרלה', 'mozzarella', 'פרמזן', 'parmesan', 'צהובה', 'גאודה', 'עיזים', 'שמנת', 'cream']],
+  ['🫛', ['סויה', 'soy', 'אדממה', 'edamame']],
+  ['🌾', ['שיבולת', 'oat', 'שיבולת שועל']],
+  ['🥥', ['קוקוס', 'coconut']],
+  ['🌰', ['שקדים', 'almond', 'אגוז לוז', 'hazelnut', 'פקאן', 'pecan', 'קשיו', 'cashew']],
+  ['🧈', ['חמאה', 'butter', 'מרגרינה']],
+  ['🍦', ['גלידה', 'ice cream', 'סורבה', 'sorbet', 'פרוזן']],
+  
+  // Coffee & Hot Drinks
+  ['☕', ['קפה', 'coffee', 'אספרסו', 'espresso', 'הפוך', 'קפוצ', 'לאטה', 'latte', 'מקיאטו', 'macchiato', 'אמריקנו', 'americano', 'נס', 'instant', 'נטול', 'decaf', 'קפאין', 'caffeine', 'טורקי', 'turkish']],
+  ['🫖', ['תה', 'tea', 'חליטה', 'infusion', 'צמחים']],
+  ['🍵', ['מאצ\'ה', 'matcha']],
+  ['🧋', ['אייס', 'iced', 'קולד ברו', 'cold brew', 'פרפה']],
+  
+  // Cold Drinks
+  ['🥤', ['שייק', 'shake', 'סמוזי', 'smoothie', 'מילקשייק']],
+  ['🧃', ['מיץ', 'juice', 'תפוזים', 'לימונדה', 'lemonade', 'לימונענע']],
+  ['🫗', ['מים', 'water', 'סודה', 'soda', 'טוניק', 'tonic']],
+  ['🍺', ['בירה', 'beer', 'לאגר', 'אייל', 'ale']],
+  ['🍷', ['יין', 'wine', 'אדום', 'לבן', 'רוזה']],
+  ['🥂', ['שמפניה', 'champagne', 'פרוסקו', 'prosecco', 'משקה חגיגי']],
+  ['🍹', ['קוקטייל', 'cocktail', 'מוחיטו', 'mojito', 'סנגריה']],
+  ['🥃', ['וויסקי', 'whisky', 'ויסקי', 'bourbon', 'ברנדי', 'brandy']],
+  
+  // Bread & Bakery
+  ['🍞', ['לחם', 'bread', 'טוסט', 'toast', 'פרוסה', 'slice']],
+  ['🥐', ['קרואסון', 'croissant']],
+  ['🥯', ['בייגל', 'bagel', 'בייגלה']],
+  ['🫓', ['פיתה', 'pita', 'לאפה', 'laffa', 'טורטייה', 'tortilla', 'לחמנייה', 'wrap', 'ראפ']],
+  ['🥖', ['באגט', 'baguette', 'צרפתי', 'french']],
+  ['🧇', ['וופל', 'waffle']],
+  ['🥞', ['פנקייק', 'pancake', 'קרפ', 'crepe', 'בלינצ']],
+  ['🥨', ['פרצל', 'pretzel']],
+  
+  // Main Dishes
+  ['🍕', ['פיצה', 'pizza']],
+  ['🍔', ['המבורגר', 'burger', 'המבורג']],
+  ['🌭', ['נקניקיה', 'hot dog', 'הוט דוג', 'נקניק', 'sausage']],
+  ['🌮', ['טאקו', 'taco']],
+  ['🌯', ['בוריטו', 'burrito']],
+  ['🥪', ['סנדוויץ', 'sandwich', 'כריך', 'פנינו', 'panini']],
+  ['🥙', ['שווארמה', 'shawarma', 'פלאפל', 'falafel', 'קבב', 'kebab']],
+  ['🧆', ['פלאפל', 'falafel', 'כדור']],
+  ['🍗', ['עוף', 'chicken', 'שניצל', 'schnitzel', 'כנפיים', 'wings']],
+  ['🥩', ['סטייק', 'steak', 'בשר', 'meat', 'בקר', 'beef', 'אנטריקוט', 'entrecote']],
+  ['🐟', ['דג', 'fish', 'סלמון', 'salmon', 'טונה', 'tuna', 'סשימי', 'sashimi']],
+  ['🍣', ['סושי', 'sushi', 'מאקי', 'maki', 'ניגירי']],
+  ['🍝', ['פסטה', 'pasta', 'ספגטי', 'spaghetti', 'פנה', 'penne', 'רביולי', 'ravioli', 'ניוקי', 'gnocchi']],
+  ['🍲', ['מרק', 'soup', 'תבשיל', 'stew', 'נזיד']],
+  ['🍳', ['ביצה', 'egg', 'חביתה', 'omelette', 'עין', 'שקשוקה', 'shakshuka']],
+  ['🥘', ['טאג\'ין', 'tagine', 'קדירה', 'casserole']],
+  
+  // Vegetables
+  ['🍅', ['עגבניה', 'tomato', 'עגבני']],
+  ['🥒', ['מלפפון', 'cucumber', 'חמוץ', 'pickle']],
+  ['🫒', ['זית', 'olive', 'זיתים']],
+  ['🧅', ['בצל', 'onion']],
+  ['🧄', ['שום', 'garlic']],
+  ['🌶️', ['חריף', 'hot', 'צ\'ילי', 'chili', 'פפרוני', 'pepperoni', 'חלפיניו', 'jalapeno', 'שאטה']],
+  ['🫑', ['פלפל', 'pepper', 'פפריקה', 'paprika']],
+  ['🥕', ['גזר', 'carrot']],
+  ['🌽', ['תירס', 'corn']],
+  ['🥦', ['ברוקולי', 'broccoli']],
+  ['🥬', ['חסה', 'lettuce', 'סלט', 'salad', 'עלים', 'leaves', 'ירוקים']],
+  ['🥑', ['אבוקדו', 'avocado', 'גואקמולי', 'guacamole']],
+  ['🍄', ['פטריות', 'mushroom', 'פטרי', 'שמפיניון']],
+  ['🥔', ['תפוח אדמה', 'potato', 'צ\'יפס', 'chips', 'fries', 'פרנצ\'']],
+  ['🍆', ['חציל', 'eggplant']],
+  ['🫘', ['שעועית', 'beans', 'קטניות', 'legumes']],
+  
+  // Fruits
+  ['🍋', ['לימון', 'lemon', 'ליים', 'lime']],
+  ['🍊', ['תפוז', 'orange', 'קלמנטינה', 'clementine', 'הדרים']],
+  ['🍎', ['תפוח', 'apple']],
+  ['🍌', ['בננה', 'banana']],
+  ['🍓', ['תות', 'strawberry']],
+  ['🫐', ['אוכמניות', 'blueberry', 'פירות יער', 'berries']],
+  ['🍑', ['אפרסק', 'peach']],
+  ['🥭', ['מנגו', 'mango']],
+  ['🍍', ['אננס', 'pineapple']],
+  ['🥝', ['קיווי', 'kiwi']],
+  ['🍉', ['אבטיח', 'watermelon']],
+  ['🥥', ['קוקוס', 'coconut']],
+  ['🍇', ['ענבים', 'grape', 'ענב']],
+  ['🫙', ['ריבה', 'jam', 'ממרח', 'spread']],
+  
+  // Nuts & Seeds
+  ['🥜', ['בוטנים', 'peanut', 'אגוזים', 'nuts', 'אגוז']],
+  ['🌰', ['שקדים', 'almond', 'אגוז לוז', 'hazelnut', 'פקאן', 'pecan', 'קשיו', 'cashew']],
+  
+  // Sweets & Desserts
+  ['🍫', ['שוקולד', 'chocolate', 'שוקו', 'קקאו', 'cocoa', 'נוטלה', 'nutella']],
+  ['🍰', ['עוגה', 'cake', 'עוגת']],
+  ['🧁', ['מאפין', 'muffin', 'קאפקייק', 'cupcake']],
+  ['🍩', ['דונאט', 'donut', 'סופגניה']],
+  ['🍪', ['עוגיה', 'cookie', 'ביסקוויט', 'biscuit']],
+  ['🍬', ['סוכריה', 'candy', 'ממתק', 'sweet']],
+  ['🍯', ['דבש', 'honey']],
+  ['🧇', ['וופל', 'waffle']],
+
+  // Sauces & Condiments
+  ['🫙', ['רוטב', 'sauce', 'סלסה', 'salsa']],
+  ['🥫', ['קטשופ', 'ketchup', 'רוטב עגבניות', 'טומטו']],
+  ['🫕', ['פונדו', 'fondue', 'טבילה', 'dip']],
+  ['🧂', ['מלח', 'salt', 'תיבול', 'seasoning', 'תבלין', 'spice']],
+  
+  // Grains & Cereals
+  ['🍚', ['אורז', 'rice', 'דגנים', 'cereal', 'גרנולה', 'granola']],
+  ['🫙', ['קינואה', 'quinoa', 'בורגול', 'bulgur', 'קוסקוס', 'couscous']],
+
+  // Cooking & Serving
+  ['🔥', ['גריל', 'grill', 'על האש', 'צלוי', 'grilled', 'מעושן', 'smoked']],
+  ['🫕', ['מבושל', 'cooked', 'תבשיל']],
+  ['🍽️', ['הגשה', 'serving', 'סוג צלחת', 'plate']],
+  ['🥡', ['טייק אוויי', 'takeaway', 'take away', 'לקחת', 'אריזה']],
+  ['🥢', ['סושי', 'chopsticks', 'אסיאתי', 'asian']],
+  
+  // Properties / Attributes
+  ['💪', ['חוזק', 'strength', 'חזק', 'strong', 'עדין', 'mild']],
+  ['🌡️', ['טמפרטורה', 'temp', 'חום', 'heat', 'קר', 'cold', 'חם', 'hot', 'רותח', 'פושר', 'קרח']],
+  ['🫧', ['קצף', 'foam', 'מוקצף']],
+  ['🧊', ['בסיס', 'base', 'קרח', 'ice']],
+  ['📏', ['גודל', 'size', 'כמות', 'quantity', 'מידה', 'portion']],
+  ['➕', ['תוספ', 'extra', 'topping', 'נוסף', 'addition']],
+  ['✏️', ['מותאם', 'custom', 'הערה', 'note', 'הגדרה']],
+  ['🚫', ['ללא', 'without', 'בלי', 'no']],
+  ['♻️', ['טבעוני', 'vegan', 'צמחוני', 'vegetarian']],
+  ['🌿', ['טבעי', 'natural', 'אורגני', 'organic', 'ירוק', 'green']],
 ];
 
 const detectGroupIcon = (name) => {
   const n = (name || '').toLowerCase();
-  if (n.includes('חלב') || n.includes('milk')) return '🥛';
-  if (n.includes('קפה') || n.includes('coffee') || n.includes('אספרסו')) return '☕';
-  if (n.includes('חוזק') || n.includes('strength')) return '💪';
-  if (n.includes('טמפרטורה') || n.includes('temp') || n.includes('חום')) return '🌡️';
-  if (n.includes('קצף') || n.includes('foam')) return '🫧';
-  if (n.includes('הגשה') || n.includes('serving')) return '🍽️';
-  if (n.includes('בסיס') || n.includes('base')) return '🧊';
-  if (n.includes('תוספות') || n.includes('extras') || n.includes('topping')) return '➕';
+  for (const [emoji, keywords] of ICON_MAP) {
+    if (keywords.some(k => n.includes(k))) return emoji;
+  }
   return '📋';
 };
 
@@ -264,6 +406,11 @@ const ModifierModal = (props) => {
   const [dragSource, setDragSource] = useState(null);        // { groupIdx, itemIdx } for drag-and-drop
   const [dragOverGroupIdx, setDragOverGroupIdx] = useState(null); // Visual feedback for drag target
 
+  // ── Edit Tab Navigation ──
+  const [editTab, setEditTab] = useState('modifiers'); // 'modifiers' | 'recipe' | 'training' | 'advanced'
+  const [editKdsStation, setEditKdsStation] = useState({ kitchen: true, bar: false }); // checkboxes
+  const [editKdsRouting, setEditKdsRouting] = useState('MADE_TO_ORDER'); // 'GRAB_AND_GO' | 'MADE_TO_ORDER' | 'CONDITIONAL'
+  const [editIsInStock, setEditIsInStock] = useState(true);
 
   // ── Recipe Panel State ──
   const [showRecipe, setShowRecipe] = useState(false);
@@ -284,14 +431,14 @@ const ModifierModal = (props) => {
   const [photoFile, setPhotoFile] = useState(null);             // Raw File object for upload
   const fileInputRef = useRef(null);
 
-  // Fetch vector count when training panel opens
+  // Fetch vector count when training panel opens (flip OR tab)
   useEffect(() => {
-    if (showTraining && selectedItem) {
+    if ((showTraining || (isEditMode && editTab === 'training')) && selectedItem) {
       const itemId = selectedItem?.id || selectedItem?.menu_item_id;
       const bId = businessId || selectedItem?.business_id;
       if (itemId && bId) fetchVectorCount(itemId, bId);
     }
-  }, [showTraining, selectedItem?.id]);
+  }, [showTraining, editTab, selectedItem?.id]);
 
   // Check if this is an espresso item
   const isEspresso = selectedItem?.name?.includes('אספרסו');
@@ -367,27 +514,13 @@ const ModifierModal = (props) => {
         let fetchedOptions = [];
 
         // 🛡️ REVERT TO OLD STABLE WAY: Always prioritize table-based options (DB/Cache) over JSONB to fix jank
-        if (props.optionsCache && props.optionsCache[targetItemId]) {
-          console.log('⚡ Using Cached Options for:', selectedItem.name);
-          fetchedOptions = props.optionsCache[targetItemId];
-        } else {
-          try {
-            console.log('🔄 Fetching Options from DB for:', selectedItem.name);
-            fetchedOptions = await fetchManagerItemOptions(targetItemId);
-            if (props.onCacheUpdate && fetchedOptions?.length > 0) {
-              props.onCacheUpdate(prev => ({ ...prev, [targetItemId]: fetchedOptions }));
-            }
-          } catch (e) {
-            console.warn('DB fetch failed, falling back to embedded', e);
-          }
-        }
-
-        // Fallback to embedded ONLY if DB fetch returned nothing
-        if ((!fetchedOptions || fetchedOptions.length === 0) && selectedItem?.modifiers && Array.isArray(selectedItem.modifiers) && selectedItem.modifiers.length > 0) {
-          console.log('🍕 Using Embedded JSON Modifiers as fallback for:', selectedItem.name);
+        // 🔥 NEW ARCHITECTURE: ALWAYS prefer embedded JSONB modifiers!
+        if (selectedItem?.modifiers && Array.isArray(selectedItem.modifiers) && selectedItem.modifiers.length > 0) {
+          console.log('🍕 Using Embedded JSON Modifiers for:', selectedItem.name);
           fetchedOptions = selectedItem.modifiers.map(group => {
-            const isLogicalMulti = group.logic === 'A' && group.maxSelection !== 1 && group.max_selection !== 1;
-            const isMultiSelect = group.is_multiple_select || isLogicalMulti;
+            const isAdditive = group.type === 'additive';
+            const isLogicalMulti = !isAdditive && group.logic === 'A' && group.maxSelection !== 1 && group.max_selection !== 1;
+            const isMultiSelect = isAdditive || group.is_multiple_select || isLogicalMulti;
             
             return {
               id: group.id || `json-group-${group.name.replace(/\s+/g, '_')}`,
@@ -395,10 +528,12 @@ const ModifierModal = (props) => {
               name: group.name,
               type: isMultiSelect ? 'multi' : 'single',
               is_multiple_select: isMultiSelect,
-              is_required: group.is_required || group.minSelection > 0 || group.requirement === 'M',
-              min_selection: group.minSelection || 0,
+              is_required: group.requirement ? group.requirement === 'M' : (group.is_required || group.minSelection > 0),
+              min_selection: group.requirement === 'O' ? 0 : (group.minSelection || 0),
               max_selection: group.maxSelection || (isMultiSelect ? 99 : 1),
               category: 'general',
+              show_default: group.show_default !== undefined ? group.show_default : (group.name || '').includes('חלב'),
+              modifier_type: group.type || 'replacement',
               values: (group.items || []).map((item, idx) => ({
                 id: item.id || `json-val-${item.name.replace(/\s+/g, '_')}`,
                 name: item.name,
@@ -413,6 +548,10 @@ const ModifierModal = (props) => {
               }))
             };
           });
+        } else {
+          // No JSONB modifiers — skip DB fetch entirely (prevents IndexedDB hang on iPad/tablet)
+          console.log('📋 No embedded modifiers for:', selectedItem.name, '— opening modal with note/add only');
+          fetchedOptions = [];
         }
 
         let allOptions = [...(fetchedOptions || []), ...(props.extraGroups || [])];
@@ -481,10 +620,8 @@ const ModifierModal = (props) => {
       } catch (error) {
         console.error('Error loading options:', error);
         setIsLoadingOptions(false);
-        if (props.allowAutoAdd !== false) {
-          onAddItem?.(selectedItem);
-          onClose();
-        }
+        // 🛡️ Do NOT auto-add and close — let the modal stay open for notes/quantity
+        setOptionGroups([]);
       }
     };
 
@@ -817,7 +954,8 @@ const ModifierModal = (props) => {
             inventory_item_id: val.inventory_item_id || null,
             replaces_inventory_item_id: val.inhibits_ingredient_id || val.replaces_inventory_item_id || null,
             inhibits_ingredient_id: val.inhibits_ingredient_id || null,
-            quantity: val.quantity || null
+            quantity: val.quantity || null,
+            multiplier: val.multiplier || null
           };
         }).filter(Boolean);
       }
@@ -837,7 +975,8 @@ const ModifierModal = (props) => {
         inventory_item_id: val.inventory_item_id || null,
         replaces_inventory_item_id: val.inhibits_ingredient_id || val.replaces_inventory_item_id || null,
         inhibits_ingredient_id: val.inhibits_ingredient_id || null,
-        quantity: val.quantity || null
+        quantity: val.quantity || null,
+        multiplier: val.multiplier || null
       }];
     });
 
@@ -879,22 +1018,53 @@ const ModifierModal = (props) => {
     setPhotoFile(null);
     setIsEnhancing(false);
     // Initialize edit groups from JSONB
-    const groups = (selectedItem?.modifiers || []).map(group => ({
-      ...group,
-      id: group.id || `group-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
-      type: group.type || 'replacement',
-      icon: group.icon || detectGroupIcon(group.name || ''),
-      items: (group.items || []).map(item => ({
+    const groups = (Array.isArray(selectedItem?.modifiers) ? selectedItem.modifiers : []).map(group => {
+      const parsedItems = (group.items || []).map(item => ({
         ...item,
         id: item.id || `item-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
-      }))
-    }));
+      }));
+      
+      // Smart type detection: if name contains תוספות/תוספת, force additive
+      const groupName = (group.name || '').toLowerCase();
+      const detectedType = group.type || (groupName.includes('תוספ') ? 'additive' : 'replacement');
+      
+      // Auto-fix: ensure every REPLACEMENT group has a default "רגיל" item
+      // Additive groups don't need a default — they're extras, not replacements
+      if (detectedType !== 'additive') {
+        const hasDefault = parsedItems.some(item => item.isDefault || item.is_default);
+        if (!hasDefault) {
+          parsedItems.unshift({
+            id: `item-default-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+            name: 'רגיל',
+            price: 0,
+            isDefault: true,
+            inventory_item_id: null,
+          });
+        }
+      }
+      
+      return {
+        ...group,
+        id: group.id || `group-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+        type: detectedType,
+        show_default: group.show_default !== undefined ? group.show_default : (group.name || '').includes('חלב'),
+        icon: group.icon || detectGroupIcon(group.name || ''),
+        items: parsedItems,
+      };
+    });
     setEditGroups(groups);
     setActiveGroupIdx(0);
     setShowGroupPicker(false);
     setIsAddingItemToGroup(false);
     setLinkingItemKey(null);
     setLinkSearch('');
+    setEditTab('modifiers');
+    setEditKdsStation({
+      kitchen: (selectedItem?.kds_station || '').includes('kitchen') || (selectedItem?.kds_station || '').includes('both'),
+      bar: (selectedItem?.kds_station || '').includes('bar') || (selectedItem?.kds_station || '').includes('both'),
+    });
+    setEditKdsRouting(selectedItem?.kds_routing_logic || 'MADE_TO_ORDER');
+    setEditIsInStock(selectedItem?.is_in_stock !== false);
     // Initialize stock from linked inventory_items via recipe_ingredients
     setEditStock(null);
     setLinkedInventoryItemId(null);
@@ -1063,20 +1233,35 @@ const ModifierModal = (props) => {
   const createNewRecipe = useCallback(async () => {
     const menuId = selectedItem?.id || selectedItem?.menu_item_id;
     const bId = businessId || selectedItem?.business_id;
-    if (!menuId || !bId) return null;
+    if (!menuId || !bId) {
+      console.error('❌ createNewRecipe: missing menuId or businessId', { menuId, bId });
+      return null;
+    }
     
     setRecipeSaveStatus('saving');
     try {
-      const { data, error } = await supabase.from('recipes')
-        .insert({ menu_item_id: menuId, business_id: bId, preparation_quantity: 1 })
+      console.log('📝 Creating new recipe for menu item:', menuId);
+      const { error: insertError } = await supabase.from('recipes')
+        .insert({ menu_item_id: menuId, business_id: bId, preparation_quantity: 1 });
+      if (insertError) throw insertError;
+      
+      // Fetch the created recipe ID
+      const { data: recipes, error: fetchError } = await supabase.from('recipes')
         .select('id')
-        .single();
-      if (error) throw error;
-      setRecipeId(data.id);
+        .eq('menu_item_id', menuId)
+        .order('id', { ascending: false })
+        .limit(1);
+      if (fetchError) throw fetchError;
+      
+      const newId = recipes?.[0]?.id;
+      if (!newId) throw new Error('Recipe created but ID not found');
+      
+      console.log('✅ Recipe created with id:', newId);
+      setRecipeId(newId);
       setRecipeIngredients([]);
       setRecipeSaveStatus('saved');
       setTimeout(() => setRecipeSaveStatus('idle'), 1500);
-      return data.id;
+      return newId;
     } catch (e) {
       console.error('❌ createNewRecipe error:', e);
       setRecipeSaveStatus('error');
@@ -1089,46 +1274,45 @@ const ModifierModal = (props) => {
     let activeRecipeId = recipeId;
     if (!activeRecipeId) {
       activeRecipeId = await createNewRecipe();
-      if (!activeRecipeId) return;
+      if (!activeRecipeId) {
+        console.error('❌ addRecipeIngredient: could not create recipe');
+        return;
+      }
     }
     
     setRecipeSaveStatus('saving');
     try {
       const unit = inventoryItem.display_unit || inventoryItem.base_unit || 'kg';
       const step = Number(inventoryItem.recipe_step) || Number(inventoryItem.quantity_step) || 1;
-      const qty = quantity != null ? Number(quantity) : step; // Default to recipe_step, not 1
+      const qty = quantity != null ? Number(quantity) : step;
       
-      const { data, error } = await supabase.from('recipe_ingredients')
+      console.log('📝 Adding recipe ingredient:', inventoryItem.name, 'qty:', qty, 'recipeId:', activeRecipeId);
+      
+      const { error } = await supabase.from('recipe_ingredients')
         .insert({
           recipe_id: activeRecipeId,
           inventory_item_id: inventoryItem.id,
           quantity_used: qty,
           unit_of_measure: unit,
-        })
-        .select('id')
-        .single();
+        });
       if (error) throw error;
       
-      const newIngredient = {
-        id: data.id,
-        inventory_item_id: inventoryItem.id,
-        name: inventoryItem.name,
-        quantity: qty,
-        unit,
-        price: inventoryItem.price || 0,
-        subtotal: qty * (inventoryItem.price || 0),
-      };
-      setRecipeIngredients(prev => [...prev, newIngredient]);
-      setRecipeSaveStatus('saved');
+      console.log('✅ Recipe ingredient added:', inventoryItem.name);
+      
+      // Clear search immediately for responsiveness
       setIngredientSearch('');
       setShowIngredientDropdown(false);
+      setRecipeSaveStatus('saved');
       setTimeout(() => setRecipeSaveStatus('idle'), 1500);
+      
+      // Re-fetch full recipe data from DB to ensure UI is in sync
+      await fetchRecipeData();
     } catch (e) {
       console.error('❌ addRecipeIngredient error:', e);
       setRecipeSaveStatus('error');
       setTimeout(() => setRecipeSaveStatus('idle'), 2000);
     }
-  }, [recipeId, createNewRecipe]);
+  }, [recipeId, createNewRecipe, fetchRecipeData]);
 
   const removeRecipeIngredient = useCallback(async (ingredientId) => {
     setRecipeSaveStatus('saving');
@@ -1168,9 +1352,10 @@ const ModifierModal = (props) => {
     }
   }, []);
 
-  // Load recipe data when recipe panel opens
+  // Load recipe data when recipe panel opens (flip OR tab)
+  const isRecipeVisible = showRecipe || (isEditMode && editTab === 'recipe');
   useEffect(() => {
-    if (showRecipe && selectedItem) {
+    if (isRecipeVisible && selectedItem) {
       // Pass fetched inventory directly to avoid stale closure race condition
       fetchInventoryForRecipe().then((freshInventory) => {
         if (freshInventory && freshInventory.length > 0) {
@@ -1178,18 +1363,18 @@ const ModifierModal = (props) => {
         }
       });
     }
-  }, [showRecipe, selectedItem?.id]);
+  }, [isRecipeVisible, selectedItem?.id]);
   
   // Re-fetch recipe data when inventoryOptions state updates (handles delayed state batching)
   useEffect(() => {
-    if (showRecipe && inventoryOptions.length > 0) {
+    if (isRecipeVisible && inventoryOptions.length > 0) {
       // Re-fetch if we have no ingredients yet, or if existing ingredients have placeholder names
       const hasPlaceholders = recipeIngredients.some(i => i.name === 'רכיב לא ידוע');
       if (recipeIngredients.length === 0 || hasPlaceholders) {
         fetchRecipeData();
       }
     }
-  }, [inventoryOptions, showRecipe]);
+  }, [inventoryOptions, isRecipeVisible]);
 
   const exitEditMode = useCallback(() => {
     setIsEditMode(false);
@@ -1242,15 +1427,17 @@ const ModifierModal = (props) => {
               name: item.name,
               price: Number(item.price) || 0,
               isDefault: isDefault,
+              multiplier: Number(item.multiplier) || (isDefault ? 1.0 : 1.5),
               inventory_item_id: item.inventory_item_id || null,
               replaces_inventory_item_id: replacesId,
               inhibits_ingredient_id: item.inhibits_ingredient_id || replacesId || null,
             };
           }),
           logic: group.logic || 'A',
+          show_default: group.show_default !== false,
           requirement: group.type === 'additive' ? 'O' : (group.requirement || 'M'),
-          maxSelection: group.type === 'additive' ? (group.items || []).length : (group.maxSelection || 1),
-          minSelection: group.type === 'additive' ? 0 : (group.minSelection || 1),
+          maxSelection: group.type === 'additive' ? (group.items || []).length : 1,
+          minSelection: group.type === 'additive' ? 0 : (group.requirement === 'O' ? 0 : (group.minSelection || 1)),
         };
       });
 
@@ -1258,7 +1445,11 @@ const ModifierModal = (props) => {
       const menuUpdate = {
         name: editData.name,
         price: Number(editData.price),
-        modifiers: updatedModifiers
+        modifiers: updatedModifiers,
+        kds_station: editKdsStation.kitchen && editKdsStation.bar ? 'both' : editKdsStation.kitchen ? 'kitchen' : editKdsStation.bar ? 'bar' : 'none',
+        kds_routing_logic: editKdsRouting,
+        is_in_stock: editIsInStock,
+        display_kds: ['Checker', ...(editKdsStation.kitchen ? ['Kitchen'] : []), ...(editKdsStation.bar ? ['Bar'] : [])],
       };
       // Handle photo upload — save whatever we have NOW (original or enhanced)
       if (capturedPhoto && photoFile) {
@@ -1343,7 +1534,10 @@ const ModifierModal = (props) => {
           price: Number(editData.price),
           image_url: editData.image_url || selectedItem.image_url,
           modifiers: updatedModifiers,
-          current_stock: editStock !== null ? editStock : selectedItem.current_stock
+          current_stock: editStock !== null ? editStock : selectedItem.current_stock,
+          is_in_stock: editIsInStock,
+          kds_station: menuUpdate.kds_station,
+          kds_routing_logic: editKdsRouting,
         });
       }
 
@@ -1388,7 +1582,7 @@ const ModifierModal = (props) => {
     } finally {
       setIsSaving(false);
     }
-  }, [editData, editGroups, editStock, linkedInventoryItemId, selectedItem, onItemUpdated, props.onCacheUpdate, exitEditMode, photoFile, capturedPhoto, businessId, onClose]);
+  }, [editData, editGroups, editStock, linkedInventoryItemId, editKdsStation, editKdsRouting, editIsInStock, selectedItem, onItemUpdated, props.onCacheUpdate, exitEditMode, photoFile, capturedPhoto, businessId, onClose]);
 
   if (!isOpen || !selectedItem) return null;
 
@@ -1403,31 +1597,20 @@ const ModifierModal = (props) => {
         {/* Backdrop */}
         {/* The backdrop is now part of the main container div */}
 
-        {/* 3D Flip Container */}
         <div
           style={{ perspective: '1200px' }}
           className="relative w-auto max-w-[90vw] min-w-[420px]"
           onClick={e => e.stopPropagation()}
         >
           <div
-            style={{
-              transformStyle: 'preserve-3d',
-              WebkitTransformStyle: 'preserve-3d',
-              transform: (showTraining || showRecipe) ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              transition: 'transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)',
-            }}
             className="relative"
           >
           {/* ═══ FRONT FACE — Normal Modal ═══ */}
           <div
             style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              position: (showTraining || showRecipe) ? 'absolute' : 'relative',
-              top: 0, left: 0, right: 0,
-              pointerEvents: (showTraining || showRecipe) ? 'none' : 'auto',
+              display: (showTraining || showRecipe) ? 'none' : 'flex',
             }}
-            className="flex flex-col bg-[#FAFAFA] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="flex-col bg-[#FAFAFA] rounded-[2rem] shadow-2xl overflow-hidden"
           >
           {/* Header */}
           <div className={`bg-white/80 backdrop-blur-xl px-6 py-4 flex items-center sticky top-0 z-20 border-b ${isEditMode ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-100/50'}`}>
@@ -1625,10 +1808,30 @@ const ModifierModal = (props) => {
           {isEditMode && editData && (
             <div className="px-5 py-3 bg-indigo-50/60 border-b border-indigo-100 space-y-3">
 
-              {/* Edit mode indicator */}
-              <div className="flex items-center gap-2 text-xs text-indigo-600 font-bold">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                מצב עריכה — שינויים יישמרו בלחיצה על ״שמור״
+              {/* Edit Mode Tab Bar */}
+              <div className="flex items-center gap-1 -mx-1">
+                {[
+                  { key: 'modifiers', label: 'מודיפיירים' },
+                  { key: 'recipe', label: 'מתכון' },
+                  { key: 'training', label: 'למד מוצר' },
+                  { key: 'advanced', label: 'מתקדם' },
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => {
+                      setEditTab(tab.key);
+                      if (tab.key === 'recipe') { setShowRecipe(false); setShowTraining(false); }
+                      if (tab.key === 'training') { setShowRecipe(false); setShowTraining(false); }
+                    }}
+                    className={`flex-1 flex items-center justify-center py-2 rounded-lg text-[13px] font-bold transition-all ${
+                      editTab === tab.key
+                        ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200'
+                        : 'bg-white/80 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200/60'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
               </div>
 
               {/* Studio enhancement progress */}
@@ -1755,8 +1958,12 @@ const ModifierModal = (props) => {
                   <div className="flex gap-2">
                     {(() => {
                       const seen = new Set();
+                      const hideDefault = heroGroup.show_default === false;
                       let values = heroGroup.values?.filter(value => {
                         const name = (value.name || '').toLowerCase();
+
+                        // If show_default is false, hide default/רגיל values
+                        if (hideDefault && (value.is_default || name.includes('רגיל') || name.includes('default'))) return false;
 
                         // Always filter out juices and chocolate drinks/mixes if it's milk
                         // BUT if it's Coffee Type (short/long), allow them.
@@ -1828,12 +2035,14 @@ const ModifierModal = (props) => {
                                : String(currentSelection) === String(value.id);
                              const IconComponent = getIconForValue(value.name, heroType === 'milk' ? 'milk' : 'general');
                              const effectivePrice = value.priceAdjustment || 0;
+                             const autoEmoji = detectGroupIcon(value.name);
 
                              return (
                                <MilkCard
                                  key={value.id}
                                  label={displayName}
                                  Icon={IconComponent}
+                                 emoji={autoEmoji !== '📋' ? autoEmoji : undefined}
                                  price={effectivePrice}
                                  isSelected={isSelected}
                                  onClick={() => toggleOption(heroGroup?.id, String(value.id))}
@@ -1857,10 +2066,11 @@ const ModifierModal = (props) => {
 
             {/* Modifier Groups — Edit Mode */}
             {isEditMode && editData && (() => {
+              if (editTab !== 'modifiers') return null;
               const activeGroup = editGroups[activeGroupIdx];
               
               return (
-                <div className="mb-4" dir="rtl">
+                <div className="mb-4 min-h-[350px]" dir="rtl">
                   {/* Group Tabs */}
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-3">
                     {editGroups.map((group, idx) => (
@@ -1920,6 +2130,8 @@ const ModifierModal = (props) => {
                                   name: tpl.name,
                                   icon: tpl.icon,
                                   type: tpl.type,
+                                  show_default: (tpl.name || '').includes('חלב'),
+                                  requirement: tpl.requirement || 'M',
                                   items: tpl.type === 'additive' ? [] : [{
                                     id: `item-default-${Date.now()}`,
                                     name: 'רגיל',
@@ -1956,9 +2168,6 @@ const ModifierModal = (props) => {
                         <div className="flex items-center gap-1.5">
                           <span className="text-lg">{activeGroup.icon || '📋'}</span>
                           <span className="text-sm font-bold text-slate-700">{activeGroup.name}</span>
-                          {activeGroup.type === 'additive' && (
-                            <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-600 rounded-md text-[9px] font-bold">תוספת</span>
-                          )}
                         </div>
                         <button
                           onClick={() => {
@@ -1971,6 +2180,93 @@ const ModifierModal = (props) => {
                         >
                           <Trash2 size={14} />
                         </button>
+                      </div>
+
+                      {/* Group Settings Row */}
+                      <div className="flex items-center gap-3 mb-3 px-1">
+                        {/* Show default checkbox — only relevant for replacement groups */}
+                        {(activeGroup.type || 'replacement') !== 'additive' && (
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={activeGroup.show_default !== false}
+                              onChange={e => {
+                                setEditGroups(prev => prev.map((g, gi) => gi !== activeGroupIdx ? g : {
+                                  ...g,
+                                  show_default: e.target.checked,
+                                }));
+                              }}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 accent-indigo-500"
+                            />
+                            <span className="text-[11px] font-medium text-slate-500">הצג ברירת מחדל בהזמנה</span>
+                          </label>
+                        )}
+
+                        {/* Replacement / Additive toggle */}
+                        <div className="flex bg-slate-100 rounded-lg p-0.5 mr-auto">
+                          <button
+                            onClick={() => setEditGroups(prev => prev.map((g, gi) => {
+                              if (gi !== activeGroupIdx) return g;
+                              // Switching to replacement: add רגיל if missing
+                              const hasDefault = (g.items || []).some(it => it.isDefault || it.is_default);
+                              const items = hasDefault ? g.items : [{
+                                id: `item-default-${Date.now()}`,
+                                name: 'רגיל',
+                                price: 0,
+                                isDefault: true,
+                                inventory_item_id: null,
+                              }, ...(g.items || [])];
+                              return { ...g, type: 'replacement', items };
+                            }))}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                              (activeGroup.type || 'replacement') === 'replacement'
+                                ? 'bg-indigo-500 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-slate-600'
+                            }`}
+                          >
+                            🔄 החלפה
+                          </button>
+                          <button
+                            onClick={() => setEditGroups(prev => prev.map((g, gi) => {
+                              if (gi !== activeGroupIdx) return g;
+                              // Switching to additive: remove רגיל default item
+                              const items = (g.items || []).filter(it => !(it.isDefault || it.is_default));
+                              return { ...g, type: 'additive', items };
+                            }))}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                              activeGroup.type === 'additive'
+                                ? 'bg-emerald-500 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-slate-600'
+                            }`}
+                          >
+                            ➕ תוספת
+                          </button>
+                          <button
+                            onClick={() => setEditGroups(prev => prev.map((g, gi) => {
+                              if (gi !== activeGroupIdx) return g;
+                              // Switching to size: ensure at least one default item
+                              let items = [...(g.items || [])];
+                              if (!items.some(it => it.isDefault || it.is_default)) {
+                                items = [{
+                                  id: `item-default-${Date.now()}`,
+                                  name: 'רגיל',
+                                  price: 0,
+                                  isDefault: true,
+                                  multiplier: 1.0,
+                                  inventory_item_id: null,
+                                }, ...items];
+                              }
+                              return { ...g, type: 'size', items };
+                            }))}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                              activeGroup.type === 'size'
+                                ? 'bg-amber-500 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-slate-600'
+                            }`}
+                          >
+                            📏 גודל
+                          </button>
+                        </div>
                       </div>
 
                       {/* Item Tiles */}
@@ -1992,8 +2288,8 @@ const ModifierModal = (props) => {
                                   : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200'
                               }`}
                             >
-                              {/* Delete button */}
-                              {(!isDefault || (activeGroup.items || []).length > 1) && (
+                              {/* Delete button — hidden for default item */}
+                              {!isDefault && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -2007,30 +2303,34 @@ const ModifierModal = (props) => {
                                   <Trash2 size={12} strokeWidth={3} />
                                 </button>
                               )}
-                              {/* Default badge / Set as default */}
+                              {/* Default badge / Set as default — can only transfer, not remove */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (isDefault) return; // Can't remove default, only transfer to another item
                                   setEditGroups(prev => prev.map((g, gi) => gi !== activeGroupIdx ? g : {
                                     ...g,
                                     items: g.items.map((it, ii) => ({
                                       ...it,
-                                      isDefault: ii === itemIdx ? !isDefault : false,
+                                      isDefault: ii === itemIdx,
                                       is_default: undefined
                                     }))
                                   }));
                                 }}
                                 className={`absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-md transition-all z-10 ${
                                   isDefault 
-                                    ? 'bg-amber-400 border border-amber-500 text-white' 
+                                    ? 'bg-amber-400 border border-amber-500 text-white cursor-default' 
                                     : 'bg-slate-100 hover:bg-amber-100 text-slate-400 border border-slate-200'
                                 }`}
-                                title={isDefault ? 'הסר ברירת מחדל' : 'הגדר כברירת מחדל'}
+                                title={isDefault ? 'ברירת מחדל' : 'הגדר כברירת מחדל'}
                               >
                                 <span className="text-[10px]">{isDefault ? '⭐' : '☆'}</span>
                               </button>
-                              {/* Name */}
-                              <span className="text-sm font-black text-slate-700 text-center leading-tight">{item.name}</span>
+                              {/* Name with auto-icon */}
+                              <div className="flex items-center gap-1 justify-center">
+                                <span className="text-base">{detectGroupIcon(item.name)}</span>
+                                <span className="text-sm font-black text-slate-700 text-center leading-tight">{item.name}</span>
+                              </div>
                               {/* Price edit (inline stepper) */}
                               {!isDefault && (
                                 <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-sm mt-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
@@ -2061,6 +2361,44 @@ const ModifierModal = (props) => {
                                       setEditGroups(prev => prev.map((g, gi) => gi !== activeGroupIdx ? g : {
                                         ...g,
                                         items: g.items.map((it, ii) => ii !== itemIdx ? it : { ...it, price: newVal })
+                                      }));
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 active:scale-90 transition-all"
+                                  >
+                                    <Plus size={11} strokeWidth={3} />
+                                  </button>
+                                </div>
+                              )}
+                              {/* Multiplier edit stepper for size groups */}
+                              {activeGroup.type === 'size' && (
+                                <div className="flex items-center bg-white p-0.5 rounded-xl border border-amber-200 shadow-sm mt-1.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const currentMult = Number(item.multiplier) || (isDefault ? 1.0 : 1.5);
+                                      const newVal = Math.max(0.1, Number((currentMult - 0.1).toFixed(1)));
+                                      setEditGroups(prev => prev.map((g, gi) => gi !== activeGroupIdx ? g : {
+                                        ...g,
+                                        items: g.items.map((it, ii) => ii !== itemIdx ? it : { ...it, multiplier: newVal })
+                                      }));
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 active:scale-90 transition-all"
+                                  >
+                                    <Minus size={11} strokeWidth={3} />
+                                  </button>
+
+                                  <div className="w-12 text-center text-xs font-black text-amber-700 tabular-nums">
+                                    {Number(item.multiplier) || (isDefault ? 1.0 : 1.5)}x
+                                  </div>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const currentMult = Number(item.multiplier) || (isDefault ? 1.0 : 1.5);
+                                      const newVal = Number((currentMult + 0.1).toFixed(1));
+                                      setEditGroups(prev => prev.map((g, gi) => gi !== activeGroupIdx ? g : {
+                                        ...g,
+                                        items: g.items.map((it, ii) => ii !== itemIdx ? it : { ...it, multiplier: newVal })
                                       }));
                                     }}
                                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 active:scale-90 transition-all"
@@ -2103,6 +2441,7 @@ const ModifierModal = (props) => {
                                     name: newItemName.trim(),
                                     price: newItemPrice,
                                     isDefault: false,
+                                    multiplier: activeGroup.type === 'size' ? 1.5 : undefined,
                                     inventory_item_id: null,
                                   };
                                   setEditGroups(prev => prev.map((g, gi) => gi !== activeGroupIdx ? g : {
@@ -2119,15 +2458,22 @@ const ModifierModal = (props) => {
                                 }
                               }}
                             />
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-slate-400">₪</span>
-                              <input
-                                type="number"
-                                value={newItemPrice}
-                                onChange={e => setNewItemPrice(Number(e.target.value) || 0)}
-                                className="w-12 bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-center"
-                                min="0"
-                              />
+                            <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-sm" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => setNewItemPrice(prev => Math.max(0, prev - 1))}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 active:scale-90 transition-all"
+                              >
+                                <Minus size={11} strokeWidth={3} />
+                              </button>
+                              <div className="w-8 text-center text-xs font-black text-slate-800 tabular-nums">
+                                {newItemPrice}
+                              </div>
+                              <button
+                                onClick={() => setNewItemPrice(prev => prev + 1)}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 active:scale-90 transition-all"
+                              >
+                                <Plus size={11} strokeWidth={3} />
+                              </button>
                             </div>
                             <div className="flex gap-1">
                               <button
@@ -2273,7 +2619,8 @@ const ModifierModal = (props) => {
                       <p className="text-xs text-slate-400 text-center mb-1">קצף</p>
                       {foamGroup.values?.filter(v => {
                         const name = (v.name || '').toLowerCase();
-                        return !name.includes('רגיל') && !name.includes('default');
+                        if (foamGroup.show_default === false && (v.is_default || name.includes('רגיל') || name.includes('default'))) return false;
+                        return true;
                       }).map(value => {
                         const isMulti = foamGroup?.is_multiple_select || foamGroup?.type === 'multi';
                         const currentSelection = optionSelections[foamGroup?.id];
@@ -2288,6 +2635,7 @@ const ModifierModal = (props) => {
                             key={value.id}
                             label={value.name}
                             Icon={IconComponent}
+                            emoji={detectGroupIcon(value.name) !== '📋' ? detectGroupIcon(value.name) : undefined}
                             isSelected={isSelected}
                             onClick={() => toggleOption(foamGroup.id, String(value.id))}
                             price={effectivePrice}
@@ -2303,7 +2651,8 @@ const ModifierModal = (props) => {
                       <p className="text-xs text-slate-400 text-center mb-1">טמפרטורה</p>
                       {tempGroup.values?.filter(v => {
                         const name = (v.name || '').toLowerCase();
-                        return !name.includes('רגיל') && !name.includes('default');
+                        if (tempGroup.show_default === false && (v.is_default || name.includes('רגיל') || name.includes('default'))) return false;
+                        return true;
                       }).map(value => {
                         const isMulti = tempGroup?.is_multiple_select || tempGroup?.type === 'multi';
                         const currentSelection = optionSelections[tempGroup?.id];
@@ -2318,6 +2667,7 @@ const ModifierModal = (props) => {
                             key={value.id}
                             label={value.name}
                             Icon={IconComponent}
+                            emoji={detectGroupIcon(value.name) !== '📋' ? detectGroupIcon(value.name) : undefined}
                             isSelected={isSelected}
                             onClick={() => toggleOption(tempGroup.id, String(value.id))}
                             price={effectivePrice}
@@ -2333,7 +2683,8 @@ const ModifierModal = (props) => {
                       <p className="text-xs text-slate-400 text-center mb-1">בסיס</p>
                       {baseGroup.values?.filter(v => {
                         const name = (v.name || '').toLowerCase();
-                        return !name.includes('רגיל') && !name.includes('default');
+                        if (baseGroup.show_default === false && (v.is_default || name.includes('רגיל') || name.includes('default'))) return false;
+                        return true;
                       }).map(value => {
                         const isMulti = baseGroup?.is_multiple_select || baseGroup?.type === 'multi';
                         const currentSelection = optionSelections[baseGroup?.id];
@@ -2348,6 +2699,7 @@ const ModifierModal = (props) => {
                             key={value.id}
                             label={value.name}
                             Icon={IconComponent}
+                            emoji={detectGroupIcon(value.name) !== '📋' ? detectGroupIcon(value.name) : undefined}
                             isSelected={isSelected}
                             onClick={() => toggleOption(baseGroup.id, String(value.id))}
                             price={effectivePrice}
@@ -2363,7 +2715,8 @@ const ModifierModal = (props) => {
                       <p className="text-xs text-slate-400 text-center mb-1">חוזק</p>
                       {strengthGroup.values?.filter(v => {
                         const name = (v.name || '').toLowerCase();
-                        return !name.includes('רגיל') && !name.includes('default');
+                        if (strengthGroup.show_default === false && (v.is_default || name.includes('רגיל') || name.includes('default'))) return false;
+                        return true;
                       }).map(value => {
                         const isMulti = strengthGroup?.is_multiple_select || strengthGroup?.type === 'multi';
                         const currentSelection = optionSelections[strengthGroup?.id];
@@ -2378,6 +2731,7 @@ const ModifierModal = (props) => {
                             key={value.id}
                             label={value.name}
                             Icon={IconComponent}
+                            emoji={detectGroupIcon(value.name) !== '📋' ? detectGroupIcon(value.name) : undefined}
                             isSelected={isSelected}
                             onClick={() => toggleOption(strengthGroup.id, String(value.id))}
                             price={effectivePrice}
@@ -2405,9 +2759,12 @@ const ModifierModal = (props) => {
                 })
                 .map((group) => {
                   const isMultipleSelect = group.is_multiple_select || group.type === 'multi';
+                  const hideDefault = group.show_default === false;
                   const visibleOptions = (group.values || []).filter(v => {
                     if (!v.name) return false;
                     const lower = (v.name || '').toLowerCase();
+                    // Hide default/רגיל if show_default is false
+                    if (hideDefault && (v.is_default || lower.includes('רגיל') || lower === 'default')) return false;
                     // Keep 'מפורק' and 'נטול' filtering as they are handled in the special row
                     if (lower.includes('מפורק')) return false;
                     if (lower.includes('נטול')) return false;
@@ -2487,10 +2844,10 @@ const ModifierModal = (props) => {
                               `}
                             >
                               {(() => {
-                                const groupLower = (group.title || group.name || '').toLowerCase();
-                                const valueName = (value.name || value.value_name || '').toLowerCase();
-
-                                // Use emojis for toppings, icons for everything else
+                                const autoEmoji = detectGroupIcon(value.name || value.value_name || '');
+                                if (autoEmoji !== '📋') {
+                                  return <span className={`text-2xl transition-transform duration-200 ${isSelected ? "scale-110" : ""}`}>{autoEmoji}</span>;
+                                }
                                 const IconComponent = getIconForValue(value.name || value.value_name, group.title || group.name);
                                 return <IconComponent size={24} strokeWidth={isSelected ? 2.5 : 2} className={`transition-transform duration-200 ${isSelected ? "scale-110" : ""}`} />;
                               })()}
@@ -2607,12 +2964,62 @@ const ModifierModal = (props) => {
               })()}
             </section>}
 
-            {/* ─── Product Training & Recipe — Flip Triggers (side by side) ─── */}
-            <section className="mt-2">
-              <div className={`flex gap-2 ${isEditMode ? '' : 'flex-col'}`}>
+            {/* ─── Inline Tab Panels (Edit Mode) ─── */}
+            {isEditMode && editTab === 'recipe' && (
+              <EditRecipePanel
+                isActive={true}
+                selectedItem={selectedItem}
+                isEditMode={isEditMode}
+                recipeIngredients={recipeIngredients}
+                inventoryOptions={inventoryOptions}
+                ingredientSearch={ingredientSearch}
+                setIngredientSearch={setIngredientSearch}
+                showIngredientDropdown={showIngredientDropdown}
+                setShowIngredientDropdown={setShowIngredientDropdown}
+                recipeLoading={recipeLoading}
+                editGroups={editGroups}
+                addRecipeIngredient={addRecipeIngredient}
+                updateIngredientQuantity={updateIngredientQuantity}
+                removeRecipeIngredient={removeRecipeIngredient}
+                recipeSaveStatus={recipeSaveStatus}
+                recipeCostVariant={recipeCostVariant}
+                setRecipeCostVariant={setRecipeCostVariant}
+              />
+            )}
+            {isEditMode && editTab === 'training' && (
+              <EditTrainingPanel
+                isActive={true}
+                selectedItem={selectedItem}
+                businessId={businessId}
+                vectorCount={vectorCount}
+                maxVectors={maxVectors}
+                trainingStatus={trainingStatus}
+                errorDetail={errorDetail}
+                trainProduct={trainProduct}
+                resetVectors={resetVectors}
+              />
+            )}
+            {isEditMode && editTab === 'advanced' && (
+              <EditAdvancedPanel
+                isActive={true}
+                selectedItem={selectedItem}
+                editKdsStation={editKdsStation}
+                setEditKdsStation={setEditKdsStation}
+                editKdsRouting={editKdsRouting}
+                setEditKdsRouting={setEditKdsRouting}
+                editIsInStock={editIsInStock}
+                setEditIsInStock={setEditIsInStock}
+                onItemUpdated={onItemUpdated}
+                onClose={onClose}
+              />
+            )}
+
+            {/* Non-edit-mode: Training button (legacy) */}
+            {!isEditMode && (
+              <section className="mt-2">
                 <button
                   onClick={() => { setShowRecipe(false); setShowTraining(true); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200/60 text-sky-700 font-bold text-sm hover:from-sky-100 hover:to-indigo-100 active:scale-[0.98] transition-all duration-200`}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200/60 text-sky-700 font-bold text-sm hover:from-sky-100 hover:to-indigo-100 active:scale-[0.98] transition-all duration-200"
                 >
                   <Camera size={18} strokeWidth={2.5} />
                   <span>📷 למד מוצר</span>
@@ -2622,22 +3029,8 @@ const ModifierModal = (props) => {
                     </span>
                   )}
                 </button>
-                {isEditMode && (
-                  <button
-                    onClick={() => { setShowTraining(false); setShowRecipe(true); }}
-                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 text-amber-700 font-bold text-sm hover:from-amber-100 hover:to-orange-100 active:scale-[0.98] transition-all duration-200"
-                  >
-                    <BookOpen size={18} strokeWidth={2.5} />
-                    <span>📋 ניהול מתכון</span>
-                    {recipeIngredients.length > 0 && (
-                      <span className="text-[10px] bg-amber-200/60 text-amber-700 px-2 py-0.5 rounded-full font-black">
-                        {recipeIngredients.length} רכיבים
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
-            </section>
+              </section>
+            )}
 
           </div>
           <div className={`p-3 border-t shadow-[0_-10px_30px_rgba(0,0,0,0.03)] ${isEditMode ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-100'}`}>
@@ -2680,16 +3073,24 @@ const ModifierModal = (props) => {
                 </button>
                 <button
                   onClick={handleAdd}
-                  disabled={isConditional && !clerkChoice}
+                  disabled={(isConditional && !clerkChoice) || selectedItem?.is_in_stock === false || selectedItem?.available === false}
                   className={`flex-1 h-12 rounded-2xl flex items-center justify-between px-6 text-base font-bold shadow-xl transition-all active:scale-98 ${
-                    isConditional && !clerkChoice 
+                    ((isConditional && !clerkChoice) || selectedItem?.is_in_stock === false || selectedItem?.available === false)
                     ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" 
                     : "bg-slate-900 hover:bg-black text-white shadow-slate-300/50"
                   }`}
                 >
-                  <span>{isConditional && !clerkChoice ? "בחר מצב הכנה" : aiDetection ? "אשר וקנה ✓" : "הוסף להזמנה"}</span>
+                  <span>
+                    {selectedItem?.is_in_stock === false || selectedItem?.available === false
+                      ? "מחוץ למלאי"
+                      : isConditional && !clerkChoice 
+                        ? "בחר מצב הכנה" 
+                        : aiDetection 
+                          ? "אשר וקנה ✓" 
+                          : "הוסף להזמנה"}
+                  </span>
                   <div className={`flex items-center gap-2 px-3 py-1 rounded-xl ${
-                     isConditional && !clerkChoice ? "bg-slate-100" : "bg-white/15"
+                     ((isConditional && !clerkChoice) || selectedItem?.is_in_stock === false || selectedItem?.available === false) ? "bg-slate-100" : "bg-white/15"
                   }`}>
                     <span>₪{totalPrice}</span>
                     <Check size={16} />
@@ -2704,17 +3105,9 @@ const ModifierModal = (props) => {
           <div
             dir="rtl"
             style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-              position: showTraining ? 'relative' : 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              pointerEvents: showTraining ? 'auto' : 'none',
-              visibility: showRecipe ? 'hidden' : 'visible',
+              display: showTraining ? 'flex' : 'none',
             }}
-            className="flex flex-col bg-[#FAFAFA] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="flex-col bg-[#FAFAFA] rounded-[2rem] shadow-2xl overflow-hidden"
           >
             {/* Back Header */}
             <div className="flex items-center justify-between px-5 py-4 bg-white/80 backdrop-blur-xl border-b border-slate-100/50">
@@ -2869,17 +3262,9 @@ const ModifierModal = (props) => {
           <div
             dir="rtl"
             style={{
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-              position: showRecipe ? 'relative' : 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              pointerEvents: showRecipe ? 'auto' : 'none',
-              visibility: showTraining ? 'hidden' : 'visible',
+              display: showRecipe ? 'flex' : 'none',
             }}
-            className="flex flex-col bg-[#FFFBF5] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="flex-col bg-[#FFFBF5] rounded-[2rem] shadow-2xl overflow-hidden"
           >
             {/* Recipe Header */}
             <div className="flex items-center justify-between px-5 py-4 bg-white/80 backdrop-blur-xl border-b border-amber-100/50">
@@ -2963,7 +3348,7 @@ const ModifierModal = (props) => {
 
               {/* Empty State — only show if no recipe ingredients AND no modifier groups with linked items */}
               {!recipeLoading && recipeIngredients.length === 0 && (() => {
-                const groups = isEditMode ? editGroups : (selectedItem?.modifiers || []);
+                const groups = isEditMode ? editGroups : (Array.isArray(selectedItem?.modifiers) ? selectedItem.modifiers : []);
                 const hasLinkedModifiers = groups.some(g => (g.items || []).some(item => item.inventory_item_id));
                 if (hasLinkedModifiers) return null;
                 return (
@@ -2980,7 +3365,7 @@ const ModifierModal = (props) => {
               {/* Modifier Groups — each replacement group shown separately */}
               {(() => {
                 // Use editGroups if in edit mode, otherwise use selectedItem.modifiers
-                const groups = isEditMode ? editGroups : (selectedItem?.modifiers || []);
+                const groups = isEditMode ? editGroups : (Array.isArray(selectedItem?.modifiers) ? selectedItem.modifiers : []);
                 const replacementGroups = groups.filter(g => (g.type || 'replacement') === 'replacement' && (g.items || []).length > 0);
                 const additiveGroups = groups.filter(g => g.type === 'additive' && (g.items || []).length > 0);
                 
@@ -3076,10 +3461,20 @@ const ModifierModal = (props) => {
                               </div>
                               <div className="flex items-center gap-1.5 bg-amber-50 rounded-lg px-1.5 py-1">
                                 <button
-                                  onClick={() => {
-                                    if (!defaultRecipeIng) return;
-                                    const newQty = Math.max(activeStep, activeQty - activeStep);
-                                    updateIngredientQuantity(defaultRecipeIng.id, newQty);
+                                  onClick={async () => {
+                                    if (defaultRecipeIng) {
+                                      const newQty = Math.max(activeStep, activeQty - activeStep);
+                                      updateIngredientQuantity(defaultRecipeIng.id, newQty);
+                                    } else if (finalActiveItem) {
+                                      // Auto-create recipe ingredient for this modifier default
+                                      await addRecipeIngredient({
+                                        id: finalActiveItem.inventory_item_id,
+                                        name: finalActiveItem.name,
+                                        display_unit: finalActiveItem.unit,
+                                        recipe_step: finalActiveItem.recipe_step,
+                                        price: finalActiveItem.price,
+                                      }, Math.max(activeStep, activeQty - activeStep));
+                                    }
                                   }}
                                   className="w-7 h-7 rounded-lg bg-white shadow-sm flex items-center justify-center text-amber-600 hover:bg-amber-100 active:scale-90 transition-all"
                                 >
@@ -3089,9 +3484,19 @@ const ModifierModal = (props) => {
                                   {activeQty % 1 === 0 ? activeQty : activeQty.toFixed(1)}
                                 </span>
                                 <button
-                                  onClick={() => {
-                                    if (!defaultRecipeIng) return;
-                                    updateIngredientQuantity(defaultRecipeIng.id, activeQty + activeStep);
+                                  onClick={async () => {
+                                    if (defaultRecipeIng) {
+                                      updateIngredientQuantity(defaultRecipeIng.id, activeQty + activeStep);
+                                    } else if (finalActiveItem) {
+                                      // Auto-create recipe ingredient for this modifier default
+                                      await addRecipeIngredient({
+                                        id: finalActiveItem.inventory_item_id,
+                                        name: finalActiveItem.name,
+                                        display_unit: finalActiveItem.unit,
+                                        recipe_step: finalActiveItem.recipe_step,
+                                        price: finalActiveItem.price,
+                                      }, activeQty + activeStep);
+                                    }
                                   }}
                                   className="w-7 h-7 rounded-lg bg-white shadow-sm flex items-center justify-center text-amber-600 hover:bg-amber-100 active:scale-90 transition-all"
                                 >
@@ -3140,22 +3545,22 @@ const ModifierModal = (props) => {
                 );
               })()}
 
-              {/* Ingredient List — filter out modifier-linked default items (shown in modifier section) */}
+              {/* Ingredient List — filter out ALL modifier-linked items from replacement groups */}
               {!recipeLoading && (() => {
-                // Collect modifier-linked inventory IDs for DEFAULT items (to avoid duplicate display)
-                const modifierDefaultInvIds = new Set();
-                const groups = isEditMode ? editGroups : (selectedItem?.modifiers || []);
+                // Collect ALL modifier-linked inventory IDs from replacement groups
+                const modifierLinkedInvIds = new Set();
+                const groups = isEditMode ? editGroups : (Array.isArray(selectedItem?.modifiers) ? selectedItem.modifiers : []);
                 groups.forEach(group => {
                   if ((group.type || 'replacement') === 'replacement') {
                     (group.items || []).forEach(item => {
-                      if (item.inventory_item_id && (item.isDefault || item.is_default)) {
-                        modifierDefaultInvIds.add(item.inventory_item_id);
+                      if (item.inventory_item_id) {
+                        modifierLinkedInvIds.add(item.inventory_item_id);
                       }
                     });
                   }
                 });
                 
-                const filteredIngredients = recipeIngredients.filter(ing => !modifierDefaultInvIds.has(ing.inventory_item_id));
+                const filteredIngredients = recipeIngredients.filter(ing => !modifierLinkedInvIds.has(ing.inventory_item_id));
                 if (filteredIngredients.length === 0) return null;
                 
                 return (
@@ -3227,7 +3632,7 @@ const ModifierModal = (props) => {
                 // Calculate modifier variant cost
                 let modifierCost = 0;
                 const allModItems = [];
-                (selectedItem?.modifiers || []).forEach(group => {
+                (Array.isArray(selectedItem?.modifiers) ? selectedItem.modifiers : []).forEach(group => {
                   (group.items || []).forEach(item => {
                     if (item.inventory_item_id) {
                       const invOpt = inventoryOptions.find(o => o.id === item.inventory_item_id);

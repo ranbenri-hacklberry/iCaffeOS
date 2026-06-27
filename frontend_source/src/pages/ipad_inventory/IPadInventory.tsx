@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package } from 'lucide-react';
+import { Package, Check, AlertTriangle } from 'lucide-react';
 
 const MotionDiv = motion.div as any;
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // Hooks
 import { useInventoryData } from '@/pages/ipad_inventory/hooks/useInventoryData';
@@ -38,6 +39,12 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     const [showReportModal, setShowReportModal] = useState(false);
     const [stockDeltas, setStockDeltas] = useState<Record<string, number>>({});
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     // Data Hooks
     const { items, suppliers, loading: dataLoading, refresh: refreshData } = useInventoryData(businessId);
@@ -49,6 +56,8 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
         initializeSession,
         initializeFromOrder,
         updateActualQty,
+        updateMatchedItem,
+        updateCaseQuantity,
         confirmReceipt,
         clearSession,
         isConfirming
@@ -95,19 +104,88 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const result = await scanInvoice(file);
+        const result = await scanInvoice(file, businessId);
         if (result) {
             initializeSession(result);
         }
     };
 
     const handleConfirmReceipt = async () => {
+        if (session) {
+            const unmatchedCount = session.items.filter(item => !item.inventoryItemId && item.actualQty > 0).length;
+            if (unmatchedCount > 0) {
+                const confirmSave = window.confirm(
+                    `שים לב: ישנם ${unmatchedCount} פריטים בחשבונית שלא שויכו למלאי. פריטים אלו לא יעודכנו במלאי.\n\nהאם להמשיך בשמירה?`
+                );
+                if (!confirmSave) return;
+            }
+        }
+
         const result = await confirmReceipt();
         if (result.success) {
             refreshData();
             refreshOrders();
+            showToast('קבלת הסחורה עודכנה בהצלחה במלאי!');
         } else {
-            alert('שגיאה בעדכון המלאי: ' + result.error);
+            showToast('שגיאה בעדכון המלאי: ' + result.error, 'error');
+        }
+    };
+
+    const handleCreateNewItem = async (itemId: string, name: string, unit: string) => {
+        if (!businessId) {
+            showToast('שגיאה: מזהה עסק חסר', 'error');
+            return;
+        }
+
+        // Prompt the user to edit the item name before creation
+        const editedName = window.prompt(
+            'הקמת מוצר חדש במלאי:\nאנא הזן את שם המוצר כפי שיופיע במלאי שלכם:',
+            name
+        );
+        if (editedName === null) return; // User cancelled
+        const finalName = editedName.trim();
+        if (!finalName) {
+            showToast('שם המוצר אינו יכול להיות ריק', 'error');
+            return;
+        }
+
+        const supplierId = session?.supplierId;
+        const parsedSupplierId = (supplierId && !isNaN(Number(supplierId))) ? Number(supplierId) : null;
+
+        try {
+            // Determine category from existing items of this supplier, default to 'ירקות'
+            const existingCategories = items
+                .filter(i => parsedSupplierId && String(i.supplier_id) === String(parsedSupplierId))
+                .map(i => i.category);
+            const category = existingCategories[0] || 'ירקות';
+
+            const { data, error } = await supabase
+                .from('inventory_items')
+                .insert({
+                    name: finalName,
+                    unit: unit === 'ק"ג' ? 'יח׳' : (unit || 'יח׳'),
+                    category: category,
+                    current_stock: 0,
+                    business_id: businessId,
+                    supplier_id: parsedSupplierId,
+                    weight_per_unit: unit === 'ק"ג' ? 150 : 0,
+                    count_step: 1
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Map the row in the triple check session to this new item
+            updateMatchedItem(itemId, data.id);
+
+            // Refresh inventory items so the new item is loaded in the cache/UI
+            refreshData();
+
+            showToast(`המוצר "${name}" נוצר בהצלחה במלאי!`);
+        } catch (err: any) {
+            console.error('Error creating inventory item:', err);
+            showToast('שגיאה ביצירת המוצר: ' + err.message, 'error');
         }
     };
 
@@ -229,7 +307,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                 }}
                                 isLoading={ordersLoading}
                                 onScanInvoice={async (file) => {
-                                    const result = await scanInvoice(file);
+                                    const result = await scanInvoice(file, businessId);
                                     if (result) {
                                         setSelectedOrderId(null);
                                         initializeSession(result);
@@ -242,7 +320,11 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                 <div className="flex-1 h-full bg-slate-50 relative">
                                     <TripleCheckSession
                                         session={session}
+                                        items={items}
                                         onUpdateQty={updateActualQty}
+                                        onMapItem={updateMatchedItem}
+                                        onUpdateCaseQuantity={updateCaseQuantity}
+                                        onCreateNewItem={handleCreateNewItem}
                                         onConfirm={handleConfirmReceipt}
                                         onCancel={() => {
                                             clearSession();
@@ -272,7 +354,11 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 {session && activeTab === 'counts' && (
                     <TripleCheckSession
                         session={session}
+                        items={items}
                         onUpdateQty={updateActualQty}
+                        onMapItem={updateMatchedItem}
+                        onUpdateCaseQuantity={updateCaseQuantity}
+                        onCreateNewItem={handleCreateNewItem}
                         onConfirm={handleConfirmReceipt}
                         onCancel={clearSession}
                         isSubmitting={isConfirming}
@@ -301,6 +387,16 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 currentStocks={stockDeltas}
                 onUpdateStock={handleStockDelta}
             />
+
+            {/* Custom Toast Alert */}
+            {toast && (
+                <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[300] px-8 py-4 rounded-[2rem] shadow-2xl flex items-center gap-3 ${
+                    toast.type === 'error' ? 'bg-rose-600' : 'bg-slate-900/95 backdrop-blur-md'
+                } text-white font-bold border border-white/10`}>
+                    {toast.type === 'error' ? <AlertTriangle size={24} /> : <Check size={24} className="text-emerald-400" />}
+                    <span className="text-lg">{toast.message}</span>
+                </div>
+            )}
 
             {/* Hidden Inputs */}
             <input

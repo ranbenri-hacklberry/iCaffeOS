@@ -33,6 +33,105 @@ export default defineConfig(async ({ mode }) => {
     aliases['recharts'] = emptyModule;
   }
 
+
+  // ═══ Teltonika TRB950 Local Modem SMS Plugin ═══
+  // Primary: Send via modem at 192.168.1.1:4433
+  // Fallback: Cloud API at sapi.itnewsletter.co.il
+  const smsModemPlugin = () => ({
+    name: 'sms-modem-gateway',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        // Only intercept SMS send requests
+        if (req.method !== 'POST' || !req.url?.includes('/api/sms/sendSmsToRecipients')) {
+          return next();
+        }
+
+        // Parse request body
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+          try {
+            const data = JSON.parse(body);
+            const phone = (data.destinations || '').replace(/\D/g, '');
+            const text = data.txtSMSmessage || '';
+            const time = new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
+
+            if (!phone || !text) {
+              return next(); // Let proxy handle invalid requests
+            }
+
+            console.log(`\n📱 ═══════════════════════════════════════`);
+            console.log(`📱 SMS OUT  │ ${time}`);
+            console.log(`📱 Phone    │ ${phone}`);
+            console.log(`📱 Message  │ ${text.slice(0, 50)}...`);
+
+            // ── Try Teltonika Modem First ──
+            try {
+              const https = await import('https');
+              const modemUrl = `https://192.168.1.1:4433/cgi-bin/sms_send?username=icaffeos&password=Nati1111&number=${phone}&text=${encodeURIComponent(text)}`;
+
+              const modemResult = await new Promise((resolve, reject) => {
+                const modemReq = https.get(modemUrl, { rejectUnauthorized: false, timeout: 8000 }, (modemRes) => {
+                  let responseData = '';
+                  modemRes.on('data', chunk => responseData += chunk);
+                  modemRes.on('end', () => {
+                    if (modemRes.statusCode >= 200 && modemRes.statusCode < 300) {
+                      resolve({ success: true, data: responseData });
+                    } else {
+                      reject(new Error(`Modem HTTP ${modemRes.statusCode}: ${responseData}`));
+                    }
+                  });
+                });
+                modemReq.on('error', reject);
+                modemReq.on('timeout', () => { modemReq.destroy(); reject(new Error('Modem timeout')); });
+              });
+
+              console.log(`📱 Method   │ 🏭 MODEM (Teltonika TRB950)`);
+              console.log(`✅ Modem Response │ ${modemResult.data.slice(0, 120)}`);
+              console.log(`📱 ═══════════════════════════════════════\n`);
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true, result: 1, resultJSON: '[]', errDesc: '', method: 'modem' }));
+              return;
+
+            } catch (modemErr) {
+              console.log(`📱 Method   │ ⚠️ MODEM FAILED → Falling back to Cloud API`);
+              console.log(`📱 Error    │ ${modemErr.message}`);
+            }
+
+            // ── Fallback: Cloud SMS API ──
+            try {
+              const cloudUrl = 'https://sapi.itnewsletter.co.il/api/restApiSms/sendSmsToRecipients';
+              const cloudRes = await fetch(cloudUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+              });
+              const cloudResult = await cloudRes.json();
+
+              const icon = cloudResult.success ? '✅' : '❌';
+              console.log(`📱 Method   │ ☁️ CLOUD API (itnewsletter)`);
+              console.log(`${icon} Cloud Response │ ${JSON.stringify(cloudResult).slice(0, 120)}`);
+              console.log(`📱 ═══════════════════════════════════════\n`);
+
+              res.writeHead(cloudRes.status, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ...cloudResult, method: 'cloud' }));
+            } catch (cloudErr) {
+              console.log(`❌ BOTH MODEM AND CLOUD FAILED │ ${cloudErr.message}`);
+              console.log(`📱 ═══════════════════════════════════════\n`);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: false, error: 'Both modem and cloud SMS failed', method: 'none' }));
+            }
+
+          } catch (parseErr) {
+            console.error('❌ SMS Plugin parse error:', parseErr.message);
+            return next(); // Let proxy handle malformed requests
+          }
+        });
+      });
+    }
+  });
+
   return {
     base: '/',
     build: {
@@ -49,7 +148,7 @@ export default defineConfig(async ({ mode }) => {
         plugins: [],
       },
     },
-    plugins: plugins.filter(Boolean),
+    plugins: [react(), tagger()].filter(Boolean),
     resolve: {
       alias: aliases,
       dedupe: ['react', 'react-dom'],
@@ -71,40 +170,13 @@ export default defineConfig(async ({ mode }) => {
         "/item": { target: backendTarget, changeOrigin: true, secure: false },
         "/api/marketing": { target: backendTarget, changeOrigin: true, secure: false },
         "/api/maya": { target: backendTarget, changeOrigin: true, secure: false },
+        // SMS proxy is now handled by smsModemPlugin above — this proxy is kept as a catch-all
+        // for non-send SMS routes (like balance check)
         "/api/sms": {
           target: "https://sapi.itnewsletter.co.il",
           changeOrigin: true,
           secure: true,
           rewrite: (path) => path.replace(/^\/api\/sms/, "/api/restApiSms"),
-          configure: (proxy) => {
-            proxy.on('proxyReq', (proxyReq, req) => {
-              let body = '';
-              req.on('data', chunk => body += chunk);
-              req.on('end', () => {
-                try {
-                  const data = JSON.parse(body);
-                  const time = new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
-                  const phone = data.destinations || '?';
-                  const msgPreview = (data.txtSMSmessage || '').slice(0, 50);
-                  console.log(`\n📱 ═══════════════════════════════════════`);
-                  console.log(`📱 SMS OUT  │ ${time}`);
-                  console.log(`📱 Phone    │ ${phone}`);
-                  console.log(`📱 Message  │ ${msgPreview}...`);
-                  console.log(`📱 Path     │ ${req.url}`);
-                  console.log(`📱 ═══════════════════════════════════════\n`);
-                } catch(e) { /* ignore parse errors */ }
-              });
-            });
-            proxy.on('proxyRes', (proxyRes, req) => {
-              let responseBody = '';
-              proxyRes.on('data', chunk => responseBody += chunk);
-              proxyRes.on('end', () => {
-                const status = proxyRes.statusCode;
-                const icon = status >= 200 && status < 300 ? '✅' : '❌';
-                console.log(`${icon} SMS Response │ Status: ${status} │ Body: ${responseBody.slice(0, 120)}`);
-              });
-            });
-          },
         },
         "/api": { target: backendTarget, changeOrigin: true, secure: false },
         "/supabase-api": {

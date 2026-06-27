@@ -74,8 +74,8 @@ const IncomingOrdersSidebar: React.FC<IncomingOrdersSidebarProps> = ({
                         <span className="font-black text-sm text-indigo-700">
                             {isScanning ? 'סורק חשבונית...' : 'סרוק חשבונית'}
                         </span>
-                        <span className="text-[10px] text-indigo-400 font-medium">
-                            {isScanning ? 'ה-AI מנתח את הפריטים' : 'צלם או העלה תמונה של חשבונית'}
+                        <span className="text-[10px] text-indigo-400 font-bold leading-tight">
+                            {isScanning ? 'ה-AI מנתח את הפריטים...' : 'מומלץ: בחר באפשרות "סרוק מסמך"'}
                         </span>
                     </div>
                 </MotionButton>
@@ -85,7 +85,6 @@ const IncomingOrdersSidebar: React.FC<IncomingOrdersSidebarProps> = ({
                     ref={fileInputRef}
                     className="hidden"
                     accept="image/*,application/pdf"
-                    capture="environment"
                     onChange={handleFileChange}
                 />
 

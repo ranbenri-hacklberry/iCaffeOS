@@ -304,11 +304,14 @@ const OrderCard = memo(({
                 }
 
                 const visibleMods = item.modifiers
-                  .map(mod => ({
-                    ...mod,
-                    fullName: mod.text || mod.valueName || mod,
-                    shortName: getShortName(mod.text || mod.valueName || mod)
-                  }))
+                  .map(mod => {
+                    const resolvedName = typeof mod === 'string' ? mod : (mod.text || mod.valueName || mod.value_name || mod.name || mod.label || '');
+                    return {
+                      ...mod,
+                      fullName: resolvedName,
+                      shortName: getShortName(resolvedName)
+                    };
+                  })
                   .filter(mod => {
                     const nameLower = (typeof mod.fullName === 'string' ? mod.fullName.toLowerCase() : '');
                     // Filter out hidden functional modifiers

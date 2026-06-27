@@ -16,6 +16,7 @@ import * as mm from 'music-metadata';
 import fetch from 'node-fetch';
 import musicCoverRouter from './backend/api/musicCoverRoute.js';
 import { getYouTubeApiKey as getYTKeyFromSecrets, getSecrets, getSmsApiKey } from './backend/services/secretsService.js';
+import ocrRoutes from './backend/api/ocrRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,7 +55,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
 // Request logger
@@ -347,6 +348,7 @@ app.use('/api/maya', mayaRoutes);
 app.use('/api/marketing', marketingRoutes);
 app.use('/api/admin', adminRoutes); // ✅ Admin routes (docker-health, sync, etc.)
 app.use('/api/abrakadabra', abrakadabraRoutes);
+app.use('/api/ocr', ocrRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/music', musicRoutes); // Support both path styles
 app.use('/music/cover', musicCoverRouter);

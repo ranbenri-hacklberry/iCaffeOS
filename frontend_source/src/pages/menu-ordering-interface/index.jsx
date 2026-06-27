@@ -1224,6 +1224,18 @@ const MenuOrderingInterface = () => {
       return;
     }
 
+    const isOutOfStock = item?.available === false || item?.is_in_stock === false;
+
+    if (isOutOfStock) {
+      setSelectedItemForMod({
+        ...item,
+        selectedOptions: []
+      });
+      setEditingCartItem(null);
+      setShowModifierModal(true);
+      return;
+    }
+
     // 🌿 NURSERY SPECIAL: Open full product detail page
     // Using direct item check + currentUser check for guest/clerk robustness
     const isNurseryItem = item?.business_id === NURSERY_BIZ_ID || currentUser?.business_id === NURSERY_BIZ_ID;

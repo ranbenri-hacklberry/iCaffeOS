@@ -246,7 +246,10 @@ const OrderEditModal = ({
                     ) : items.map((item) => {
                         // Get visible modifiers with short names
                         const visibleMods = (item.modifiers || [])
-                            .map(mod => ({ ...mod, shortName: getShortName(mod.text || mod.valueName || mod) }))
+                            .map(mod => {
+                                const resolvedName = typeof mod === 'string' ? mod : (mod.text || mod.valueName || mod.value_name || mod.name || mod.label || '');
+                                return { ...mod, shortName: getShortName(resolvedName), resolvedName };
+                            })
                             .filter(mod => mod.shortName !== null);
 
                         const isDelivered = 
@@ -270,7 +273,7 @@ const OrderEditModal = ({
                                     {visibleMods.length > 0 && (
                                         <div className="flex flex-wrap gap-1">
                                             {visibleMods.map((mod, i) => (
-                                                <span key={i} className={`mod-label text-xs ${getModColorClass(mod.text || mod.valueName || mod, mod.shortName)} ${item.is_early_delivered ? 'opacity-50' : ''}`}>
+                                                <span key={i} className={`mod-label text-xs ${getModColorClass(mod.resolvedName, mod.shortName)} ${item.is_early_delivered ? 'opacity-50' : ''}`}>
                                                     {mod.shortName}
                                                 </span>
                                             ))}

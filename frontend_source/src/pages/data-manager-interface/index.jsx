@@ -10,6 +10,7 @@ import SalesDashboard from '@/components/manager/SalesDashboard';
 import TasksManager from '@/components/manager/TasksManager';
 import EmployeeManager from '@/components/manager/EmployeeManager';
 import SystemDiagnostics from '@/components/manager/SystemDiagnostics';
+import WeeklyReport from '@/components/manager/WeeklyReport';
 import ConnectionStatusBar from '@/components/ConnectionStatusBar';
 import MiniMusicPlayer from '@/components/music/MiniMusicPlayer';
 import { useAuth } from '@/context/AuthContext';
@@ -20,10 +21,21 @@ import { LogOut } from 'lucide-react';
 const ManagerDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(location.state?.initialTab || 'sales');
+  
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const initialTab = useMemo(() => queryParams.get('tab') || location.state?.initialTab || 'sales', [queryParams, location.state]);
+  
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [menuView, setMenuView] = useState('grid'); // 'grid' | 'details'
+
+  useEffect(() => {
+    const tabFromUrl = queryParams.get('tab');
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [queryParams, activeTab]);
 
   const { currentUser } = useAuth();
 
@@ -144,6 +156,15 @@ const ManagerDashboard = () => {
             className="h-full flex flex-col"
           >
             {activeTab === 'sales' && <SalesDashboard />}
+            {activeTab === 'reports' && (
+              <WeeklyReport 
+                initialWeekOffset={
+                  queryParams.get('week') !== null 
+                    ? Number(queryParams.get('week')) 
+                    : -1
+                } 
+              />
+            )}
             {activeTab === 'inventory' && <InventoryScreen />}
             {activeTab === 'tasks' && <TasksManager />}
             {activeTab === 'employees' && <EmployeeManager />}

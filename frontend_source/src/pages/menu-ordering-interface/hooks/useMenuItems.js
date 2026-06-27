@@ -231,6 +231,8 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                     (Array.isArray(item.modifiers) && item.modifiers.some(m => m.is_hot_drink))
                 ),
                 kds_routing_logic: item.kds_routing_logic,
+                kds_station: item.kds_station,
+                is_in_stock: item.is_in_stock,
                 db_category: item.category,
                 modifiers: item.modifiers || [],
                 // Only show stock badge ("מוכנים") for prepared items, not regular inventory

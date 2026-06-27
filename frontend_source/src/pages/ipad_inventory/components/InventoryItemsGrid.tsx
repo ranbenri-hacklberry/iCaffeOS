@@ -165,8 +165,8 @@ const InventoryItemCard: React.FC<{ item: InventoryItem, onUpdateStock: (itemId:
     }, [item]);
 
     const displayUnit = item?.display_unit || item?.settings?.display_unit || 
-        (((item?.base_unit || item?.unit || '').includes('גרם') || (item?.base_unit || item?.unit || '').includes('מ"ל')) ? 'יח\'' : null);
-    const baseUnit = item?.base_unit || item?.unit || 'יח\'';
+        (conversionFactor > 1 ? (item?.unit || 'יח\'') : null);
+    const baseUnit = item?.base_unit || (conversionFactor > 1 ? 'גרם' : (item?.unit || 'יח\''));
     const hasDisplayUnit = !!displayUnit && conversionFactor > 1;
 
     const thresholdGrams = (parseFloat(item.low_stock_threshold_units as any) || 0) * conversionFactor;
