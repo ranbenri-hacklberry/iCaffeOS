@@ -439,9 +439,10 @@ export const useKDSDataLocal = () => {
                         if (item.mods) {
                             try {
                                 const parsed = typeof item.mods === 'string' ? JSON.parse(item.mods) : item.mods;
-                                if (Array.isArray(parsed)) {
-                                    modsArray = parsed.map(m => {
-                                        if (typeof m === 'object' && m?.value_name) return m.value_name;
+                                const parsedArray = Array.isArray(parsed) ? parsed : (parsed?.selectedOptions || []);
+                                if (Array.isArray(parsedArray)) {
+                                    modsArray = parsedArray.map(m => {
+                                        if (typeof m === 'object') return m.value_name || m.valueName || m.name || m.text || m.label || '';
                                         return optionValues.get(String(m)) || String(m);
                                     }).filter(m =>
                                         m &&
@@ -464,7 +465,7 @@ export const useKDSDataLocal = () => {
                                 return { text: mod.name, color: 'mod-color-purple', isNote: true };
                             }
 
-                            const modName = typeof mod === 'string' ? mod : (mod.name || String(mod));
+                            const modName = typeof mod === 'string' ? mod : (mod.name || mod.valueName || mod.value_name || mod.text || '');
                             let color = 'mod-color-gray';
 
                             if (modName.includes('סויה')) color = 'mod-color-lightgreen';
@@ -1149,6 +1150,7 @@ export const useKDSDataLocal = () => {
                         try {
                             if (typeof item.mods === 'string') parsedMods = JSON.parse(item.mods);
                             else if (Array.isArray(item.mods)) parsedMods = item.mods;
+                            else if (item.mods && typeof item.mods === 'object') parsedMods = item.mods.selectedOptions || [];
                         } catch (e) { }
                         if (Array.isArray(parsedMods)) {
                             parsedMods = parsedMods.filter(m => {

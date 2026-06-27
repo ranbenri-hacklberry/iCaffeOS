@@ -7,7 +7,7 @@ export const useInvoiceOCR = () => {
     const [error, setError] = useState<string | null>(null);
     const [ocrResult, setOcrResult] = useState<any>(null);
 
-    const scanInvoice = async (file: File) => {
+    const scanInvoice = async (file: File, businessId?: string) => {
         if (!file) return;
         setIsProcessing(true);
         setError(null);
@@ -26,7 +26,7 @@ export const useInvoiceOCR = () => {
                 });
             }
 
-            const result = await processInvoiceOCR(base64Image);
+            const result = await processInvoiceOCR(base64Image, businessId);
             setOcrResult(result);
             return result;
         } catch (err: any) {

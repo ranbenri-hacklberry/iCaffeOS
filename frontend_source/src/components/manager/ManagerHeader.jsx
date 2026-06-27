@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard,
+    FileText,
     Package,
     CheckSquare,
     Sparkles,
@@ -51,6 +52,7 @@ const ManagerHeader = ({ activeTab, onTabChange, currentUser, isImpersonating, o
 
     const navItems = [
         { id: 'sales', label: 'מכירות', icon: <LayoutDashboard size={18} />, path: '/data-manager-interface' },
+        { id: 'reports', label: 'דוחות', icon: <FileText size={18} />, path: '/data-manager-interface' },
         { id: 'inventory', label: 'מלאי', icon: <Package size={18} />, path: '/data-manager-interface' },
         { id: 'tasks', label: 'משימות', icon: <CheckSquare size={18} />, path: '/data-manager-interface' },
         { id: 'employees', label: 'עובדים', icon: <Users size={18} />, path: '/data-manager-interface' },

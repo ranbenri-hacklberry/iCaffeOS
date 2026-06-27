@@ -9,9 +9,7 @@ const LiteMenuItemCard = ({ item, onAddToCart }) => {
     const isDarkMode = true; // Always dark/slate theme in Lite for now or derived
 
     const handleClick = useCallback(() => {
-        if (item?.available !== false) {
-            onAddToCart?.(item);
-        }
+        onAddToCart?.(item);
     }, [item, onAddToCart]);
 
     // Fallback
@@ -22,7 +20,7 @@ const LiteMenuItemCard = ({ item, onAddToCart }) => {
             className={`relative group w-full aspect-square rounded-3xl overflow-hidden cursor-pointer select-none 
         border shadow-2xl transition-colors duration-300
         ${isDarkMode ? 'bg-slate-900 border-slate-700 shadow-black/50' : 'bg-white border-slate-200'}
-        ${item?.available === false ? 'opacity-60 cursor-not-allowed grayscale' : ''}`}
+        ${item?.available === false ? 'opacity-60 grayscale' : ''}`}
             onClick={handleClick}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}

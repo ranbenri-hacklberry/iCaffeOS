@@ -15,6 +15,9 @@ const isStrictlyLocal = isElectron || isLocalIp || import.meta.env?.VITE_FORCE_L
 
 // URLs
 const getLocalUrl = () => {
+    if (typeof window !== 'undefined') {
+        return `${window.location.protocol}//${window.location.hostname}:54321`;
+    }
     if (import.meta.env?.VITE_LOCAL_SUPABASE_URL) {
         return import.meta.env.VITE_LOCAL_SUPABASE_URL;
     }

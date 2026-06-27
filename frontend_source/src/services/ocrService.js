@@ -10,7 +10,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
  * @param {string} base64Image - Base64 encoded image (with or without data URL prefix)
  * @returns {Promise<Object>} OCR result with items, supplier, date, etc.
  */
-export const processInvoiceOCR = async (base64Image) => {
+export const processInvoiceOCR = async (base64Image, businessId) => {
     try {
         console.log('🔄 Sending OCR request to backend...');
 
@@ -19,7 +19,7 @@ export const processInvoiceOCR = async (base64Image) => {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ base64Image }),
+            body: JSON.stringify({ base64Image, businessId }),
         });
 
         if (!response.ok) {

@@ -48,6 +48,7 @@ export interface ReceivingSessionItem {
     catalogItemId: string | null;
     isNew: boolean;
     matchedItem?: InventoryItem;
+    caseQuantity?: number;
 }
 
 export interface ReceivingSession {
