@@ -750,6 +750,34 @@ const MusicPageContent = () => {
         if (activeTab === 'favorites') loadFavorites();
     }, [activeTab, loadFavorites]);
 
+    // Sync active queue with database songs when new ones are added or deleted
+    useEffect(() => {
+        const isPlayingThisPlaylist = selectedAlbum?.isPlaylist && playlist.length > 0 && playlist.some(s => s.playlist_id === selectedAlbum.id);
+        
+        if (selectedAlbum?.isPlaylist && isPlayingThisPlaylist && currentAlbumSongs.length > 0) {
+            // 1. Filter out songs in the active queue that no longer exist in the DB playlist
+            const filteredQueue = playlist.filter(qSong => 
+                currentAlbumSongs.some(dbSong => dbSong.id === qSong.id)
+            );
+
+            // 2. Find songs in the DB playlist that are missing from the active queue
+            const missingSongs = currentAlbumSongs.filter(dbSong => 
+                !filteredQueue.some(qSong => qSong.id === dbSong.id)
+            );
+
+            // If there's any mismatch, update the active queue
+            if (missingSongs.length > 0 || filteredQueue.length !== playlist.length) {
+                const updatedQueue = [...filteredQueue, ...missingSongs];
+                console.log('🔄 Syncing active queue with database playlist songs. Added:', missingSongs.length, 'Removed:', playlist.length - filteredQueue.length);
+                
+                const timer = setTimeout(() => {
+                    handleReorder(updatedQueue);
+                }, 50);
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [currentAlbumSongs, selectedAlbum, playlist, handleReorder]);
+
     // Get songs to display (current album or playlist)
     const displaySongs = currentAlbumSongs.length > 0 ? currentAlbumSongs : playlist;
 
@@ -1115,8 +1143,7 @@ const MusicPageContent = () => {
                                 <div className="space-y-1">
                                     {(() => {
                                         const filteredSongs = filterSongs(currentAlbumSongs);
-                                        // Disabled active queue view within playlist details to prevent hiding newly added/downloaded playlist songs.
-                                        const isPlaylistPlaying = false;
+                                        const isPlaylistPlaying = selectedAlbum?.isPlaylist && playlist.length > 0 && playlist.some(s => s.playlist_id === selectedAlbum.id);
 
                                         if (isPlaylistPlaying) {
                                             return (
@@ -1177,16 +1204,8 @@ const MusicPageContent = () => {
                                             );
                                         }
 
-                                        // Static display of album/playlist songs sorted by position or track number
-                                        const sortedSongs = [...filteredSongs].sort((a, b) => {
-                                            if (selectedAlbum?.isPlaylist) {
-                                                return (a.position || 0) - (b.position || 0);
-                                            }
-                                            if (a.track_number !== undefined && b.track_number !== undefined) {
-                                                return (a.track_number || 0) - (b.track_number || 0);
-                                            }
-                                            return (a.title || '').localeCompare(b.title || '', 'he');
-                                        });
+                                        // Static display of album/playlist songs sorted alphabetically
+                                        const sortedSongs = [...filteredSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
                                         return sortedSongs.map((song) => (
                                             <SongRow
                                                 key={song.id}
