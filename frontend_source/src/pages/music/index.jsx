@@ -844,21 +844,7 @@ const MusicPageContent = () => {
                             <Home className="w-5 h-5 text-white/70" />
                         </button>
 
-                        {/* Server / Local Audio Toggle */}
-                        <button
-                            onClick={() => setPlaybackTarget(playbackTarget === 'server' ? 'local' : 'server')}
-                            title={playbackTarget === 'server' ? 'נגינה: שרת M4 (לחץ לעבור למקומי)' : 'נגינה: קסם מקומי (לחץ לעבור לשרת)'}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight transition-all active:scale-95
-                                ${playbackTarget === 'server'
-                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                                    : 'bg-white/5 text-white/40 border-white/10 hover:text-white/70'}`}
-                        >
-                            {/* WS connection dot */}
-                            <span className={`w-1.5 h-1.5 rounded-full ${playbackTarget === 'server' ? (wsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400 animate-pulse') : 'bg-white/20'}`} />
-                            <span>{playbackTarget === 'server' ? (wsConnected ? 'M4 LIVE' : 'M4 OFF') : 'LOCAL'}</span>
-                        </button>
 
-                        <div className="w-px h-6 bg-white/10" />
 
                         {/* Library Tools / Edit Actions */}
                         {isEditMode ? (

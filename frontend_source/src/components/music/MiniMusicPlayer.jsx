@@ -1,7 +1,7 @@
 import React, { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useAnimation } from 'framer-motion';
-import { Play, Pause, SkipBack, ThumbsUp, ThumbsDown, Music } from 'lucide-react';
+import { Play, Pause, SkipForward, Volume2, Music } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import MusicContext from '../../context/MusicContext';
 
@@ -22,7 +22,8 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
     const isPlaying = music?.isPlaying;
     const togglePlay = music?.togglePlay;
     const handleNext = music?.handleNext;
-    const rateSong = music?.rateSong;
+    const volume = music?.volume !== undefined ? music.volume : 0.7;
+    const setVolume = music?.setVolume;
 
     // 📀 Realistic "Coast to Stop" Effect
     useEffect(() => {
@@ -51,14 +52,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
         return null;
     }
 
-    const isLiked = currentSong.myRating === 5;
-    const isDisliked = currentSong.myRating === 1;
 
-    const handleRate = async (rating) => {
-        if (!currentSong?.id) return;
-        const newRating = currentSong.myRating === rating ? 0 : rating;
-        await rateSong(currentSong.id, newRating);
-    };
 
     const coverUrl = currentSong.album?.cover_url || currentSong.cover_url || currentSong.thumbnail_url;
     const artistName = currentSong.artist?.name || currentSong.artist_name || 'Unknown Artist';
@@ -107,30 +101,21 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-1 shrink-0">
-                <button
-                    onClick={() => handleRate(5)}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all
-                        ${isLiked
-                            ? 'bg-green-100 text-green-600'
-                            : `${isDarkMode ? 'text-slate-500 hover:text-green-400 hover:bg-slate-700' : 'text-gray-400 hover:text-green-500 hover:bg-gray-200'}`
-                        }`}
-                    title="אהבתי"
-                >
-                    <ThumbsUp className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                    onClick={() => handleRate(1)}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all
-                        ${isDisliked
-                            ? 'bg-red-100 text-red-600'
-                            : `${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-slate-700' : 'text-gray-400 hover:text-red-500 hover:bg-gray-200'}`
-                        }`}
-                    title="לא אהבתי"
-                >
-                    <ThumbsDown className="w-3.5 h-3.5" />
-                </button>
+            <div className="flex items-center gap-2 shrink-0">
+                {/* Server Volume Control */}
+                <div className="flex items-center gap-1.5 px-1.5 bg-white/5 py-1 rounded-lg border border-white/5" dir="ltr">
+                    <Volume2 className={`w-3.5 h-3.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`} />
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={volume}
+                        onChange={(e) => setVolume?.(parseFloat(e.target.value))}
+                        className="w-12 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
+                        title="ווליום שרת"
+                    />
+                </div>
 
                 <button
                     onClick={togglePlay}
@@ -143,7 +128,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                     {isPlaying ? (
                         <Pause className={`w-4 h-4 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
                     ) : (
-                        <Play className={`w-4 h-4 -scale-x-100 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
+                        <Play className={`w-4 h-4 ${isDarkMode ? 'text-slate-200 fill-slate-200' : 'text-gray-700 fill-gray-700'}`} />
                     )}
                 </button>
 
@@ -155,7 +140,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
                         }`}
                     title="שיר הבא"
                 >
-                    <SkipBack className="w-3.5 h-3.5" />
+                    <SkipForward className="w-3.5 h-3.5" />
                 </button>
             </div>
         </div>
