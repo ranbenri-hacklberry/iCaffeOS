@@ -656,7 +656,7 @@
   border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 760px) {
   .music-split-layout {
     flex-direction: column-reverse;
   }
@@ -708,4 +708,26 @@
   .music-split-right {
     max-height: 100px;
   }
+}
+
+/* === PLAYLIST CARD NOW-PLAYING VISUALIZER BARS === */
+@keyframes musicBar1 {
+  0%, 100% { height: 15%; }
+  50% { height: 80%; }
+}
+@keyframes musicBar2 {
+  0%, 100% { height: 30%; }
+  50% { height: 95%; }
+}
+@keyframes musicBar3 {
+  0%, 100% { height: 50%; }
+  50% { height: 20%; }
+}
+@keyframes musicBar4 {
+  0%, 100% { height: 20%; }
+  50% { height: 70%; }
+}
+@keyframes musicBar5 {
+  0%, 100% { height: 40%; }
+  50% { height: 90%; }
 }

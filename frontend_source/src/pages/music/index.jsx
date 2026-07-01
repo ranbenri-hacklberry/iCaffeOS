@@ -4,9 +4,9 @@ import {
     Music, Disc, ListMusic, Search, Plus, RefreshCw,
     ArrowRight, Sparkles, User, Play, FolderOpen, Heart, Youtube,
     Pause, SkipForward, SkipBack, Trash2, X, HardDrive, AlertCircle, Home, Download, Archive, List,
-    Volume2, VolumeX, ThumbsUp, ThumbsDown
+    Volume2, VolumeX, ThumbsUp, ThumbsDown, Edit2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
 import { useAlbums } from '@/hooks/useAlbums';
 import { useImportContext } from '@/hooks/useImportContext';
@@ -14,13 +14,13 @@ import { useAuth } from '@/context/AuthContext';
 import AlbumCard from '@/components/music/AlbumCard';
 import AddMusicCard from '@/components/music/AddMusicCard';
 import VinylTurntable from '@/components/music/VinylTurntable';
+import AudioVisualizer from '@/components/music/AudioVisualizer';
 import SongRow from '@/components/music/SongRow';
 import MiniMusicPlayer from '@/components/music/MiniMusicPlayer';
 import AlbumView from '@/pages/music/components/AlbumView';
 import PlaylistBuilder from '@/pages/music/components/PlaylistBuilder';
 import SyncOverlay from '@/pages/music/components/SyncOverlay';
 import CDImportModal from '@/pages/music/components/CDImportModal';
-import MusicQueue from '@/components/music/MusicQueue';
 import QueueModeModal from '@/components/music/QueueModeModal';
 import UnifiedHeader from '@/components/UnifiedHeader';
 
@@ -36,11 +36,8 @@ const MUSIC_API_URL = getBackendApiUrl();
 
 // Tabs for navigation
 const TABS = [
-    { id: 'albums', label: 'אלבומים', icon: Disc },
-    { id: 'artists', label: 'אמנים', icon: User },
-    { id: 'singles', label: 'סינגלים', icon: Music },
+    { id: 'songs', label: 'שירים', icon: Music },
     { id: 'playlists', label: 'פלייליסטים', icon: ListMusic },
-    { id: 'favorites', label: 'מועדפים', icon: Heart },
 ];
 
 // Helper to generate gradients for song cards without album art
@@ -92,7 +89,9 @@ const MusicPageContent = () => {
         deleteAlbum,
         deletePlaylist,
         archiveItem,
-        generateSmartPlaylist
+        generateSmartPlaylist,
+        updateSongDetails,
+        fetchSongPlaylistId
     } = useAlbums();
 
     const {
@@ -117,14 +116,23 @@ const MusicPageContent = () => {
         setPlaybackTarget,
         wsConnected,
         wsError,
+        updateSongInContext,
     } = useMusic();
 
-    const [activeTab, setActiveTab] = useState('albums');
+    const [activeTab, setActiveTab] = useState('songs');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAlbum, setSelectedAlbum] = useState(null);
     const [showPlaylistBuilder, setShowPlaylistBuilder] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
-    const [showQueue, setShowQueue] = useState(false);
+    
+    // Song editing & BPM filtering states
+    const [editingSong, setEditingSong] = useState(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editArtistName, setEditArtistName] = useState('');
+    const [editPlaylistId, setEditPlaylistId] = useState('');
+    const [editBpmType, setEditBpmType] = useState('chill'); // 'chill' | 'upbeat'
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [bpmFilter, setBpmFilter] = useState('all'); // 'all' | 'chill' | 'upbeat'
     const [queueContext, setQueueContext] = useState(null); // { item, type: 'song'|'album' }
     const [showYouTubeIngest, setShowYouTubeIngest] = useState(false);
     const [selectedBatch, setSelectedBatch] = useState(null);
@@ -493,13 +501,91 @@ const MusicPageContent = () => {
         }
     };
 
-    // Handle playlist play
+    // Handle playlist play - Shuffles and plays immediately
     const handlePlaylistPlay = async (playlist, mode = 'last') => {
         const songs = await fetchPlaylistSongs(playlist.id);
         const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
         if (playable.length > 0) {
-            addPlaylistToQueue(playable, mode);
+            const shuffled = [...playable].map(s => ({ ...s, playlist_id: playlist.id }));
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            playSong(shuffled[0], shuffled, true);
         }
+    };
+
+    // Edit song handlers
+    const handleEditClick = async (song) => {
+        setEditingSong(song);
+        setEditTitle(song.title || '');
+        setEditArtistName(song.artist?.name || song.artist || '');
+        
+        // Pre-select BpmType based on current song bpm
+        if (song.bpm && song.bpm > 100) {
+            setEditBpmType('upbeat');
+        } else {
+            setEditBpmType('chill');
+        }
+        
+        // Fetch which playlist the song is in
+        setEditPlaylistId('');
+        try {
+            const playlistId = await fetchSongPlaylistId(song.id);
+            if (playlistId) {
+                setEditPlaylistId(playlistId);
+            }
+        } catch (err) {
+            console.error('Error fetching song playlist:', err);
+        }
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingSong) return;
+        setIsSavingEdit(true);
+        try {
+            const bpmValue = editBpmType === 'chill' ? 80 : 120;
+            const res = await updateSongDetails(editingSong.id, editTitle, editArtistName, editPlaylistId, bpmValue);
+            if (res.success) {
+                // Instantly update the current context queue and playing song
+                updateSongInContext({ id: editingSong.id, title: editTitle, artist: { name: editArtistName }, playlist_id: editPlaylistId, bpm: bpmValue });
+                
+                // If the selected item is the current playlist/album being viewed, reload its songs!
+                if (selectedAlbum) {
+                    if (selectedAlbum.isPlaylist) {
+                        const updatedSongs = await fetchPlaylistSongs(selectedAlbum.id);
+                        setCurrentAlbumSongs(updatedSongs);
+                    } else if (selectedAlbum.isArtist) {
+                        // TODO: Artist songs might not have a direct fetcher yet, fallback
+                        const updatedSongs = await fetchAlbumSongs(selectedAlbum.id);
+                        setCurrentAlbumSongs(updatedSongs);
+                    } else {
+                        const updatedSongs = await fetchAlbumSongs(selectedAlbum.id);
+                        setCurrentAlbumSongs(updatedSongs);
+                    }
+                }
+                setEditingSong(null);
+            } else {
+                alert(`שגיאה בעדכון השיר: ${res.message}`);
+            }
+        } catch (err) {
+            console.error('Error saving song edit:', err);
+            alert(`שגיאה בעדכון השיר: ${err.message}`);
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
+
+    // Filter songs by BPM tempo selection
+    const filterSongs = (songList) => {
+        if (!songList) return [];
+        if (bpmFilter === 'chill') {
+            return songList.filter(s => s.bpm && s.bpm <= 100);
+        }
+        if (bpmFilter === 'upbeat') {
+            return songList.filter(s => s.bpm && s.bpm > 100);
+        }
+        return songList;
     };
 
     // Handle add to queue selection
@@ -561,8 +647,24 @@ const MusicPageContent = () => {
             }
         }
 
-        // When playing a song from context of an album, pass the full song list
-        const queueSongs = currentAlbumSongs.length > 0 ? currentAlbumSongs : [songToPlay];
+        // When playing a song from context of an album or playlist, pass the full song list
+        let queueSongs;
+        if (currentAlbumSongs.length > 0) {
+            const filteredDetailSongs = filterSongs(currentAlbumSongs).filter(s => (s?.myRating || 0) !== 1);
+            if (selectedAlbum?.isPlaylist) {
+                // Shuffle playlist songs except the clicked one
+                const rest = filteredDetailSongs.filter(s => s.id !== songToPlay.id);
+                for (let i = rest.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [rest[i], rest[j]] = [rest[j], rest[i]];
+                }
+                queueSongs = [songToPlay, ...rest];
+            } else {
+                queueSongs = filteredDetailSongs;
+            }
+        } else {
+            queueSongs = [songToPlay];
+        }
         playSong(songToPlay, queueSongs, true);
     };
 
@@ -747,13 +849,7 @@ const MusicPageContent = () => {
                                     </button>
                                 )}
 
-                                <button
-                                    onClick={() => navigate('/youtube')}
-                                    className="w-10 h-10 rounded-2xl bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 flex items-center justify-center transition-all active:scale-95 shadow-sm"
-                                    title="הורדות YouTube"
-                                >
-                                    <Download className="w-4 h-4 text-red-400" />
-                                </button>
+
 
                                 <button
                                     onClick={() => setShowScanner(true)}
@@ -817,154 +913,113 @@ const MusicPageContent = () => {
                 <div
                     className="music-split-right order-last flex flex-col items-center justify-center p-6 relative"
                 >
-                    <AnimatePresence mode="wait">
-                        {!showQueue ? (
-                            <motion.div
-                                key="turntable"
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.9 }}
-                                className="flex flex-col items-center justify-center w-full"
-                            >
-                                <VinylTurntable
-                                    song={currentSong}
-                                    isPlaying={isPlaying}
-                                    albumArt={currentSong?.album?.cover_url || currentSong?.cover_url || currentSong?.thumbnail_url}
-                                    onTogglePlay={(forcePlayFirst) => {
-                                        if (forcePlayFirst && playlist.length > 0 && !currentSong) {
-                                            playSong(playlist[0], null, true);
-                                        } else {
-                                            togglePlay();
-                                        }
-                                    }}
-                                    queue={playlist}
-                                />
+                    {/* Vinyl Turntable is always visible */}
+                    <div className="flex flex-col items-center justify-center w-full">
+                        <VinylTurntable
+                            song={currentSong}
+                            isPlaying={isPlaying}
+                            albumArt={currentSong?.album?.cover_url || currentSong?.cover_url || currentSong?.thumbnail_url}
+                            onTogglePlay={(forcePlayFirst) => {
+                                if (forcePlayFirst && playlist.length > 0 && !currentSong) {
+                                    playSong(playlist[0], null, true);
+                                } else {
+                                    togglePlay();
+                                }
+                            }}
+                            queue={playlist}
+                        />
 
-                                {/* Player controls */}
-                                <div className="flex flex-col items-center w-full max-w-sm mt-8">
-                                    {/* Progress & Time - Always show if we have a song OR a queue (since turntable shows queue item) */}
-                                    {(currentSong || playlist.length > 0) && (
-                                        <>
-                                            <div className="w-full flex items-center gap-3 mb-6 px-4" dir="ltr">
-                                                <span className="text-white/40 text-xs w-10 text-right font-mono">
-                                                    {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
-                                                </span>
+                        {/* Player controls */}
+                        <div className="flex flex-col items-center w-full max-w-sm mt-8">
+                            {/* Progress & Time - Always show if we have a song OR a queue */}
+                            {(currentSong || playlist.length > 0) && (
+                                <>
+                                    <div className="w-full flex items-center gap-3 mb-6 px-4" dir="ltr">
+                                        <span className="text-white/40 text-xs w-10 text-right font-mono">
+                                            {Math.floor(currentTime / 60)}:{(Math.floor(currentTime % 60)).toString().padStart(2, '0')}
+                                        </span>
 
-                                                {/* Interactive Progress Bar */}
-                                                <div
-                                                    className="relative flex-1 h-6 group cursor-pointer flex items-center"
-                                                    onClick={(e) => {
-                                                        if (!duration) return;
-                                                        const rect = e.currentTarget.getBoundingClientRect();
-                                                        const percent = (e.clientX - rect.left) / rect.width;
-                                                        seek(Math.min(Math.max(0, percent), 1) * duration);
-                                                    }}
-                                                >
-                                                    {/* Background Track */}
-                                                    <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                                        {/* Progress Fill */}
-                                                        <motion.div
-                                                            className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
-                                                            style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                                                            layoutId="progressBar"
-                                                        />
-                                                    </div>
-
-                                                    {/* Scrubber Knob (visible on hover) */}
-                                                    <motion.div
-                                                        className="absolute w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        style={{ left: `${(currentTime / (duration || 1)) * 100}%`, transform: 'translateX(-50%)' }}
-                                                    />
-                                                </div>
-
-                                                <span className="text-white/40 text-xs w-10 font-mono">
-                                                    {Math.floor(duration / 60)}:{(Math.floor(duration % 60)).toString().padStart(2, '0')}
-                                                </span>
-                                            </div>
-
-                                            <div className="flex items-center gap-6" dir="ltr">
-                                                {/* RTL Swap: Forward is Left, Backward is Right */}
-                                                {/* Left Button (Next) */}
-                                                <button
-                                                    onClick={handleNext}
-                                                    disabled={!currentSong && playlist.length === 0}
-                                                    className="w-14 h-14 rounded-full music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
-                                                    title="שיר הבא"
-                                                >
-                                                    <SkipBack className="w-6 h-6 text-white" />
-                                                </button>
-
-                                                {/* Center Button (Play/Pause) */}
-                                                <button
-                                                    onClick={() => {
-                                                        if (!currentSong && playlist.length > 0) {
-                                                            playSong(playlist[0], null, true);
-                                                        } else {
-                                                            togglePlay();
-                                                        }
-                                                    }}
-                                                    className="w-20 h-20 rounded-full music-gradient-purple flex items-center justify-center shadow-2xl hover:scale-105 transition-transform border border-white/20"
-                                                >
-                                                    {isPlaying ? (
-                                                        <Pause className="w-9 h-9 text-white fill-current" />
-                                                    ) : (
-                                                        <Play className="w-9 h-9 text-white fill-current -scale-x-100" />
-                                                    )}
-                                                </button>
-
-                                                {/* Right Button (Previous) */}
-                                                <button
-                                                    onClick={handlePrevious}
-                                                    disabled={!currentSong && playlist.length === 0}
-                                                    className="w-14 h-14 rounded-full music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
-                                                    title="שיר קודם"
-                                                >
-                                                    <SkipForward className="w-6 h-6 text-white" />
-                                                </button>
-                                            </div>
-
-                                            {/* Volume Control */}
-                                            <div className="flex items-center gap-3 mt-8 w-full px-4" dir="ltr">
-                                                <VolumeX className="w-4 h-4 text-white/40 cursor-pointer hover:text-white" onClick={() => setVolume(0)} />
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max="1"
-                                                    step="0.01"
-                                                    value={volume}
-                                                    onChange={(e) => setVolume(parseFloat(e.target.value))}
-                                                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
+                                        {/* Interactive Progress Bar */}
+                                        <div
+                                            className="relative flex-1 h-6 group cursor-pointer flex items-center"
+                                            onClick={(e) => {
+                                                if (!duration) return;
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const percent = (e.clientX - rect.left) / rect.width;
+                                                seek(Math.min(Math.max(0, percent), 1) * duration);
+                                            }}
+                                        >
+                                            {/* Background Track */}
+                                            <div className="absolute w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                {/* Progress Fill */}
+                                                <motion.div
+                                                    className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                                                    style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                                                    layoutId="progressBar"
                                                 />
-                                                <Volume2 className="w-4 h-4 text-white/40 cursor-pointer hover:text-white" onClick={() => setVolume(1)} />
                                             </div>
-                                        </>
-                                    )}
-                                </div>
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key="queue"
-                                initial={{ opacity: 0, x: 50 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 50 }}
-                                className="w-full h-full flex flex-col"
-                            >
-                                <MusicQueue />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
 
-                    {/* View Toggle Button */}
-                    <button
-                        onClick={() => setShowQueue(!showQueue)}
-                        className={`absolute top-6 right-6 w-12 h-12 rounded-2xl flex items-center justify-center transition-all border z-30
-                            ${showQueue
-                                ? 'bg-purple-600 text-white border-purple-400 shadow-lg'
-                                : 'music-glass text-white/60 border-white/10 hover:text-white'}`}
-                        title={showQueue ? "חזרה לנגן" : "הצג תור נגינה"}
-                    >
-                        {showQueue ? <Disc className="w-6 h-6" /> : <ListMusic className="w-6 h-6" />}
-                    </button>
+                                            {/* Scrubber Knob */}
+                                            <motion.div
+                                                className="absolute w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                                style={{ left: `${(currentTime / (duration || 1)) * 100}%`, transform: 'translateX(-50%)' }}
+                                            />
+                                        </div>
+
+                                        <span className="text-white/40 text-xs w-10 font-mono">
+                                            {Math.floor(duration / 60)}:{(Math.floor(duration % 60)).toString().padStart(2, '0')}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-6 animate-fade-in" dir="ltr">
+                                        {/* Play/Pause Button */}
+                                        <button
+                                            onClick={() => {
+                                                if (!currentSong && playlist.length > 0) {
+                                                    playSong(playlist[0], null, true);
+                                                } else {
+                                                    togglePlay();
+                                                }
+                                            }}
+                                            className="w-20 h-20 rounded-full music-gradient-purple flex items-center justify-center shadow-2xl hover:scale-105 transition-transform border border-white/20"
+                                            title={isPlaying ? "השהה" : "נגן"}
+                                        >
+                                            {isPlaying ? (
+                                                <Pause className="w-9 h-9 text-white fill-current" />
+                                            ) : (
+                                                <Play className="w-9 h-9 text-white fill-current" />
+                                            )}
+                                        </button>
+
+                                        {/* Next Button */}
+                                        <button
+                                            onClick={handleNext}
+                                            disabled={!currentSong && playlist.length === 0}
+                                            className="w-14 h-14 rounded-full music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                            title="שיר הבא"
+                                        >
+                                            <SkipForward className="w-6 h-6 text-white" />
+                                        </button>
+                                    </div>
+
+                                    {/* Volume Control */}
+                                    <div className="flex items-center gap-3 mt-8 w-full px-4" dir="ltr">
+                                        <VolumeX className="w-4 h-4 text-white/40 cursor-pointer hover:text-white" onClick={() => setVolume(0)} />
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.01"
+                                            value={volume}
+                                            onChange={(e) => setVolume(parseFloat(e.target.value))}
+                                            className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <Volume2 className="w-4 h-4 text-white/40 cursor-pointer hover:text-white" onClick={() => setVolume(1)} />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
 
 
                 </div>
@@ -999,17 +1054,58 @@ const MusicPageContent = () => {
                                         <div className="flex items-center gap-4 mb-1">
                                             <h2 className="text-white text-4xl font-black tracking-tight truncate drop-shadow-lg" dir="ltr" style={{ textAlign: 'right' }}>{selectedAlbum.name}</h2>
                                             <button
-                                                onClick={() => setQueueContext({ item: selectedAlbum, type: 'album' })}
+                                                onClick={async () => {
+                                                    if (selectedAlbum.isPlaylist) {
+                                                        handlePlaylistPlay(selectedAlbum);
+                                                    } else {
+                                                        const songs = await fetchAlbumSongs(selectedAlbum.id);
+                                                        const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
+                                                        if (playable.length > 0) {
+                                                            playSong(playable[0], playable, true);
+                                                        }
+                                                    }
+                                                }}
                                                 className="group relative"
-                                                title="הוסף אלבום לתור"
+                                                title="נגן הכל"
                                             >
-                                                <div className="absolute inset-0 bg-white/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                <div className="relative w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center transition-all group-hover:scale-110 group-hover:bg-white/20 group-active:scale-95 shadow-2xl">
-                                                    <Plus className="w-6 h-6 text-white" />
+                                                <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                <div className="relative w-11 h-11 rounded-2xl bg-purple-600 border border-purple-500 flex items-center justify-center transition-all group-hover:scale-110 group-active:scale-95 shadow-2xl">
+                                                    <Play className="w-6 h-6 text-white fill-current" />
                                                 </div>
                                             </button>
                                         </div>
-                                        <p className="text-white/60 font-bold mt-0.5">{selectedAlbum.artist?.name} • {currentAlbumSongs.length} שירים</p>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-white/60 font-bold">
+                                                {selectedAlbum.isPlaylist ? (
+                                                    `${currentAlbumSongs.length} שירים`
+                                                ) : (
+                                                    `${selectedAlbum.artist?.name} • ${currentAlbumSongs.length} שירים`
+                                                )}
+                                            </p>
+                                            
+                                            {/* BPM Filter Pills */}
+                                            <div className="flex items-center gap-2 select-none" dir="rtl">
+                                                <span className="text-white/40 text-[10px] font-bold ml-1">סינון קצב:</span>
+                                                <button
+                                                    onClick={() => setBpmFilter('all')}
+                                                    className={`px-2.5 py-0.5 text-[10px] rounded-full border transition-all ${bpmFilter === 'all' ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
+                                                >
+                                                    הכל
+                                                </button>
+                                                <button
+                                                    onClick={() => setBpmFilter('chill')}
+                                                    className={`px-2.5 py-0.5 text-[10px] rounded-full border transition-all ${bpmFilter === 'chill' ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
+                                                >
+                                                    שקטים
+                                                </button>
+                                                <button
+                                                    onClick={() => setBpmFilter('upbeat')}
+                                                    className={`px-2.5 py-0.5 text-[10px] rounded-full border transition-all ${bpmFilter === 'upbeat' ? 'bg-pink-600 border-pink-500 text-white' : 'border-white/10 bg-white/5 text-white/60 hover:text-white'}`}
+                                                >
+                                                    קצביים
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1017,215 +1113,170 @@ const MusicPageContent = () => {
                             {/* SCROLLABLE SONG LIST */}
                             <div className="flex-1 overflow-y-auto music-scrollbar p-4">
                                 <div className="space-y-1">
-                                    {currentAlbumSongs.map((song, index) => (
-                                        <SongRow
-                                            key={song.id}
-                                            song={song}
-                                            index={index}
-                                            isPlaying={isPlaying}
-                                            isCurrentSong={currentSong?.id === song.id}
-                                            onPlay={handleSongPlay}
-                                            onRate={handleRate}
-                                            onDelete={(s) => handleDeleteClick('song', s)}
-                                            onQueue={(item) => setQueueContext({ item, type: 'song' })}
-                                        />
-                                    ))}
+                                    {(() => {
+                                        const filteredSongs = filterSongs(currentAlbumSongs);
+                                        const isPlaylistPlaying = selectedAlbum?.isPlaylist && playlist.length > 0 && playlist.some(s => s.playlist_id === selectedAlbum.id);
+
+                                        if (isPlaylistPlaying) {
+                                            return (
+                                                <div className="flex flex-col">
+                                                    {/* Currently playing song */}
+                                                    {playlist[0] && (
+                                                        <div className="mb-2">
+                                                            <div className="text-purple-300 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2 flex items-center gap-2">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                                מתנגן כעת
+                                                            </div>
+                                                            <SongRow
+                                                                song={playlist[0]}
+                                                                isCurrentSong={true}
+                                                                isPlaying={isPlaying}
+                                                                onEdit={handleEditClick}
+                                                                isDraggable={false}
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Upcoming songs list */}
+                                                    {playlist.length > 1 && (
+                                                        <div className="mt-2">
+                                                            <div className="text-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2">
+                                                                הבאים בתור ({playlist.length - 1})
+                                                            </div>
+                                                            <Reorder.Group
+                                                                axis="y"
+                                                                values={playlist.slice(1)}
+                                                                onReorder={(newUpcoming) => {
+                                                                    if (playlist[0]) {
+                                                                        handleReorder([playlist[0], ...newUpcoming]);
+                                                                    }
+                                                                }}
+                                                                className="space-y-1"
+                                                            >
+                                                                {playlist.slice(1).map((song) => (
+                                                                    <Reorder.Item
+                                                                        key={song.id || song.track_id}
+                                                                        value={song}
+                                                                        dragListener={true}
+                                                                        className="list-none"
+                                                                    >
+                                                                        <SongRow
+                                                                            song={song}
+                                                                            isCurrentSong={false}
+                                                                            isPlaying={false}
+                                                                            onEdit={handleEditClick}
+                                                                            isDraggable={true}
+                                                                        />
+                                                                    </Reorder.Item>
+                                                                ))}
+                                                            </Reorder.Group>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+
+                                        // Static display of album/playlist songs sorted alphabetically
+                                        const sortedSongs = [...filteredSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
+                                        return sortedSongs.map((song) => (
+                                            <SongRow
+                                                key={song.id}
+                                                song={song}
+                                                isPlaying={isPlaying && currentSong?.id === song.id}
+                                                isCurrentSong={currentSong?.id === song.id}
+                                                onEdit={handleEditClick}
+                                            />
+                                        ));
+                                    })()}
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        /* Album grid */
+                        /* Main landing area (Playlists Grid by default, or Search Results) */
                         <div className="flex-1 flex flex-col overflow-hidden">
-                            <div className="p-6 pb-2 shrink-0">
-                                <nav className="flex items-center gap-2 mb-4">
-                                    {TABS.map(tab => (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setActiveTab(tab.id)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all
-                                           ${activeTab === tab.id
-                                                    ? 'music-gradient-purple text-white'
-                                                    : 'text-white/60 hover:text-white hover:bg-white/10'}`}
-                                        >
-                                            <tab.icon className="w-4 h-4" />
-                                            <span className="font-medium">{tab.label}</span>
-                                        </button>
-                                    ))}
-                                </nav>
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto music-scrollbar p-6 pt-2">
-                                {/* Albums grid */}
-                                {activeTab === 'albums' && (
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        {isManager && (
-                                            <AddMusicCard tabId="albums" onAdd={(tracks) => {
-                                                if (tracks && tracks.length > 0) {
-                                                    setSelectedBatch(tracks);
-                                                }
-                                                setShowYouTubeIngest(true);
-                                            }} />
-                                        )}
-
-                                        {isLoading && albums.length === 0 ? (
-                                            <div className="col-span-full flex items-center justify-center py-12">
-                                                <div className="w-8 h-8 border-3 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
-                                            </div>
-                                        ) : filteredAlbums.length === 0 ? (
-                                            <div className="col-span-full text-center py-20 px-6">
-                                                {!isMusicDriveConnected ? (
-                                                    // True Disconnection
-                                                    <>
-                                                        <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-5">
-                                                            <HardDrive className="w-10 h-10 text-amber-400" />
-                                                        </div>
-                                                        <p className="text-white text-xl font-bold mb-2">דיסק RANTUNES מנותק</p>
-                                                        <p className="text-white/60 mb-8">האלבומים המחוברים לדיסק החיצוני אינם זמינים כרגע</p>
-                                                        <button
-                                                            onClick={() => refreshAll()}
-                                                            className="px-6 py-2 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 hover:bg-amber-600/30 transition-all flex items-center gap-2 mx-auto"
-                                                        >
-                                                            <RefreshCw className="w-4 h-4" />
-                                                            <span>בדוק חיבור שוב</span>
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    // Drive connected but no albums in DB
-                                                    <>
-                                                        <div className="w-20 h-20 rounded-full bg-purple-500/10 flex items-center justify-center mx-auto mb-5">
-                                                            <Music className="w-10 h-10 text-purple-400" />
-                                                        </div>
-                                                        <p className="text-white text-xl font-bold mb-2">לא נמצאו אלבומים</p>
-                                                        <p className="text-white/60 mb-8">הדיסק מחובר, אך נראה שלא סרקת שירים עדיין</p>
-                                                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                                                            <button
-                                                                onClick={() => setShowScanner(true)}
-                                                                className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all flex items-center gap-2 shadow-lg shadow-purple-900/20"
-                                                            >
-                                                                <Search className="w-4 h-4" />
-                                                                <span>התחל סריקה</span>
-                                                            </button>
-                                                            <button
-                                                                onClick={() => refreshAll()}
-                                                                className="px-6 py-2 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 transition-all flex items-center gap-2"
-                                                            >
-                                                                <RefreshCw className="w-4 h-4" />
-                                                                <span>רענן</span>
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            filteredAlbums.map(album => (
-                                                <AlbumCard
-                                                    key={album.id}
-                                                    album={album}
-                                                    onClick={isEditMode ? () => toggleItemSelection(album.id) : handleAlbumClick}
-                                                    onPlay={isEditMode ? null : handleAlbumPlay}
-                                                    selectionMode={isEditMode}
-                                                    isSelected={selectedItems.includes(album.id)}
-                                                    onDelete={isEditMode ? null : (item) => handleDeleteClick('album', item)}
-                                                />
-                                            ))
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Artists grid */}
-                                {activeTab === 'artists' && (
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        {isManager && (
-                                            <AddMusicCard tabId="artists" onAdd={(tracks) => {
-                                                if (tracks && tracks.length > 0) {
-                                                    setSelectedBatch(tracks);
-                                                }
-                                                setShowYouTubeIngest(true);
-                                            }} />
-                                        )}
-                                        {filteredArtists.map(artist => {
-                                            const initials = artist.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
-                                            const artistGradients = [
-                                                'from-pink-600 to-rose-500',
-                                                'from-purple-600 to-indigo-500',
-                                                'from-blue-600 to-cyan-500',
-                                                'from-emerald-600 to-teal-500',
-                                                'from-orange-600 to-amber-500',
-                                                'from-red-600 to-pink-500',
-                                            ];
-                                            const gradIdx = (artist.name?.charCodeAt(0) || 0) % artistGradients.length;
-                                            const artistImageUrl = artist.image_url
-                                                ? (artist.image_url.startsWith('http') ? artist.image_url : `${MUSIC_API_URL}/music/cover?path=${encodeURIComponent(artist.image_url)}`)
-                                                : null;
-
-                                            const isSelected = selectedItems.includes(artist.id);
-
-                                            return (
-                                                <motion.div
-                                                    key={artist.id}
-                                                    whileHover={!isEditMode ? { scale: 1.03 } : { scale: 1.01 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    className={`rounded-2xl overflow-hidden group relative cursor-pointer transition-all
-                                                        ${isEditMode && isSelected ? 'ring-4 ring-purple-500 opacity-100' : isEditMode ? 'opacity-60' : ''}`}
-                                                    onClick={() => isEditMode ? toggleItemSelection(artist.id) : handleArtistClick(artist)}
-                                                >
-                                                    <div className="aspect-square relative overflow-hidden">
-                                                        {artistImageUrl ? (
-                                                            <img
-                                                                src={artistImageUrl}
-                                                                alt={artist.name}
-                                                                className={`w-full h-full object-cover transition-transform duration-500 ${!isEditMode ? 'group-hover:scale-110' : ''}`}
-                                                                loading="lazy"
-                                                                onError={(e) => { e.target.style.display = 'none'; }}
-                                                            />
-                                                        ) : (
-                                                            <div className={`w-full h-full bg-gradient-to-br ${artistGradients[gradIdx]} flex items-center justify-center`}>
-                                                                <span className="text-white/80 text-4xl font-black select-none">{initials}</span>
-                                                            </div>
-                                                        )}
-
-                                                        {isEditMode && (
-                                                            <div className={`absolute top-3 left-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20
-                                                                ${isSelected ? 'bg-purple-500 border-white' : 'bg-black/20 border-white/30'}`}>
-                                                                {isSelected && <div className="w-3 h-1.5 border-l-2 border-b-2 border-white -rotate-45 mt-[-2px]" />}
-                                                            </div>
-                                                        )}
-
-                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
-                                                            <h3 className="text-white font-bold text-sm truncate">{artist.name}</h3>
-                                                            <p className="text-white/60 text-xs">אמן</p>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
+                            <div className="flex-1 overflow-y-auto music-scrollbar p-6">
+                                {searchQuery.trim() !== '' ? (
+                                    /* Search Results of all songs */
+                                    <div className="space-y-1">
+                                        <div className="text-white/40 text-xs font-bold mb-4 pr-2">תוצאות חיפוש:</div>
+                                        {(() => {
+                                            const searchedSongs = allSongs.filter(song =>
+                                                song.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                song.artist?.name?.toLowerCase().includes(searchQuery.toLowerCase())
                                             );
-                                        })}
+                                            const sortedSearchedSongs = [...searchedSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
+                                            if (sortedSearchedSongs.length === 0) {
+                                                return <div className="text-white/40 text-sm pr-2">לא נמצאו שירים התואמים את החיפוש</div>;
+                                            }
+                                            return filterSongs(sortedSearchedSongs).map((song) => (
+                                                <SongRow
+                                                    key={song.id}
+                                                    song={song}
+                                                    isPlaying={isPlaying && currentSong?.id === song.id}
+                                                    isCurrentSong={currentSong?.id === song.id}
+                                                    onEdit={handleEditClick}
+                                                />
+                                            ));
+                                        })()}
                                     </div>
-                                )}
-
-                                {/* Playlists grid */}
-                                {activeTab === 'playlists' && (
+                                ) : (
+                                    /* Playlists Grid (default landing view) */
+                                    (() => {
+                                        const activePlaylistId = playlist[0]?.playlist_id;
+                                        return (
                                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                                         {isManager && (
-                                            <AddMusicCard tabId="playlists" onAdd={(tracks) => {
-                                                if (tracks && tracks.length > 0) {
-                                                    setSelectedBatch(tracks);
-                                                }
-                                                setShowYouTubeIngest(true);
-                                            }} />
+                                            <motion.div
+                                                whileHover={{ scale: 1.02, y: -4 }}
+                                                whileTap={{ scale: 0.97 }}
+                                                onClick={() => setShowPlaylistBuilder(true)}
+                                                className="group cursor-pointer rounded-2xl overflow-hidden border border-white/10 hover:border-purple-400/60 bg-gradient-to-br from-purple-600/30 to-indigo-600/30 backdrop-blur-md relative transition-all duration-500 hover:shadow-2xl hover:shadow-white/5 w-full h-full aspect-square"
+                                            >
+                                                <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors" />
+                                                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-black/20 rounded-full blur-2xl" />
+
+                                                <div className="flex flex-col items-center justify-center h-full relative z-10 p-6">
+                                                    <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center border border-white/10 shadow-xl shadow-black/20 group-hover:scale-110 group-hover:rotate-90 transition-all duration-700 ease-out mb-4">
+                                                        <Plus className="w-8 h-8 text-purple-400" />
+                                                        <div className="absolute inset-0 rounded-full border border-white/20 animate-ping opacity-20 group-hover:opacity-40" />
+                                                    </div>
+
+                                                    <div className="text-center">
+                                                        <h3 className="text-white font-black text-lg leading-tight">צור פלייליסט</h3>
+                                                        <p className="text-white/50 text-xs font-bold mt-1">צור פלייליסט חכם חדש</p>
+                                                    </div>
+                                                </div>
+                                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-indigo-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                            </motion.div>
                                         )}
-                                        {filteredPlaylists.map(playlist => {
-                                            const isSelected = selectedItems.includes(playlist.id);
+                                        {filteredPlaylists.map(pl => {
+                                            const isSelected = selectedItems.includes(pl.id);
+                                            const isNowPlaying = activePlaylistId && activePlaylistId === pl.id && isPlaying;
                                             return (
                                                 <motion.div
-                                                    key={playlist.id}
+                                                    key={pl.id}
                                                     whileHover={!isEditMode ? { scale: 1.03 } : { scale: 1.01 }}
                                                     whileTap={{ scale: 0.98 }}
                                                     className={`rounded-2xl overflow-hidden group relative cursor-pointer transition-all
+                                                        ${isNowPlaying ? 'ring-2 ring-purple-500 shadow-lg shadow-purple-500/20' : ''}
                                                         ${isEditMode && isSelected ? 'ring-4 ring-purple-500 opacity-100' : isEditMode ? 'opacity-60' : ''}`}
-                                                    onClick={() => isEditMode ? toggleItemSelection(playlist.id) : handlePlaylistClick(playlist)}
+                                                    onClick={() => isEditMode ? toggleItemSelection(pl.id) : handlePlaylistClick(pl)}
                                                 >
-                                                    <div className="aspect-square bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center relative overflow-hidden">
-                                                        <ListMusic className="w-16 h-16 text-white/25" />
+                                                    <div className="aspect-square bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center relative overflow-hidden w-full h-full">
+                                                        <ListMusic className={`w-16 h-16 ${isNowPlaying ? 'text-white/10' : 'text-white/25'}`} />
+
+                                                        {/* Now Playing Visualizer Overlay */}
+                                                        {isNowPlaying && (
+                                                            <div className="absolute inset-0 flex items-center justify-center z-10">
+                                                                <div className="flex items-end gap-[3px] h-12">
+                                                                    <span className="w-[4px] bg-purple-400 rounded-full animate-[musicBar1_1.2s_ease-in-out_infinite]" />
+                                                                    <span className="w-[4px] bg-purple-300 rounded-full animate-[musicBar2_1.0s_ease-in-out_infinite]" />
+                                                                    <span className="w-[4px] bg-indigo-400 rounded-full animate-[musicBar3_1.4s_ease-in-out_infinite]" />
+                                                                    <span className="w-[4px] bg-purple-400 rounded-full animate-[musicBar4_0.9s_ease-in-out_infinite]" />
+                                                                    <span className="w-[4px] bg-indigo-300 rounded-full animate-[musicBar5_1.1s_ease-in-out_infinite]" />
+                                                                </div>
+                                                            </div>
+                                                        )}
 
                                                         {isEditMode && (
                                                             <div className={`absolute top-3 left-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20
@@ -1234,10 +1285,10 @@ const MusicPageContent = () => {
                                                             </div>
                                                         )}
 
-                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
-                                                            <h3 className="text-white font-bold text-sm truncate">{playlist.name}</h3>
-                                                            <p className="text-white/60 text-xs">
-                                                                {playlist.created_at ? new Date(playlist.created_at).toLocaleDateString('he-IL') : 'פלייליסט'}
+                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10 text-right">
+                                                            <h3 className="text-white font-bold text-sm truncate">{pl.name}</h3>
+                                                            <p className={`text-xs ${isNowPlaying ? 'text-purple-300 font-bold' : 'text-white/60'}`}>
+                                                                {isNowPlaying ? '♫ מתנגן כעת' : (pl.created_at ? new Date(pl.created_at).toLocaleDateString('he-IL') : 'פלייליסט')}
                                                             </p>
                                                         </div>
 
@@ -1246,84 +1297,8 @@ const MusicPageContent = () => {
                                             );
                                         })}
                                     </div>
-                                )}
-
-                                {/* Singles grid */}
-                                {activeTab === 'singles' && (
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        {isManager && (
-                                            <AddMusicCard tabId="singles" onAdd={(tracks) => {
-                                                if (tracks && tracks.length > 0) {
-                                                    setSelectedBatch(tracks);
-                                                }
-                                                setShowYouTubeIngest(true);
-                                            }} />
-                                        )}
-                                        {filteredSingles.map((song) => {
-                                            const isSelected = selectedItems.includes(song.id);
-                                            return (
-                                                <motion.div
-                                                    key={song.id}
-                                                    whileHover={!isEditMode ? { scale: 1.03 } : { scale: 1.01 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    className={`rounded-2xl overflow-hidden group relative cursor-pointer transition-all
-                                                        ${isEditMode && isSelected ? 'ring-4 ring-purple-500 opacity-100' : isEditMode ? 'opacity-60' : ''}
-                                                        ${!isEditMode && currentSong?.id === song.id ? 'ring-2 ring-purple-500' : ''}`}
-                                                    onClick={() => isEditMode ? toggleItemSelection(song.id) : handleSongPlay(song)}
-                                                >
-                                                    <div className={`aspect-square flex items-center justify-center relative overflow-hidden
-                                                        ${getSongGradient(song.title)}`}>
-                                                        <Music className="w-14 h-14 text-white/20" />
-
-                                                        {isEditMode && (
-                                                            <div className={`absolute top-3 left-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all z-20
-                                                                ${isSelected ? 'bg-purple-500 border-white' : 'bg-black/20 border-white/30'}`}>
-                                                                {isSelected && <div className="w-3 h-1.5 border-l-2 border-b-2 border-white -rotate-45 mt-[-2px]" />}
-                                                            </div>
-                                                        )}
-
-                                                        {!isEditMode && currentSong?.id === song.id && isPlaying && (
-                                                            <div className="absolute bottom-3 left-3 flex items-center gap-[2px] z-10">
-                                                                <div className="w-1 h-3 bg-white rounded-full animate-music-bar-1" />
-                                                                <div className="w-1 h-5 bg-white rounded-full animate-music-bar-2" />
-                                                                <div className="w-1 h-2 bg-white rounded-full animate-music-bar-3" />
-                                                            </div>
-                                                        )}
-
-                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 pb-2.5 px-3 z-10">
-                                                            <h3 className="text-white font-bold text-sm truncate">{song.title}</h3>
-                                                            <p className="text-white/60 text-xs truncate">{song.artist?.name || 'אמן לא ידוע'}</p>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-
-                                {/* Favorites - list style with song rows */}
-                                {activeTab === 'favorites' && (
-                                    <div className="space-y-1">
-                                        {favoriteSongs.length === 0 ? (
-                                            <div className="text-center py-12">
-                                                <Heart className="w-16 h-16 text-white/20 mx-auto mb-4" />
-                                                <p className="text-white/40 text-lg mb-1">אין מועדפים עדיין</p>
-                                                <p className="text-white/30 text-sm">לחץ על 👍 ליד שיר כדי להוסיף למועדפים</p>
-                                            </div>
-                                        ) : (
-                                            favoriteSongs.map((song, index) => (
-                                                <SongRow
-                                                    key={song.id}
-                                                    song={song}
-                                                    index={index}
-                                                    isPlaying={isPlaying}
-                                                    isCurrentSong={currentSong?.id === song.id}
-                                                    onPlay={(s) => playSong(s, favoriteSongs.filter(x => (x?.myRating || 0) !== 1))}
-                                                    onRate={handleRate}
-                                                />
-                                            ))
-                                        )}
-                                    </div>
+                                        );
+                                    })()
                                 )}
                             </div>
                         </div>
@@ -1459,6 +1434,120 @@ const MusicPageContent = () => {
                         </motion.div>
                     )}
                 </AnimatePresence>
+                {/* Edit Song Modal */}
+                {editingSong && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" dir="rtl">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="w-full max-w-md bg-zinc-900/90 border border-white/10 rounded-3xl p-6 shadow-2xl relative"
+                        >
+                            <button
+                                onClick={() => setEditingSong(null)}
+                                className="absolute top-4 left-4 p-2 text-white/40 hover:text-white rounded-full bg-white/5 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center border border-purple-500/30 text-purple-400">
+                                    <Edit2 className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-black text-xl">עריכת פרטי שיר</h3>
+                                    <p className="text-white/40 text-xs">שנה את השם, האמן או שיוך הפלייליסט</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-white/60 text-sm font-medium mb-1.5">שם השיר</label>
+                                    <input
+                                        type="text"
+                                        value={editTitle}
+                                        onChange={(e) => setEditTitle(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                        placeholder="שם השיר"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-white/60 text-sm font-medium mb-1.5">שם האמן</label>
+                                    <input
+                                        type="text"
+                                        value={editArtistName}
+                                        onChange={(e) => setEditArtistName(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                        placeholder="שם האמן"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-white/60 text-sm font-medium mb-1.5">קצב / סגנון השיר</label>
+                                    <select
+                                        value={editBpmType}
+                                        onChange={(e) => setEditBpmType(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                    >
+                                        <option value="chill">שקט / רגוע (Chill - עד 100 BPM)</option>
+                                        <option value="upbeat">קצבי / מהיר (Upbeat - מעל 100 BPM)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-white/60 text-sm font-medium mb-1.5">שיוך לרשימת השמעה (פלייליסט)</label>
+                                    <select
+                                        value={editPlaylistId}
+                                        onChange={(e) => setEditPlaylistId(e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                                    >
+                                        <option value="">ללא פלייליסט (שירים בלבד)</option>
+                                        {playlists && playlists.map(pl => (
+                                            <option key={pl.id} value={pl.id}>
+                                                {pl.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3 mt-8">
+                                <div className="flex gap-3 w-full">
+                                    <button
+                                        onClick={handleSaveEdit}
+                                        disabled={isSavingEdit || !editTitle.trim() || !editArtistName.trim()}
+                                        className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-900/30"
+                                    >
+                                        {isSavingEdit ? (
+                                            <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                            <span>שמור שינויים</span>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingSong(null)}
+                                        className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 font-bold border border-white/10 transition-all"
+                                    >
+                                        ביטול
+                                    </button>
+                                </div>
+                                
+                                <button
+                                    onClick={() => {
+                                        setEditingSong(null);
+                                        handleDeleteClick('song', editingSong);
+                                    }}
+                                    className="w-full py-3 rounded-xl bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 font-bold border border-red-500/20 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>מחק שיר לצמיתות</span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
                 {/* Delete Confirmation Dialog */}
                 <AnimatePresence>
                     {itemToDelete && (
