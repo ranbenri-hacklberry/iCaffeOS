@@ -58,7 +58,7 @@ export const MusicProvider = ({ children }) => {
     const [isLoading, setIsLoading] = useState(false);
 
     // Playback Destination (local browser or server output)
-    const [playbackTarget, setPlaybackTarget] = useState(localStorage.getItem('music_playback_target') || 'local');
+    const [playbackTarget, setPlaybackTarget] = useState(localStorage.getItem('music_playback_target') || 'server');
 
     // ─── RanTunes WebSocket (Server Mode) ───────────────────────────────────────
     // Always connect the WS hook so we receive library/drive events even in local mode.
@@ -85,11 +85,45 @@ export const MusicProvider = ({ children }) => {
         }
     }, [ws.state, playbackTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Persist target selection
+    // Persist and transition target selection in real-time
+    const lastTargetRef = useRef(playbackTarget);
     useEffect(() => {
         console.log('🔈 [MusicContext] Playback Target Changed:', playbackTarget);
         localStorage.setItem('music_playback_target', playbackTarget);
-    }, [playbackTarget]);
+
+        if (playbackTarget !== lastTargetRef.current && currentSong && isPlaying) {
+            console.log(`🔄 [MusicContext] Transitioning playback destination from ${lastTargetRef.current} to ${playbackTarget} at position ${currentTime}s`);
+            
+            if (playbackTarget === 'local') {
+                // Pause server playback
+                ws.pause();
+                
+                // Play locally
+                audio1Ref.current.pause(); audio1Ref.current.src = '';
+                audio2Ref.current.pause(); audio2Ref.current.src = '';
+                
+                const audioUrl = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(currentSong.file_path || '')}&id=${currentSong.id}`;
+                const player = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+                player.src = audioUrl;
+                player.load();
+                
+                player.play().then(() => {
+                    player.currentTime = currentTime;
+                }).catch(err => console.warn('Local play transition error:', err));
+            } else if (playbackTarget === 'server') {
+                // Pause local playback
+                audio1Ref.current.pause();
+                audio2Ref.current.pause();
+                
+                // Start server playback
+                ws.play(currentSong);
+                setTimeout(() => {
+                    ws.seek(currentTime);
+                }, 800);
+            }
+        }
+        lastTargetRef.current = playbackTarget;
+    }, [playbackTarget, currentSong, isPlaying, ws, activeAudio, currentTime, MUSIC_API_URL]);
 
     // Initial Load: Restore queue from Dexie
     useEffect(() => {
