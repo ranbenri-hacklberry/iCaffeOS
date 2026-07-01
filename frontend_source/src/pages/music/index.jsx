@@ -515,6 +515,35 @@ const MusicPageContent = () => {
         }
     };
 
+    // Handle playlist song click - plays selected song first, followed by the rest of the playlist songs shuffled
+    const handlePlaylistSongClick = async (clickedSong) => {
+        if (!selectedAlbum) return;
+        
+        const songs = await fetchPlaylistSongs(selectedAlbum.id);
+        const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
+        
+        if (playable.length > 0) {
+            // Map songs to have the playlist_id
+            const mapped = playable.map(s => ({ ...s, playlist_id: selectedAlbum.id }));
+            
+            // Separate the clicked song from the rest
+            const clickedSongWithId = mapped.find(s => s.id === clickedSong.id) || { ...clickedSong, playlist_id: selectedAlbum.id };
+            const rest = mapped.filter(s => s.id !== clickedSong.id);
+            
+            // Shuffle the rest of the songs
+            for (let i = rest.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [rest[i], rest[j]] = [rest[j], rest[i]];
+            }
+            
+            // Combine: clicked song first, then shuffled rest
+            const finalQueue = [clickedSongWithId, ...rest];
+            
+            // Play immediately starting from clickedSong
+            playSong(finalQueue[0], finalQueue, true);
+        }
+    };
+
     // Edit song handlers
     const handleEditClick = async (song) => {
         setEditingSong(song);
@@ -1212,7 +1241,7 @@ const MusicPageContent = () => {
                                                 song={song}
                                                 isPlaying={isPlaying && currentSong?.id === song.id}
                                                 isCurrentSong={currentSong?.id === song.id}
-                                                onEdit={handleEditClick}
+                                                onEdit={selectedAlbum?.isPlaylist ? handlePlaylistSongClick : handleEditClick}
                                             />
                                         ));
                                     })()}
