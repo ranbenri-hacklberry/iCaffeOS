@@ -1115,7 +1115,8 @@ const MusicPageContent = () => {
                                 <div className="space-y-1">
                                     {(() => {
                                         const filteredSongs = filterSongs(currentAlbumSongs);
-                                        const isPlaylistPlaying = selectedAlbum?.isPlaylist && playlist.length > 0 && playlist.some(s => s.playlist_id === selectedAlbum.id);
+                                        // Disabled active queue view within playlist details to prevent hiding newly added/downloaded playlist songs.
+                                        const isPlaylistPlaying = false;
 
                                         if (isPlaylistPlaying) {
                                             return (
@@ -1176,8 +1177,16 @@ const MusicPageContent = () => {
                                             );
                                         }
 
-                                        // Static display of album/playlist songs sorted alphabetically
-                                        const sortedSongs = [...filteredSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
+                                        // Static display of album/playlist songs sorted by position or track number
+                                        const sortedSongs = [...filteredSongs].sort((a, b) => {
+                                            if (selectedAlbum?.isPlaylist) {
+                                                return (a.position || 0) - (b.position || 0);
+                                            }
+                                            if (a.track_number !== undefined && b.track_number !== undefined) {
+                                                return (a.track_number || 0) - (b.track_number || 0);
+                                            }
+                                            return (a.title || '').localeCompare(b.title || '', 'he');
+                                        });
                                         return sortedSongs.map((song) => (
                                             <SongRow
                                                 key={song.id}
