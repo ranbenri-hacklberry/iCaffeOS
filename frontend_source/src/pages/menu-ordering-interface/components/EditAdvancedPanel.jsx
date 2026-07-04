@@ -77,27 +77,6 @@ const EditAdvancedPanel = ({
           </div>
         </div>
 
-        {/* In Stock Toggle */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-700">📦 במלאי</span>
-              <span className="text-[10px] text-slate-400">
-                {editIsInStock ? 'פעיל — ניתן להזמנה' : 'לא במלאי — יופיע דהוי'}
-              </span>
-            </div>
-            <button
-              onClick={() => setEditIsInStock(prev => !prev)}
-              className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${
-                editIsInStock ? 'bg-emerald-500' : 'bg-slate-300'
-              }`}
-            >
-              <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-200 ${
-                editIsInStock ? 'right-0.5' : 'right-[22px]'
-              }`} />
-            </button>
-          </div>
-        </div>
 
         {/* Delete Item */}
         <button
