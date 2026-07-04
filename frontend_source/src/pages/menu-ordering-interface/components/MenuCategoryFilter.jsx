@@ -123,15 +123,15 @@ const MenuCategoryFilter = ({
 
   return (
     <div className={`sticky top-0 z-20 ${isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-gray-100'} backdrop-blur-sm border-b shadow-sm font-heebo transition-colors duration-300`}>
-      <div className="px-4 py-3">
-        <div className="flex items-center gap-3" dir="rtl">
+      <div className="px-1.5 sm:px-4 py-2 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-3" dir="rtl">
 
           {/* Edit Mode Toggle — right side (first in RTL) */}
           {onToggleEditMode && (
             <button
               onClick={onToggleEditMode}
               title={isEditMode ? 'סיים עריכה' : 'ערוך קטגוריות'}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl transition-all duration-200 text-xs font-bold whitespace-nowrap
+              className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-xs font-bold whitespace-nowrap
                 ${isEditMode
                   ? (isDarkMode
                     ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-500 shadow-lg shadow-orange-500/10'
@@ -142,8 +142,7 @@ const MenuCategoryFilter = ({
                 }
               `}
             >
-              {isEditMode ? <X size={14} /> : <Pencil size={14} />}
-              <span>{isEditMode ? 'סיום' : 'עריכה'}</span>
+              {isEditMode ? <X size={16} /> : <Pencil size={16} />}
             </button>
           )}
 
@@ -178,7 +177,7 @@ const MenuCategoryFilter = ({
                       onMouseDown={(e) => { if (isEditMode) { e.preventDefault(); initDrag(index, e.clientX); } }}
                       onClick={() => handleCategoryClick(category)}
                       className={`
-                        flex items-center gap-1.5 px-3 py-3 rounded-lg text-[15px] font-bold whitespace-nowrap relative select-none
+                        flex items-center gap-1 sm:gap-1.5 px-2 py-2 sm:px-3 sm:py-3 rounded-lg text-xs xs:text-sm sm:text-[15px] font-bold whitespace-nowrap relative select-none
                         transition-all duration-200
                         ${isBeingDragged
                           ? (isDarkMode
@@ -215,22 +214,7 @@ const MenuCategoryFilter = ({
             </div>
           </div>
 
-          {/* Add Category button — separated on the left */}
-          {onAddCategory && (
-            <button
-              onClick={onAddCategory}
-              title="הוסף קטגוריה חדשה"
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl border-2 border-dashed transition-all duration-200 text-xs font-bold whitespace-nowrap
-                ${isDarkMode
-                  ? 'border-slate-600 text-slate-400 hover:border-sky-500 hover:text-sky-400 hover:bg-slate-800/50'
-                  : 'border-slate-300 text-slate-400 hover:border-purple-400 hover:text-purple-500 hover:bg-purple-50'
-                }
-              `}
-            >
-              <FolderPlus size={16} />
-              <span>+ קטגוריה</span>
-            </button>
-          )}
+
         </div>
       </div>
     </div>

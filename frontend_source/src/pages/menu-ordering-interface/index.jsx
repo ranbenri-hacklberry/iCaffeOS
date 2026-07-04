@@ -14,6 +14,7 @@ import MTOQuickNotesModal from './components/MTOQuickNotesModal';
 import DeliveryAddressModal from './components/DeliveryAddressModal';
 import OrderConfirmationModal from '../../components/ui/OrderConfirmationModal';
 import CustomerInfoModal from '../../components/CustomerInfoModal';
+import PinCodeModal from '../../components/PinCodeModal';
 import { addCoffeePurchase, getLoyaltyCount, handleLoyaltyAdjustment, getLoyaltyRedemptionForOrder } from "../../lib/loyalty";
 import { supabase } from '../../lib/supabase';
 import { useAuth, APP_VERSION } from '../../context/AuthContext';
@@ -219,6 +220,9 @@ const MenuOrderingInterface = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCategoryEditMode, setIsCategoryEditMode] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null); // null = create mode, object = edit mode
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinAction, setPinAction] = useState(null); // 'add-product' | 'add-category' | 'edit-categories' | 'edit-category-item'
+  const [pinActionData, setPinActionData] = useState(null);
   const isSubmittingRef = useRef(false); // 🛡️ Synchronous guard against double-submit
   const [showConfirmationModal, setShowConfirmationModal] = useState(null);
   const [isEditMode, setIsEditMode] = useState(() => {
@@ -1095,10 +1099,9 @@ const MenuOrderingInterface = () => {
   const handleUndoCart = cartHandleUndo;
 
   // Handle adding a NEW product from the POS
-  const handleAddNewProduct = useCallback((categoryId) => {
+  const executeAddNewProduct = useCallback((categoryId) => {
     console.log('🆕 [AddNewProduct] Creating blank item for category:', categoryId || activeCategory);
     const effectiveCatId = categoryId || activeCategory;
-    // Find category name for display
     const cat = categories.find(c => c.id === effectiveCatId);
     const blankItem = {
       id: `new-${Date.now()}`,
@@ -1118,6 +1121,39 @@ const MenuOrderingInterface = () => {
     setIsCreatingNewProduct(true);
     setShowModifierModal(true);
   }, [categories, currentUser?.business_id, activeCategory]);
+
+  const triggerPinProtectedAction = useCallback((actionType, data = null) => {
+    setPinAction(actionType);
+    setPinActionData(data);
+    setShowPinModal(true);
+  }, []);
+
+  const executeEditCategory = useCallback((category) => {
+    setEditingCategory(category);
+    setNewCategoryName(category?.name || '');
+    setShowNewCategoryModal(true);
+  }, []);
+
+  const handlePinSuccess = useCallback(() => {
+    setShowPinModal(false);
+    if (pinAction === 'add-product') {
+      executeAddNewProduct(pinActionData);
+    } else if (pinAction === 'add-category') {
+      setEditingCategory(null);
+      setNewCategoryName('');
+      setShowNewCategoryModal(true);
+    } else if (pinAction === 'edit-categories') {
+      setIsCategoryEditMode(true);
+    } else if (pinAction === 'edit-category-item') {
+      executeEditCategory(pinActionData);
+    }
+    setPinAction(null);
+    setPinActionData(null);
+  }, [pinAction, pinActionData, executeAddNewProduct, executeEditCategory]);
+
+  const handleAddNewProduct = useCallback((categoryId) => {
+    triggerPinProtectedAction('add-product', categoryId);
+  }, [triggerPinProtectedAction]);
 
   // Handle adding a NEW category
   const handleAddCategory = useCallback(async (name) => {
@@ -1165,10 +1201,8 @@ const MenuOrderingInterface = () => {
 
   // Handle clicking a category in edit mode -> open modal pre-filled
   const handleEditCategory = useCallback((category) => {
-    setEditingCategory(category);
-    setNewCategoryName(category?.name || '');
-    setShowNewCategoryModal(true);
-  }, []);
+    triggerPinProtectedAction('edit-category-item', category);
+  }, [triggerPinProtectedAction]);
 
   // Handle moving a category left/right (swap positions)
   const handleMoveCategory = useCallback(async (categoryId, direction) => {
@@ -2980,9 +3014,14 @@ const MenuOrderingInterface = () => {
                 activeCategory={activeCategory}
                 onCategoryChange={handleCategoryChange}
                 categories={categories}
-                onAddCategory={() => { setEditingCategory(null); setNewCategoryName(''); setShowNewCategoryModal(true); }}
                 isEditMode={isCategoryEditMode}
-                onToggleEditMode={() => setIsCategoryEditMode(prev => !prev)}
+                onToggleEditMode={() => {
+                  if (isCategoryEditMode) {
+                    setIsCategoryEditMode(false);
+                  } else {
+                    triggerPinProtectedAction('edit-categories');
+                  }
+                }}
                 onEditCategory={handleEditCategory}
                 onReorderCategories={handleReorderCategories}
               />
@@ -3014,21 +3053,39 @@ const MenuOrderingInterface = () => {
             </div>
           )}
 
-          {/* Floating Add Product button — bottom-left of menu panel */}
+          {/* Floating Action Buttons (Add Category + Add Product) — bottom-left of menu panel */}
           {!scanMode && !isRestrictedMode && (
-            <button
-              onClick={() => handleAddNewProduct(activeCategory)}
-              className={`absolute bottom-4 left-4 z-30 flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-dashed shadow-lg transition-all duration-200 text-sm font-bold
-                ${isDarkMode
-                  ? 'border-slate-600 text-slate-300 bg-slate-800/90 hover:border-sky-500 hover:text-sky-400 hover:bg-slate-800 backdrop-blur-sm'
-                  : 'border-slate-300 text-slate-500 bg-white/90 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 backdrop-blur-sm'
-                }
-              `}
-              title="הוסף מוצר חדש לקטגוריה"
-            >
-              <span className="text-lg leading-none">+</span>
-              <span>מוצר חדש</span>
-            </button>
+            <div className="absolute bottom-4 left-4 z-30 flex items-center gap-2">
+              {/* Add Category Button */}
+              <button
+                onClick={() => triggerPinProtectedAction('add-category')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-dashed shadow-lg transition-all duration-200 text-sm font-bold
+                  ${isDarkMode
+                    ? 'border-slate-600 text-slate-300 bg-slate-800/90 hover:border-sky-500 hover:text-sky-400 hover:bg-slate-800 backdrop-blur-sm'
+                    : 'border-slate-300 text-slate-500 bg-white/90 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 backdrop-blur-sm'
+                  }
+                `}
+                title="הוסף קטגוריה חדשה"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span>קטגוריה חדשה</span>
+              </button>
+
+              {/* Add Product Button */}
+              <button
+                onClick={() => handleAddNewProduct(activeCategory)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-dashed shadow-lg transition-all duration-200 text-sm font-bold
+                  ${isDarkMode
+                    ? 'border-slate-600 text-slate-300 bg-slate-800/90 hover:border-sky-500 hover:text-sky-400 hover:bg-slate-800 backdrop-blur-sm'
+                    : 'border-slate-300 text-slate-500 bg-white/90 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 backdrop-blur-sm'
+                  }
+                `}
+                title="הוסף מוצר חדש לקטגוריה"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span>מוצר חדש</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -3170,6 +3227,27 @@ const MenuOrderingInterface = () => {
         isOpen={!!showConfirmationModal}
         orderDetails={showConfirmationModal}
         onStartNewOrder={handleCloseConfirmation}
+      />
+
+      <PinCodeModal
+        isOpen={showPinModal}
+        onClose={() => {
+          setShowPinModal(false);
+          setPinAction(null);
+          setPinActionData(null);
+        }}
+        onSuccess={handlePinSuccess}
+        featureName={
+          pinAction === 'add-product'
+            ? 'הוספת מוצר חדש'
+            : pinAction === 'add-category'
+            ? 'הוספת קטגוריה חדשה'
+            : pinAction === 'edit-categories'
+            ? 'עריכת קטגוריות'
+            : pinAction === 'edit-category-item'
+            ? 'עריכת קטגוריה'
+            : 'ניהול תפריט'
+        }
       />
 
       {/* Exit Confirmation Modal */}

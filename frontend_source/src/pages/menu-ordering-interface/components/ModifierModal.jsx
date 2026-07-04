@@ -369,6 +369,66 @@ const detectGroupIcon = (name) => {
   return '📋';
 };
 
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.85) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Canvas toBlob failed'));
+              return;
+            }
+            const compressedFile = new File([blob], file.name || `photo_${Date.now()}.jpg`, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve({
+              file: compressedFile,
+              previewUrl: URL.createObjectURL(blob),
+            });
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
+const isSecureOrigin = () => {
+  return window.location.protocol === 'https:' || 
+         window.location.hostname === 'localhost' || 
+         window.location.hostname === '127.0.0.1';
+};
+
 const ModifierModal = (props) => {
   const { isOpen, selectedItem, onClose, onAddItem, aiDetection, businessId, onItemUpdated, onStartBackgroundEnhancement, enhancingItems = {}, initialEditMode = false } = props;
 
@@ -429,7 +489,45 @@ const ModifierModal = (props) => {
   const [enhanceProgress, setEnhanceProgress] = useState('');   // SSE progress message
   const [enhancedPhoto, setEnhancedPhoto] = useState(null);     // Enhanced result blob URL
   const [photoFile, setPhotoFile] = useState(null);             // Raw File object for upload
+  const [rawPhotoFile, setRawPhotoFile] = useState(null);       // Store original file before background removal
+  const [autoRemoveBg, setAutoRemoveBg] = useState(true);        // Toggle for automatic background removal
+  const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
   const fileInputRef = useRef(null);
+  const [categoriesList, setCategoriesList] = useState([]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const bId = businessId || selectedItem?.business_id;
+      if (!bId) return;
+      try {
+        const { data, error } = await supabase
+          .from('item_category')
+          .select('id, name, name_he')
+          .eq('business_id', bId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .order('position', { ascending: true });
+        if (data) {
+          setCategoriesList(data);
+        }
+      } catch (err) {
+        console.warn('⚠️ [ModifierModal] Failed to fetch categories:', err);
+      }
+    };
+    fetchCategories();
+  }, [businessId, selectedItem?.business_id]);
+
+  // Sync category UUID once categoriesList is loaded
+  useEffect(() => {
+    if (isEditMode && editData && !editData.category && selectedItem) {
+      const catText = selectedItem.category_id || selectedItem._categoryId || selectedItem.category;
+      if (catText) {
+        const found = categoriesList.find(c => c.id === catText || c.name === catText || c.name_he === catText);
+        if (found) {
+          setEditData(prev => prev ? { ...prev, category: found.id } : null);
+        }
+      }
+    }
+  }, [categoriesList, isEditMode, selectedItem, editData?.category]);
 
   // Fetch vector count when training panel opens (flip OR tab)
   useEffect(() => {
@@ -472,25 +570,7 @@ const ModifierModal = (props) => {
     }
   }, [selectedItem?.id]);
 
-  // Auto-enter edit mode for new products
-  useEffect(() => {
-    if (isOpen && selectedItem?._isNewProduct && initialEditMode) {
-      console.log('🆕 [ModifierModal] Auto-entering edit mode for new product');
-      setIsEditMode(true);
-      setEditData({
-        name: selectedItem?.name || '',
-        price: selectedItem?.price || 0,
-        image_url: selectedItem?.image || selectedItem?.image_url || ''
-      });
-      setCapturedPhoto(null);
-      setEnhancedPhoto(null);
-      setPhotoFile(null);
-      setIsEnhancing(false);
-      setEditModifierPrices({});
-      setEditGroups([]);
-      setActiveGroupIdx(0);
-    }
-  }, [isOpen, selectedItem?._isNewProduct, initialEditMode]);
+  // Auto-enter edit mode for products is now handled in the unified effect below fetchInventoryForRecipe to support existing items as well.
 
   useEffect(() => {
     if (!isOpen || !selectedItem) {
@@ -1010,7 +1090,8 @@ const ModifierModal = (props) => {
     setEditData({
       name: selectedItem?.name || '',
       price: selectedItem?.price || selectedItem?.sale_price || 0,
-      image_url: selectedItem?.image || selectedItem?.image_url || ''
+      image_url: selectedItem?.image || selectedItem?.image_url || '',
+      category: selectedItem?.category_id || selectedItem?._categoryId || selectedItem?.category || ''
     });
     // Reset photo state
     setCapturedPhoto(null);
@@ -1104,20 +1185,6 @@ const ModifierModal = (props) => {
   }, [selectedItem]);
 
   // ── Photo Capture & MLX Studio Enhancement ──
-  const handlePhotoCapture = useCallback(async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    // Create preview URL — show immediately, no blocking
-    const previewUrl = URL.createObjectURL(file);
-    setCapturedPhoto(previewUrl);
-    setPhotoFile(file);
-    setEnhancedPhoto(null);
-    
-    // Try to enhance in background, but don't block — user can save at any time
-    enhanceWithMLXStudio(file).catch(() => {});
-  }, []);
-
   const enhanceWithMLXStudio = useCallback(async (file) => {
     setIsEnhancing(true);
     setEnhanceProgress('מסיר רקע...');
@@ -1152,6 +1219,52 @@ const ModifierModal = (props) => {
     }
   }, []);
 
+  const handlePhotoCapture = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      setEnhanceProgress('מעבד תמונה...');
+      setIsEnhancing(true);
+      
+      // Compress to max 800x800, jpeg quality 0.8 to prevent memory crashes and speed up background removal
+      const compressed = await compressImage(file, 800, 800, 0.8);
+      
+      setCapturedPhoto(compressed.previewUrl);
+      setRawPhotoFile(compressed.file);
+      setPhotoFile(compressed.file);
+      setEnhancedPhoto(null);
+      
+      if (autoRemoveBg) {
+        setEnhanceProgress('מסיר רקע...');
+        enhanceWithMLXStudio(compressed.file).catch(() => {});
+      } else {
+        setIsEnhancing(false);
+        setEnhanceProgress('');
+      }
+    } catch (err) {
+      console.error('⚠️ [PhotoCapture] Compression error:', err);
+      setIsEnhancing(false);
+      setEnhanceProgress('שגיאה בעיבוד תמונה');
+      setTimeout(() => setEnhanceProgress(''), 3000);
+    }
+  }, [autoRemoveBg, enhanceWithMLXStudio]);
+
+  const handleToggleRemoveBg = useCallback((checked) => {
+    setAutoRemoveBg(checked);
+    if (!rawPhotoFile) return;
+    
+    if (checked) {
+      enhanceWithMLXStudio(rawPhotoFile).catch(() => {});
+    } else {
+      // Revert to raw photo
+      setEnhancedPhoto(null);
+      setPhotoFile(rawPhotoFile);
+      setEnhanceProgress('');
+      setIsEnhancing(false);
+    }
+  }, [rawPhotoFile, enhanceWithMLXStudio]);
+
   // ── Recipe Data Functions ──
   const fetchInventoryForRecipe = useCallback(async () => {
     try {
@@ -1175,6 +1288,108 @@ const ModifierModal = (props) => {
       return [];
     }
   }, [businessId, selectedItem?.business_id]);
+
+  // Auto-enter edit mode for products (new or existing) if initialEditMode is true
+  useEffect(() => {
+    if (isOpen && initialEditMode && selectedItem) {
+      const isNew = selectedItem?._isNewProduct;
+      console.log(`🆕 [ModifierModal] Auto-entering edit mode (isNew: ${isNew})`);
+      setIsEditMode(true);
+      setEditData({
+        name: selectedItem?.name || '',
+        price: selectedItem?.price || selectedItem?.sale_price || 0,
+        image_url: selectedItem?.image || selectedItem?.image_url || '',
+        category: selectedItem?.category_id || selectedItem?._categoryId || selectedItem?.category || ''
+      });
+      setCapturedPhoto(null);
+      setEnhancedPhoto(null);
+      setPhotoFile(null);
+      setRawPhotoFile(null);
+      setIsEnhancing(false);
+      
+      if (isNew) {
+        setEditModifierPrices({});
+        setEditGroups([]);
+        setActiveGroupIdx(0);
+      } else {
+        // Initialize existing modifiers, stock, and KDS settings
+        const groups = (Array.isArray(selectedItem?.modifiers) ? selectedItem.modifiers : []).map(group => {
+          const parsedItems = (group.items || []).map(item => ({
+            ...item,
+            id: item.id || `item-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+          }));
+          
+          const groupName = (group.name || '').toLowerCase();
+          const detectedType = group.type || (groupName.includes('תוספ') ? 'additive' : 'replacement');
+          
+          if (detectedType !== 'additive') {
+            const hasDefault = parsedItems.some(item => item.isDefault || item.is_default);
+            if (!hasDefault) {
+              parsedItems.unshift({
+                id: `item-default-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+                name: 'רגיל',
+                price: 0,
+                isDefault: true,
+                inventory_item_id: null,
+              });
+            }
+          }
+          
+          return {
+            ...group,
+            id: group.id || `group-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+            type: detectedType,
+            show_default: group.show_default !== undefined ? group.show_default : (group.name || '').includes('חלב'),
+            icon: group.icon || detectGroupIcon(group.name || ''),
+            items: parsedItems,
+          };
+        });
+        setEditGroups(groups);
+        setActiveGroupIdx(0);
+        setShowGroupPicker(false);
+        setIsAddingItemToGroup(false);
+        setLinkingItemKey(null);
+        setLinkSearch('');
+        setEditTab('modifiers');
+        setEditKdsStation({
+          kitchen: (selectedItem?.kds_station || '').includes('kitchen') || (selectedItem?.kds_station || '').includes('both'),
+          bar: (selectedItem?.kds_station || '').includes('bar') || (selectedItem?.kds_station || '').includes('both'),
+        });
+        setEditKdsRouting(selectedItem?.kds_routing_logic || 'MADE_TO_ORDER');
+        setEditIsInStock(selectedItem?.is_in_stock !== false);
+        setEditStock(null);
+        setLinkedInventoryItemId(null);
+        
+        // Fetch inventory link
+        (async () => {
+          try {
+            const menuId = selectedItem?.id || selectedItem?.menu_item_id;
+            if (!menuId) return;
+            fetchInventoryForRecipe();
+            const { data: links } = await supabase
+              .from('recipe_ingredients')
+              .select('inventory_item_id')
+              .eq('recipe_id', menuId);
+
+            if (links && links.length === 1) {
+              const invId = links[0].inventory_item_id;
+              const { data: invItem } = await supabase
+                .from('inventory_items')
+                .select('id, current_stock')
+                .eq('id', invId)
+                .single();
+              if (invItem) {
+                setLinkedInventoryItemId(invItem.id);
+                setEditStock(invItem.current_stock ?? 0);
+              }
+            }
+          } catch (e) {
+            console.error('Error fetching inventory stock in initialEditMode:', e);
+          }
+        })();
+      }
+    }
+  }, [isOpen, selectedItem?.id, initialEditMode]);
 
   const fetchRecipeData = useCallback(async (inventoryOverride) => {
     const menuId = selectedItem?.id || selectedItem?.menu_item_id;
@@ -1442,10 +1657,13 @@ const ModifierModal = (props) => {
       });
 
       // 2. Build update object
+      const selectedCategoryObj = categoriesList.find(c => c.id === editData.category);
       const menuUpdate = {
         name: editData.name,
         price: Number(editData.price),
         modifiers: updatedModifiers,
+        category_id: editData.category || null,
+        category: selectedCategoryObj ? (selectedCategoryObj.name_he || selectedCategoryObj.name) : null,
         kds_station: editKdsStation.kitchen && editKdsStation.bar ? 'both' : editKdsStation.kitchen ? 'kitchen' : editKdsStation.bar ? 'bar' : 'none',
         kds_routing_logic: editKdsRouting,
         is_in_stock: editIsInStock,
@@ -1478,8 +1696,8 @@ const ModifierModal = (props) => {
         const insertPayload = {
           ...menuUpdate,
           business_id: businessId || selectedItem?.business_id,
-          category_id: selectedItem?._categoryId || null,
-          category: selectedItem?.db_category || selectedItem?.category || null,
+          category_id: editData.category || selectedItem?._categoryId || null,
+          category: selectedCategoryObj ? (selectedCategoryObj.name_he || selectedCategoryObj.name) : (selectedItem?.db_category || selectedItem?.category || null),
           is_deleted: false,
         };
         const { data: insertedItem, error: insertError } = await supabase
@@ -1538,6 +1756,8 @@ const ModifierModal = (props) => {
           is_in_stock: editIsInStock,
           kds_station: menuUpdate.kds_station,
           kds_routing_logic: editKdsRouting,
+          category: menuUpdate.category,
+          category_id: menuUpdate.category_id,
         });
       }
 
@@ -1590,7 +1810,7 @@ const ModifierModal = (props) => {
   try {
     console.log('🚀 ModifierModal Reaching Return Statement - Rendering JSX');
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 sm:backdrop-blur-sm" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         dir="rtl"
         onClick={onClose}
       >
@@ -1599,174 +1819,202 @@ const ModifierModal = (props) => {
 
         <div
           style={{ perspective: '1200px' }}
-          className="relative w-auto max-w-[90vw] min-w-[420px]"
+          className="relative w-full h-full sm:w-auto sm:max-w-[90vw] sm:min-w-[420px] md:max-w-xl sm:max-h-[90vh] flex flex-col"
           onClick={e => e.stopPropagation()}
         >
           <div
-            className="relative"
+            className="relative flex flex-col w-full h-full sm:max-h-[90vh]"
           >
           {/* ═══ FRONT FACE — Normal Modal ═══ */}
           <div
             style={{
               display: (showTraining || showRecipe) ? 'none' : 'flex',
             }}
-            className="flex-col bg-[#FAFAFA] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="flex-col w-full h-full sm:max-h-[90vh] bg-[#FAFAFA] rounded-none sm:rounded-[2rem] sm:shadow-2xl overflow-hidden flex-1"
           >
           {/* Header */}
-          <div className={`bg-white/80 backdrop-blur-xl px-6 py-4 flex items-center sticky top-0 z-20 border-b ${isEditMode ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-100/50'}`}>
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              {/* Item Image / Photo Capture */}
-              {(() => {
-                const currentImageUrl = enhancedPhoto || capturedPhoto || editData?.image_url || selectedItem?.image || selectedItem?.image_url;
-                
-                if (isEditMode) {
-                  // Edit mode: clickable thumbnail with camera overlay
-                  return (
-                    <div className="relative flex-shrink-0 group">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handlePhotoCapture}
-                        className="hidden"
-                      />
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-dashed border-indigo-300 hover:border-indigo-500 transition-all relative bg-indigo-50"
-                      >
-                        {currentImageUrl ? (
-                          <img src={currentImageUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ImagePlus size={22} className="text-indigo-400" />
-                          </div>
-                        )}
-                        {/* Camera overlay */}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                          <Camera size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-                        </div>
-                        {/* Enhancement indicator */}
-                        {isEnhancing && (
-                          <div className="absolute inset-0 bg-indigo-900/60 flex items-center justify-center">
-                            <Sparkles size={18} className="text-yellow-300 animate-pulse" />
-                          </div>
-                        )}
-                        {enhancedPhoto && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-md">
-                            <Sparkles size={10} className="text-white" />
-                          </div>
-                        )}
-                      </button>
-                      {/* Retry enhance button */}
-                      {capturedPhoto && !isEnhancing && (
+          <div className={`bg-white/80 backdrop-blur-xl px-4 py-4 flex items-center sticky top-0 z-20 border-b ${isEditMode ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-100/50'}`}>
+            {isEditMode && editData ? (
+              <div className="flex flex-col gap-3 flex-1 min-w-0">
+                {/* Row 1: Image & Name + Auto-Remove Background option */}
+                <div className="flex items-center gap-3 w-full">
+                  {/* Item Image / Photo Capture (capture="environment" removed to prevent mobile crashes) */}
+                  {(() => {
+                    const currentImageUrl = enhancedPhoto || capturedPhoto || editData?.image_url || selectedItem?.image || selectedItem?.image_url;
+                    return (
+                      <div className="relative flex-shrink-0 group">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoCapture}
+                          className="hidden"
+                        />
+
                         <button
-                          onClick={(e) => { e.stopPropagation(); photoFile && enhanceWithMLXStudio(photoFile); }}
-                          className="absolute -bottom-1 -left-1 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center shadow-md hover:bg-indigo-600 transition-colors"
-                          title="שפר שוב"
+                          onClick={() => setShowImageUploadDialog(true)}
+                          className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-dashed border-indigo-300 hover:border-indigo-500 transition-all relative bg-indigo-50 flex-shrink-0"
                         >
-                          <RotateCcw size={10} className="text-white" />
+                          {currentImageUrl ? (
+                            <img src={currentImageUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ImagePlus size={22} className="text-indigo-400" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                            <Camera size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                          </div>
+                          {isEnhancing && (
+                            <div className="absolute inset-0 bg-indigo-900/60 flex items-center justify-center">
+                              <Sparkles size={18} className="text-yellow-300 animate-pulse" />
+                            </div>
+                          )}
+                          {enhancedPhoto && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-md">
+                              <Sparkles size={10} className="text-white" />
+                            </div>
+                          )}
                         </button>
-                      )}
-                    </div>
-                  );
-                }
-                
-                // Normal mode: show image thumbnail or fallback to icon
-                if (currentImageUrl) {
-                  return (
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-inner flex-shrink-0 border border-orange-100">
-                      <img src={currentImageUrl} alt={selectedItem?.name} className="w-full h-full object-cover" />
-                    </div>
-                  );
-                }
-                
-                // Fallback: icon
-                return (
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-inner flex-shrink-0 bg-gradient-to-br from-orange-100 to-orange-50 text-orange-500">
-                    <Coffee size={20} strokeWidth={2.5} />
+                        {capturedPhoto && !isEnhancing && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); photoFile && enhanceWithMLXStudio(photoFile); }}
+                            className="absolute -bottom-1 -left-1 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center shadow-md hover:bg-indigo-600 transition-colors"
+                            title="שפר שוב"
+                          >
+                            <RotateCcw size={10} className="text-white" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Name Input */}
+                  <div className="flex-[3] min-w-0">
+                    <input
+                      type="text"
+                      value={editData.name}
+                      onChange={e => setEditData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="שם המנה"
+                      className="text-base font-bold text-slate-800 tracking-tight w-full bg-white border-2 border-indigo-200 rounded-xl px-3 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                      dir="rtl"
+                    />
                   </div>
-                );
-              })()}
-              <div className="min-w-0 flex-1">
-                {isEditMode && editData ? (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-3">
-                      {/* Name input — ~half width */}
-                      <input
-                        type="text"
-                        value={editData.name}
-                        onChange={e => setEditData(prev => ({ ...prev, name: e.target.value }))}
-                        className="text-base font-bold text-slate-800 tracking-tight flex-1 min-w-0 bg-white border-2 border-indigo-200 rounded-xl px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                        dir="rtl"
-                      />
-                      {/* Price selector — same style as quantity selector */}
-                      <div className="flex items-center bg-slate-50 p-1.5 rounded-2xl border border-indigo-100 shadow-inner flex-shrink-0">
-                        <button
-                          onClick={() => setEditData(prev => ({ ...prev, price: Math.max(0, Number(prev.price) - 1) }))}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 active:scale-90 transition-all shadow-sm"
-                        >
-                          <Minus size={18} strokeWidth={3} />
-                        </button>
 
-                        <div className="w-16 text-center text-lg font-black text-slate-800 tabular-nums flex items-center justify-center gap-0.5">
-                          <span className="text-sm text-slate-400">₪</span>
-                          <span>{Number(editData.price)}</span>
-                        </div>
+                  {/* Category Select (Max 25% of row) */}
+                  <div className="flex-1 max-w-[25%] min-w-[90px]">
+                    <select
+                      value={editData.category || ''}
+                      onChange={e => setEditData(prev => ({ ...prev, category: e.target.value }))}
+                      className="w-full text-xs font-bold text-slate-700 bg-white border-2 border-indigo-200 rounded-xl px-2 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none text-ellipsis overflow-hidden whitespace-nowrap"
+                      dir="rtl"
+                    >
+                      <option value="">קטגוריה...</option>
+                      {categoriesList.map(cat => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name_he || cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-                        <button
-                          onClick={() => setEditData(prev => ({ ...prev, price: Number(prev.price) + 1 }))}
-                          className="w-10 h-10 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-90 transition-all shadow-md"
-                        >
-                          <Plus size={18} strokeWidth={3} />
-                        </button>
+                {/* Row 2: Price & Stock/Availability */}
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100/50 w-full">
+                  {/* Price selector */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-400">מחיר:</span>
+                    <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-indigo-100 shadow-inner">
+                      <button
+                        onClick={() => setEditData(prev => ({ ...prev, price: Math.max(0, Number(prev.price) - 1) }))}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 active:scale-90 transition-all shadow-sm"
+                      >
+                        <Minus size={14} strokeWidth={3} />
+                      </button>
+
+                      <div className="w-14 text-center text-sm font-black text-slate-800 tabular-nums flex items-center justify-center gap-0.5">
+                        <span className="text-xs text-slate-400">₪</span>
+                        <span>{Number(editData.price)}</span>
                       </div>
+
+                      <button
+                        onClick={() => setEditData(prev => ({ ...prev, price: Number(prev.price) + 1 }))}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 active:scale-90 transition-all shadow-md"
+                      >
+                        <Plus size={14} strokeWidth={3} />
+                      </button>
                     </div>
+                  </div>
 
-                    {/* Stock selector — same style as price, below it */}
-                    {editStock !== null && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
-                          <Package size={13} className="text-emerald-500" />
-                          מלאי
-                        </span>
-                        <div className="flex items-center bg-emerald-50 p-1.5 rounded-2xl border border-emerald-200 shadow-inner flex-shrink-0">
-                          <button
-                            onClick={() => setEditStock(prev => Math.max(0, (prev || 0) - 1))}
-                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-500 active:scale-90 transition-all shadow-sm"
-                          >
-                            <Minus size={18} strokeWidth={3} />
-                          </button>
-
-                          <div className="w-16 text-center text-lg font-black text-slate-800 tabular-nums">
-                            {editStock}
-                          </div>
-
-                          <button
-                            onClick={() => setEditStock(prev => (prev || 0) + 1)}
-                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-90 transition-all shadow-md"
-                          >
-                            <Plus size={18} strokeWidth={3} />
-                          </button>
+                  {/* Stock or Availability control */}
+                  <div className="flex items-center gap-3">
+                    {editStock !== null ? (
+                      <div className="flex items-center bg-emerald-50 p-1 rounded-xl border border-emerald-200 shadow-inner">
+                        <button
+                          onClick={() => setEditStock(prev => Math.max(0, (prev || 0) - 1))}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-red-50 active:scale-90 transition-all shadow-sm"
+                        >
+                          <Minus size={14} strokeWidth={3} />
+                        </button>
+                        <div className="w-12 text-center text-sm font-black text-slate-800 tabular-nums flex items-center justify-center gap-1 text-emerald-700">
+                          <Package size={12} />
+                          <span>{editStock}</span>
                         </div>
+                        <button
+                          onClick={() => setEditStock(prev => (prev || 0) + 1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:scale-90 transition-all shadow-md"
+                        >
+                          <Plus size={14} strokeWidth={3} />
+                        </button>
                       </div>
+                    ) : (
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <span className="text-xs font-bold text-slate-400">זמין במלאי:</span>
+                        <input
+                          type="checkbox"
+                          checked={editIsInStock}
+                          onChange={e => setEditIsInStock(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="relative w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                      {selectedItem.name}
-                      {itemQuantity > 1 && (
-                        <span className="text-red-600 animate-pulse border-r-2 border-red-600/20 pr-2 mr-1">
-                          x{itemQuantity}
-                        </span>
-                      )}
-                    </h2>
-                    <p className="text-sm text-slate-400">התאמה אישית</p>
-                  </>
-                )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                {/* Normal view: show image thumbnail or fallback to icon */}
+                {(() => {
+                  const currentImageUrl = enhancedPhoto || capturedPhoto || editData?.image_url || selectedItem?.image || selectedItem?.image_url;
+                  
+                  if (currentImageUrl) {
+                    return (
+                      <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-inner flex-shrink-0 border border-orange-100">
+                        <img src={currentImageUrl} alt={selectedItem?.name} className="w-full h-full object-cover" />
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-inner flex-shrink-0 bg-gradient-to-br from-orange-100 to-orange-50 text-orange-500">
+                      <Coffee size={20} strokeWidth={2.5} />
+                    </div>
+                  );
+                })()}
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                    {selectedItem.name}
+                    {itemQuantity > 1 && (
+                      <span className="text-red-600 animate-pulse border-r-2 border-red-600/20 pr-2 mr-1">
+                        x{itemQuantity}
+                      </span>
+                    )}
+                  </h2>
+                  <p className="text-sm text-slate-400">התאמה אישית</p>
+                </div>
+              </div>
+            )}
 
             {/* Edit Button (only in normal mode) / Quantity Selector */}
             <div className="mr-auto flex items-center gap-2">
@@ -2782,9 +3030,10 @@ const ModifierModal = (props) => {
                     if (isDefault) return null;
                   }
 
+                  const shouldHideTitle = (group.name || '').toLowerCase() === 'מותאם אישית' || (group.name || '').toLowerCase() === 'custom';
                   return (
                     <div key={group.id} className={`flex flex-col gap-2 p-3 rounded-2xl shadow-sm border ${isEditMode ? 'bg-indigo-50/30 border-indigo-100' : 'bg-white border-gray-100'}`}>
-                      <h4 className="text-sm font-black text-slate-800 px-1">{group.name}</h4>
+                      {!shouldHideTitle && <h4 className="text-sm font-black text-slate-800 px-1">{group.name}</h4>}
                       <div className={`grid gap-2 ${isEditMode
                         ? 'grid-cols-1'
                         : isMultipleSelect
@@ -3037,7 +3286,7 @@ const ModifierModal = (props) => {
             {isEditMode ? (
               <div className="flex gap-3">
                 <button
-                  onClick={() => selectedItem?._isNewProduct ? onClose() : exitEditMode()}
+                  onClick={() => (selectedItem?._isNewProduct || initialEditMode) ? onClose() : exitEditMode()}
                   disabled={isSaving}
                   className="w-1/3 h-12 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition-colors active:scale-95 disabled:opacity-50"
                 >
@@ -3107,7 +3356,7 @@ const ModifierModal = (props) => {
             style={{
               display: showTraining ? 'flex' : 'none',
             }}
-            className="flex-col bg-[#FAFAFA] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="flex-col w-full h-full sm:max-h-[90vh] bg-[#FAFAFA] rounded-none sm:rounded-[2rem] sm:shadow-2xl overflow-hidden flex-1"
           >
             {/* Back Header */}
             <div className="flex items-center justify-between px-5 py-4 bg-white/80 backdrop-blur-xl border-b border-slate-100/50">
@@ -3264,7 +3513,7 @@ const ModifierModal = (props) => {
             style={{
               display: showRecipe ? 'flex' : 'none',
             }}
-            className="flex-col bg-[#FFFBF5] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="flex-col w-full h-full sm:max-h-[90vh] bg-[#FFFBF5] rounded-none sm:rounded-[2rem] sm:shadow-2xl overflow-hidden flex-1"
           >
             {/* Recipe Header */}
             <div className="flex items-center justify-between px-5 py-4 bg-white/80 backdrop-blur-xl border-b border-amber-100/50">
@@ -3686,6 +3935,57 @@ const ModifierModal = (props) => {
 
           </div>{/* END rotate container */}
         </div>{/* END perspective container */}
+
+        {showImageUploadDialog && (
+          <div 
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={(e) => { e.stopPropagation(); setShowImageUploadDialog(false); }}
+          >
+            <div 
+              className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl flex flex-col gap-4 text-center font-heebo animate-in fade-in zoom-in-95 duration-200" 
+              dir="rtl"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-slate-800">העלאת תמונת מוצר</h3>
+              <p className="text-xs text-slate-400">בחר כיצד להוסיף תמונה למוצר</p>
+              
+              {/* Checkbox for AI bg removal */}
+              <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-indigo-50/50 border border-indigo-100/50 cursor-pointer select-none text-right justify-start">
+                <input
+                  type="checkbox"
+                  checked={autoRemoveBg}
+                  onChange={e => handleToggleRemoveBg(e.target.checked)}
+                  className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-indigo-950">נקה רקע בעזרת AI</span>
+                  <span className="text-[10px] text-indigo-600/80 font-medium">הסר רקע אוטומטית למראה נקי ומקצועי</span>
+                </div>
+              </label>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    setShowImageUploadDialog(false);
+                    setTimeout(() => fileInputRef.current?.click(), 100);
+                  }}
+                  className="w-full h-12 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <ImagePlus size={18} />
+                  <span>בחירת תמונה מהגלריה או קובץ</span>
+                </button>
+
+                <button
+                  onClick={() => setShowImageUploadDialog(false)}
+                  className="w-full h-12 rounded-2xl border border-slate-200 text-slate-500 font-medium hover:bg-slate-50 active:scale-95 transition-all mt-1"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div >
     );
   } catch (error) {
