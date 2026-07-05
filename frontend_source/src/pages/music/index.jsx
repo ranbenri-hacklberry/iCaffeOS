@@ -858,6 +858,7 @@ const MusicPageContent = () => {
                 subtitle="ניהול ספריית מוזיקה ופלייליסטים"
                 onHome={() => navigate('/mode-selection')}
                 forceMusicDark={true}
+                showMusicPlayer={false}
                 className="music-header"
                 rightContent={
                     <div className="flex items-center gap-2">

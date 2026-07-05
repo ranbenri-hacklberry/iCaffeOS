@@ -59,10 +59,11 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
     return (
         <div
-            className={`flex items-center gap-3 rounded-xl px-4 py-2.5 transition-all max-w-[390px] min-w-[250px] border transition-colors duration-300 ${isDarkMode
+            className={`flex items-center gap-3 rounded-xl px-4 py-2 transition-all max-w-[390px] min-w-[250px] border transition-colors duration-300 ${isDarkMode
                 ? 'music-gradient-wood border-white/10 shadow-black/20 text-white'
                 : 'bg-gray-100 hover:bg-gray-50 border-gray-200 shadow-sm'
                 } ${className}`}
+            style={{ transform: 'translateX(-10px)' }}
             dir="rtl"
         >
             {/* Mini Vinyl Record */}
