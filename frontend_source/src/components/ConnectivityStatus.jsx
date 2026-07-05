@@ -91,7 +91,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
 
     const Content = () => (
         <div className={`flex flex-col items-start pointer-events-auto ${className}`}>
-            <div className={`text-[17px] font-black tracking-tight leading-none mb-0.5 whitespace-nowrap drop-shadow-sm/50 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+            <div className={`text-[17px] font-black tracking-tight leading-none mb-0.5 whitespace-nowrap drop-shadow-sm/50 ${(isDarkMode || invert) ? 'text-white' : 'text-slate-900'}`}>
                 {displayName}
             </div>
             <div className="flex items-center gap-1.5">
@@ -103,7 +103,7 @@ const ConnectivityStatus = ({ mode = 'fixed', invert = false, forceShow = false,
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isN150Down ? 'bg-red-400' : (pendingCount > 0 ? 'bg-amber-400' : 'bg-emerald-400')}`}></span>
                         <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isN150Down ? 'bg-red-500' : (pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500')}`}></span>
                     </div>
-                    <span className={`text-[10px] font-bold leading-none ${isN150Down ? 'text-red-800' : (isDarkMode ? 'text-emerald-400' : 'text-emerald-700')}`}>
+                    <span className={`text-[10px] font-bold leading-none ${isN150Down ? ((isDarkMode || invert) ? 'text-red-400' : 'text-red-800') : ((isDarkMode || invert) ? 'text-emerald-400' : 'text-emerald-700')}`}>
                         {isN150Down ? (window.location.hostname.includes('vercel.app') ? 'Not Connected' : 'Offline') : (machineName === 'n150' ? 'Ryzen AI' : machineName)}
                     </span>
                 </div>

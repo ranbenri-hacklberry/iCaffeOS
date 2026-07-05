@@ -4,7 +4,7 @@ import {
     Music, Disc, ListMusic, Search, Plus, RefreshCw,
     ArrowRight, Sparkles, User, Play, FolderOpen, Heart, Youtube,
     Pause, SkipForward, SkipBack, Trash2, X, HardDrive, AlertCircle, Home, Download, Archive, List,
-    Volume2, VolumeX, ThumbsUp, ThumbsDown, Edit2
+    Volume2, VolumeX, ThumbsUp, ThumbsDown, Edit2, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
@@ -32,11 +32,15 @@ import ExternalIngestManager from '@/pages/music/components/ExternalIngestManage
 import { getBackendApiUrl } from '@/utils/apiUtils';
 import '@/styles/music.css';
 
+const isStandaloneRanTunes = import.meta.env.VITE_STANDALONE_RANTUNES === 'true';
 const MUSIC_API_URL = getBackendApiUrl();
 
 // Tabs for navigation
-const TABS = [
+const TABS = isStandaloneRanTunes ? [
     { id: 'songs', label: 'שירים', icon: Music },
+    { id: 'albums', label: 'אלבומים', icon: Disc },
+    { id: 'playlists', label: 'פלייליסטים', icon: ListMusic },
+] : [
     { id: 'playlists', label: 'פלייליסטים', icon: ListMusic },
 ];
 
@@ -56,12 +60,23 @@ const getSongGradient = (title) => {
 
 const MusicPageContent = () => {
     const navigate = useNavigate();
-    const { currentUser } = useAuth();
+    const { currentUser: authUser } = useAuth();
+    const isStandalone = import.meta.env.VITE_STANDALONE_RANTUNES === 'true';
+
+    const currentUser = isStandalone ? {
+        id: '0f043e57-ce9a-4843-b661-83088299da26',
+        name: 'Ran Ben-Ri',
+        role: 'admin',
+        access_level: 'admin',
+        is_admin: true,
+        business_id: 'standalone',
+        business_name: 'RanTunes'
+    } : authUser;
 
     // Permissions: Everyone can see the player, but maybe only admins can ingest?
     const accessLevel = (currentUser?.access_level || '').toLowerCase();
     const role = (currentUser?.role || '').toLowerCase();
-    const isManager = role === 'admin' || role === 'manager' || role === 'owner' ||
+    const isManager = isStandalone || role === 'admin' || role === 'manager' || role === 'owner' ||
         accessLevel === 'admin' || accessLevel === 'manager' || accessLevel === 'owner' ||
         currentUser?.is_admin || currentUser?.is_super_admin;
 
@@ -119,7 +134,7 @@ const MusicPageContent = () => {
         updateSongInContext,
     } = useMusic();
 
-    const [activeTab, setActiveTab] = useState('songs');
+    const [activeTab, setActiveTab] = useState(isStandaloneRanTunes ? 'songs' : 'playlists');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAlbum, setSelectedAlbum] = useState(null);
     const [showPlaylistBuilder, setShowPlaylistBuilder] = useState(false);
@@ -157,6 +172,31 @@ const MusicPageContent = () => {
     const [libraryStats, setLibraryStats] = useState(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState([]); // Array of IDs
+
+    const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Track mobile viewport
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 760);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // Scroll lock on mobile when player is expanded
+    useEffect(() => {
+        if (isMobile && isPlayerExpanded) {
+            document.body.classList.add('overflow-hidden', 'touch-none');
+        } else {
+            document.body.classList.remove('overflow-hidden', 'touch-none');
+        }
+        return () => {
+            document.body.classList.remove('overflow-hidden', 'touch-none');
+        };
+    }, [isMobile, isPlayerExpanded]);
 
     const toggleItemSelection = (id) => {
         setSelectedItems(prev =>
@@ -821,22 +861,6 @@ const MusicPageContent = () => {
                 className="music-header"
                 rightContent={
                     <div className="flex items-center gap-2">
-                        {/* Drive Source Indicator */}
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[10px] font-black tracking-tight shadow-sm
-                            ${isMusicDriveConnected ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
-                            {isMusicDriveConnected ? <HardDrive className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                            <span className="uppercase tracking-wider">{isMusicDriveConnected ? 'RANTUNES' : 'Local Disk'}</span>
-                        </div>
-
-                        {/* Scan Button */}
-                        <button
-                            onClick={() => setShowScanner(true)}
-                            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all text-white shadow-lg"
-                            title="סריקת ספרייה"
-                        >
-                            <Search className="w-5 h-5 text-purple-400" />
-                        </button>
-
                         <button
                             onClick={() => navigate('/')}
                             className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all"
@@ -954,10 +978,30 @@ const MusicPageContent = () => {
             <div className="music-split-layout flex-1 flex overflow-hidden">
                 {/* Right side - Vinyl Turntable or Queue */}
                 <div
-                    className="music-split-right order-last flex flex-col items-center justify-center p-6 relative"
+                    className={`music-split-right order-last flex flex-col items-center justify-center p-6 relative transition-all duration-300
+                        ${isMobile ? (isPlayerExpanded ? 'mobile-expanded' : 'mobile-collapsed') : ''}`}
+                    onClick={() => {
+                        if (isMobile && !isPlayerExpanded) {
+                            setIsPlayerExpanded(true);
+                        }
+                    }}
                 >
-                    {/* Vinyl Turntable is always visible */}
-                    <div className="flex flex-col items-center justify-center w-full">
+                    {/* Chevron down collapse button shown ONLY in mobile-expanded state */}
+                    {isMobile && isPlayerExpanded && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsPlayerExpanded(false);
+                            }}
+                            className="absolute top-6 left-6 p-2.5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors z-50 active:scale-95 flex items-center justify-center"
+                            title="סגור נגן"
+                        >
+                            <ChevronDown className="w-6 h-6 text-white" />
+                        </button>
+                    )}
+
+                    {/* Vinyl Turntable is always rendered so it doesn't unmount */}
+                    <div className="flex flex-col items-center justify-center w-full vinyl-container">
                         <VinylTurntable
                             song={currentSong}
                             isPlaying={isPlaying}
@@ -972,8 +1016,8 @@ const MusicPageContent = () => {
                             queue={playlist}
                         />
 
-                        {/* Player controls */}
-                        <div className="flex flex-col items-center w-full max-w-sm mt-8">
+                        {/* Player controls (hidden on mobile-collapsed via CSS/JS) */}
+                        <div className="flex flex-col items-center w-full max-w-sm mt-8 vinyl-info">
                             {/* Progress & Time - Always show if we have a song OR a queue */}
                             {(currentSong || playlist.length > 0) && (
                                 <>
@@ -1064,7 +1108,53 @@ const MusicPageContent = () => {
                         </div>
                     </div>
 
+                    {/* Inline Collapsed Mobile Bar Elements (shown ONLY when collapsed on mobile) */}
+                    {isMobile && !isPlayerExpanded && (
+                        <div className="absolute top-0 left-0 right-0 h-[72px] flex items-center justify-between w-full px-4 cursor-pointer select-none">
+                            {/* Progress bar line */}
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-white/10">
+                                <div 
+                                    className="h-full bg-gradient-to-r from-purple-500 to-indigo-500" 
+                                    style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                                />
+                            </div>
 
+                            <div className="flex items-center gap-3 min-w-0">
+                                <img
+                                    src={currentSong?.album?.cover_url || currentSong?.cover_url || currentSong?.thumbnail_url}
+                                    alt="Cover"
+                                    className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
+                                />
+                                <div className="min-w-0 text-right">
+                                    <p className="text-white text-sm font-bold truncate leading-tight">
+                                        {currentSong?.title}
+                                    </p>
+                                    <p className="text-white/60 text-xs truncate leading-tight mt-0.5">
+                                        {currentSong?.artist?.name || currentSong?.artist_name || 'Unknown Artist'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                    onClick={togglePlay}
+                                    className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center shadow-lg active:scale-95 transition-all animate-fade-in"
+                                >
+                                    {isPlaying ? (
+                                        <Pause className="w-5 h-5 text-white fill-current" />
+                                    ) : (
+                                        <Play className="w-5 h-5 text-white fill-current" />
+                                    )}
+                                </button>
+                                <button
+                                    onClick={handleNext}
+                                    className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 active:scale-95 transition-all animate-fade-in"
+                                >
+                                    <SkipForward className="w-5 h-5 text-white" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Left side - Song list / Albums */}
@@ -1096,26 +1186,24 @@ const MusicPageContent = () => {
                                     <div className="flex flex-col flex-1 min-w-0">
                                         <div className="flex items-center gap-4 mb-1">
                                             <h2 className="text-white text-4xl font-black tracking-tight truncate drop-shadow-lg" dir="ltr" style={{ textAlign: 'right' }}>{selectedAlbum.name}</h2>
-                                            <button
-                                                onClick={async () => {
-                                                    if (selectedAlbum.isPlaylist) {
-                                                        handlePlaylistPlay(selectedAlbum);
-                                                    } else {
+                                            {!selectedAlbum.isPlaylist && (
+                                                <button
+                                                    onClick={async () => {
                                                         const songs = await fetchAlbumSongs(selectedAlbum.id);
                                                         const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
                                                         if (playable.length > 0) {
                                                             playSong(playable[0], playable, true);
                                                         }
-                                                    }
-                                                }}
-                                                className="group relative"
-                                                title="נגן הכל"
-                                            >
-                                                <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                <div className="relative w-11 h-11 rounded-2xl bg-purple-600 border border-purple-500 flex items-center justify-center transition-all group-hover:scale-110 group-active:scale-95 shadow-2xl">
-                                                    <Play className="w-6 h-6 text-white fill-current" />
-                                                </div>
-                                            </button>
+                                                    }}
+                                                    className="group relative"
+                                                    title="נגן הכל"
+                                                >
+                                                    <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    <div className="relative w-11 h-11 rounded-2xl bg-purple-600 border border-purple-500 flex items-center justify-center transition-all group-hover:scale-110 group-active:scale-95 shadow-2xl">
+                                                        <Play className="w-6 h-6 text-white fill-current" />
+                                                    </div>
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="flex items-center justify-between mt-1">
                                             <p className="text-white/60 font-bold">
@@ -1219,6 +1307,53 @@ const MusicPageContent = () => {
                                             );
                                         }
 
+                                        // If we are viewing an album, and a song from this album is currently playing, pin it to the top
+                                        const isCurrentAlbumActive = currentSong && !selectedAlbum?.isPlaylist && filteredSongs.some(s => s.id === currentSong.id);
+
+                                        if (isCurrentAlbumActive) {
+                                            const activeSongInAlbum = filteredSongs.find(s => s.id === currentSong.id);
+                                            const otherAlbumSongs = filteredSongs.filter(s => s.id !== currentSong.id);
+                                            const sortedOthers = [...otherAlbumSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
+
+                                            return (
+                                                <div className="flex flex-col">
+                                                    {/* Currently playing song */}
+                                                    <div className="mb-2">
+                                                        <div className="text-purple-300 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2 flex items-center gap-2">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                            מתנגן כעת
+                                                        </div>
+                                                        <SongRow
+                                                            song={activeSongInAlbum}
+                                                            isCurrentSong={true}
+                                                            isPlaying={isPlaying}
+                                                            onEdit={handleEditClick}
+                                                        />
+                                                    </div>
+
+                                                    {/* Other album songs */}
+                                                    {sortedOthers.length > 0 && (
+                                                        <div className="mt-2">
+                                                            <div className="text-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2">
+                                                                שירים באלבום ({sortedOthers.length})
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {sortedOthers.map((song) => (
+                                                                    <SongRow
+                                                                        key={song.id}
+                                                                        song={song}
+                                                                        isPlaying={false}
+                                                                        isCurrentSong={false}
+                                                                        onEdit={handleEditClick}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+
                                         // Static display of album/playlist songs sorted alphabetically
                                         const sortedSongs = [...filteredSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
                                         return sortedSongs.map((song) => (
@@ -1237,7 +1372,32 @@ const MusicPageContent = () => {
                     ) : (
                         /* Main landing area (Playlists Grid by default, or Search Results) */
                         <div className="flex-1 flex flex-col overflow-hidden">
-                            <div className="flex-1 overflow-y-auto music-scrollbar p-6">
+                            {/* Tab Navigation */}
+                            <div className="px-6 pt-6 pb-2 shrink-0">
+                                <nav className="flex items-center gap-2">
+                                    {TABS.map(tab => {
+                                        const Icon = tab.icon;
+                                        return (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => {
+                                                    setActiveTab(tab.id);
+                                                    setSearchQuery('');
+                                                }}
+                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all
+                                                    ${activeTab === tab.id
+                                                        ? 'bg-purple-600 text-white shadow-lg'
+                                                        : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+                                            >
+                                                <Icon className="w-4 h-4" />
+                                                <span className="font-medium text-sm">{tab.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </nav>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto music-scrollbar p-6 pt-2">
                                 {searchQuery.trim() !== '' ? (
                                     /* Search Results of all songs */
                                     <div className="space-y-1">
@@ -1261,6 +1421,89 @@ const MusicPageContent = () => {
                                                 />
                                             ));
                                         })()}
+                                    </div>
+                                ) : activeTab === 'songs' ? (
+                                    /* All songs list */
+                                    <div className="space-y-1">
+                                        <div className="text-white/40 text-xs font-bold mb-4 pr-2">כל השירים ({allSongs.length}):</div>
+                                        {(() => {
+                                            const sortedSongs = [...allSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
+                                            if (sortedSongs.length === 0) {
+                                                return <div className="text-white/40 text-sm pr-2">אין שירים בספרייה עדיין</div>;
+                                            }
+
+                                            const filteredAll = filterSongs(sortedSongs);
+                                            const isSongActive = currentSong && filteredAll.some(s => s.id === currentSong.id);
+
+                                            if (isSongActive) {
+                                                const activeSong = filteredAll.find(s => s.id === currentSong.id);
+                                                const otherSongs = filteredAll.filter(s => s.id !== currentSong.id);
+                                                return (
+                                                    <div className="flex flex-col">
+                                                        <div className="mb-2">
+                                                            <div className="text-purple-300 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2 flex items-center gap-2">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                                                מתנגן כעת
+                                                            </div>
+                                                            <SongRow
+                                                                song={activeSong}
+                                                                isCurrentSong={true}
+                                                                isPlaying={isPlaying}
+                                                                onEdit={handleSongPlay}
+                                                            />
+                                                        </div>
+                                                        {otherSongs.length > 0 && (
+                                                            <div className="mt-2">
+                                                                <div className="text-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2">
+                                                                    שירים בספרייה ({otherSongs.length})
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    {otherSongs.map((song) => (
+                                                                        <SongRow
+                                                                            key={song.id}
+                                                                            song={song}
+                                                                            isPlaying={false}
+                                                                            isCurrentSong={false}
+                                                                            onEdit={handleSongPlay}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return filteredAll.map((song) => (
+                                                <SongRow
+                                                    key={song.id}
+                                                    song={song}
+                                                    isPlaying={isPlaying && currentSong?.id === song.id}
+                                                    isCurrentSong={currentSong?.id === song.id}
+                                                    onEdit={handleSongPlay}
+                                                />
+                                            ));
+                                        })()}
+                                    </div>
+                                ) : activeTab === 'albums' ? (
+                                    /* Albums Grid */
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                                        {filteredAlbums.length === 0 ? (
+                                            <div className="col-span-full text-center py-12">
+                                                <Disc className="w-12 h-12 text-white/20 mx-auto mb-4" />
+                                                <p className="text-white/40 text-sm">אין אלבומים בספרייה עדיין</p>
+                                            </div>
+                                        ) : (
+                                            filteredAlbums.map(album => (
+                                                <AlbumCard
+                                                    key={album.id}
+                                                    album={album}
+                                                    onClick={handleAlbumClick}
+                                                    onPlay={handleAlbumPlay}
+                                                    onDelete={(item) => handleDeleteClick('album', item)}
+                                                />
+                                            ))
+                                        )}
                                     </div>
                                 ) : (
                                     /* Playlists Grid (default landing view) */

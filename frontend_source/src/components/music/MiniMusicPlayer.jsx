@@ -59,7 +59,7 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
     return (
         <div
-            className={`flex items-center gap-3 rounded-xl px-4 py-2 transition-all max-w-[340px] min-w-[220px] border transition-colors duration-300 ${isDarkMode
+            className={`flex items-center gap-3 rounded-xl px-4 py-2.5 transition-all max-w-[390px] min-w-[250px] border transition-colors duration-300 ${isDarkMode
                 ? 'music-gradient-wood border-white/10 shadow-black/20 text-white'
                 : 'bg-gray-100 hover:bg-gray-50 border-gray-200 shadow-sm'
                 } ${className}`}
@@ -67,14 +67,14 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
         >
             {/* Mini Vinyl Record */}
             <motion.div
-                className="w-8 h-8 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20"
+                className="w-9 h-9 rounded-full overflow-hidden shrink-0 cursor-pointer shadow-lg bg-[#111] relative flex items-center justify-center border border-black/20"
                 animate={controls}
                 onClick={openRanTunes}
             >
                 {/* Vinyl Grooves */}
                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_transparent_30%,_rgba(255,255,255,0.1)_35%,_transparent_40%,_rgba(255,255,255,0.1)_45%,_transparent_50%)]" />
 
-                <div className="w-4 h-4 rounded-full overflow-hidden border border-black/20 flex items-center justify-center bg-white z-10">
+                <div className="w-5 h-5 rounded-full overflow-hidden border border-black/20 flex items-center justify-center bg-white z-10">
                     {coverUrl ? (
                         <img
                             src={coverUrl}
@@ -92,34 +92,41 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
             {/* Song & Artist */}
             <div className="min-w-0 flex-1 cursor-pointer text-right" onClick={openRanTunes}>
-                <p className={`text-sm font-semibold truncate leading-tight ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                <p className={`text-[15px] font-bold truncate leading-tight ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                     {currentSong.title}
                 </p>
-                <p className={`text-xs truncate leading-tight ${isDarkMode ? 'text-white/60' : 'text-gray-500'}`}>
+                <p className={`text-xs truncate leading-tight mt-0.5 ${isDarkMode ? 'text-white/60' : 'text-gray-500'}`}>
                     {artistName}
                 </p>
             </div>
 
             {/* Controls */}
             <div className="flex items-center gap-2 shrink-0">
-                {/* Server Volume Control */}
-                <div className="flex items-center gap-1.5 px-1.5 bg-white/5 py-1 rounded-lg border border-white/5" dir="ltr">
-                    <Volume2 className={`w-3.5 h-3.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`} />
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={volume}
-                        onChange={(e) => setVolume?.(parseFloat(e.target.value))}
-                        className="w-12 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-purple-500"
-                        title="ווליום שרת"
-                    />
+                {/* Server Volume Control (Plus/Minus Buttons & Level Display) */}
+                <div className="flex items-center bg-white/5 rounded-lg border border-white/10 overflow-hidden" dir="ltr">
+                    <button
+                        onClick={() => setVolume?.(Math.max(0, volume - 0.1))}
+                        className={`w-8 h-8 flex items-center justify-center font-bold text-xs transition-all hover:bg-white/10 active:scale-95 ${isDarkMode ? 'text-white/60 hover:text-white' : 'text-gray-600 hover:text-black'}`}
+                        title="הנמך ווליום"
+                    >
+                        -
+                    </button>
+                    <div className={`px-1.5 text-xs font-mono font-bold select-none text-center min-w-[22px] ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                        {Math.round(volume * 10)}
+                    </div>
+                    <button
+                        onClick={() => setVolume?.(Math.min(1, volume + 0.1))}
+                        className={`w-8 h-8 flex items-center justify-center font-bold text-xs transition-all hover:bg-white/10 active:scale-95 ${isDarkMode ? 'text-white/60 hover:text-white' : 'text-gray-600 hover:text-black'}`}
+                        title="הגבר ווליום"
+                    >
+                        +
+                    </button>
                 </div>
+
 
                 <button
                     onClick={togglePlay}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDarkMode
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isDarkMode
                         ? 'bg-slate-700 hover:bg-slate-600'
                         : 'bg-gray-200 hover:bg-gray-300'
                         }`}
@@ -134,13 +141,13 @@ const MiniMusicPlayer = ({ className = '', forceDark = false, forceLight = false
 
                 <button
                     onClick={handleNext}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isDarkMode
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDarkMode
                         ? 'text-slate-400 hover:text-white hover:bg-slate-700'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
                         }`}
                     title="שיר הבא"
                 >
-                    <SkipForward className="w-3.5 h-3.5" />
+                    <SkipForward className="w-4 h-4" />
                 </button>
             </div>
         </div>

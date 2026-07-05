@@ -119,7 +119,7 @@ const SuppliersList: React.FC<SuppliersListProps> = ({
                                 className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${isActive
                                         ? 'bg-white shadow-md border-indigo-100 border'
                                         : 'hover:bg-slate-100 text-slate-600'
-                                    } ${info?.status === 'delivery_today' ? 'ring-2 ring-emerald-300' : ''} ${info?.status === 'order_today' ? 'ring-2 ring-amber-300' : ''}`}
+                                    } ${info?.status === 'order_today' ? 'ring-2 ring-amber-300' : ''}`}
                             >
                                 <div className="flex flex-col items-start gap-0.5">
                                     <span className={`font-bold transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-800'}`}>
@@ -128,11 +128,6 @@ const SuppliersList: React.FC<SuppliersListProps> = ({
                                     <span className="text-xs text-slate-500 font-medium">
                                         {count} פריטים
                                     </span>
-                                    {info?.status === 'delivery_today' && (
-                                        <span className="text-xs font-bold text-emerald-600 mt-0.5">
-                                            📦 אספקה היום — לספור בקבלה
-                                        </span>
-                                    )}
                                     {info?.status === 'order_today' && (
                                         <span className="text-xs font-bold text-amber-600 mt-0.5">
                                             🚛 אספקה יום {info.deliveryDay} · הזמנה עד {info.cutoff || '—'}

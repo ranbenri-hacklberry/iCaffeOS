@@ -440,52 +440,45 @@ const Header = ({
           colorClass: 'text-purple-600'
         }
       ]}
-    >
-      <div className="flex items-center gap-3">
-        {/* Station Dropdown - Clean Context Preservation */}
-        {viewMode === 'active' && availableStations && (
-          <div className="relative group px-2">
-            <button className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-white border border-slate-200 text-slate-800 font-black shadow-sm group-hover:bg-slate-50 transition-all min-w-[140px] justify-between">
-              <span className="flex items-center gap-2">
-                {stationView === 'Checker' ? '🧑‍💼 צ׳קר (ראשי)' :
-                 stationView === 'Kitchen' ? '🍳 מטבח' :
-                 stationView === 'Bar' ? '🍹 בר' : stationView}
+      leftTabContent={
+        viewMode === 'active' && availableStations && (
+          <div className="relative group shrink-0 h-9 md:h-10">
+            <button className="flex items-center gap-2 px-3 md:px-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 text-slate-700 hover:text-slate-900 font-bold transition-all h-full text-xs md:text-sm shadow-sm justify-between">
+              <span>
+                {stationView === 'Checker' ? 'צ׳קר' :
+                 stationView === 'Kitchen' ? 'מטבח' :
+                 stationView === 'Bar' ? 'בר' : stationView}
               </span>
-              <ChevronDown size={16} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+              <ChevronDown size={14} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
             </button>
-            <div className="absolute top-full right-2 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden transform origin-top-right scale-95 group-hover:scale-100">
-              <div className="p-1.5 flex flex-col gap-1">
+            <div className="absolute top-full left-0 mt-1.5 w-36 bg-white border border-slate-200 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden transform origin-top-left scale-95 group-hover:scale-100">
+              <div className="p-1 flex flex-col gap-0.5" dir="rtl">
                 {availableStations.map(station => (
                   <button key={station}
                     onClick={() => {
                       setStationView(station);
                       localStorage.setItem('kds_station_view', station);
                     }}
-                    className={`w-full text-right px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-between ${
+                    className={`w-full text-right px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
                       stationView === station
                         ? 'bg-blue-50 text-blue-700'
                         : 'bg-white text-slate-600 hover:bg-slate-50'
                     }`}
                   >
                     <span>
-                      {station === 'Checker' ? '🧑‍💼 צ׳קר (ראשי)' :
-                       station === 'Kitchen' ? '🍳 מטבח' :
-                       station === 'Bar' ? '🍹 בר' : station}
+                      {station === 'Checker' ? 'צ׳קר' :
+                       station === 'Kitchen' ? 'מטבח' :
+                       station === 'Bar' ? 'בר' : station}
                     </span>
-                    {stationView === station && <Check size={16} className="text-blue-600" />}
+                    {stationView === station && <Check size={14} className="text-blue-600" />}
                   </button>
                 ))}
               </div>
             </div>
           </div>
-        )}
-
-        {/* Leftmost button: New Order */}
-        <button onClick={handleNewOrder} className="flex items-center gap-2 h-11 px-5 bg-[#0F172A] text-white rounded-2xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg active:scale-95 text-sm font-bold shrink-0 ml-2">
-          <Plus size={16} /> <span className="mt-[2px]">הזמנה חדשה</span>
-        </button>
-      </div>
-    </UnifiedHeader>
+        )
+      }
+    />
   );
 };
 

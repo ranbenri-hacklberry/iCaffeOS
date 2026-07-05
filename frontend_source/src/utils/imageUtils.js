@@ -7,42 +7,49 @@
  */
 export const compressAndToBase64 = (file, options = { maxWidth: 1024, maxHeight: 1024, quality: 0.6 }) => {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = objectUrl;
+        img.onload = () => {
+            // Revoke immediately to release memory
+            URL.revokeObjectURL(objectUrl);
 
-                // Calculate dimensions
-                if (width > height) {
-                    if (width > options.maxWidth) {
-                        height *= options.maxWidth / width;
-                        width = options.maxWidth;
-                    }
-                } else {
-                    if (height > options.maxHeight) {
-                        width *= options.maxHeight / height;
-                        height = options.maxHeight;
-                    }
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // Calculate dimensions
+            if (width > height) {
+                if (width > options.maxWidth) {
+                    height *= options.maxWidth / width;
+                    width = options.maxWidth;
                 }
+            } else {
+                if (height > options.maxHeight) {
+                    width *= options.maxHeight / height;
+                    height = options.maxHeight;
+                }
+            }
 
-                canvas.width = width;
-                canvas.height = height;
+            canvas.width = width;
+            canvas.height = height;
 
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
 
-                // Convert to base64 with quality reduction
-                const dataUrl = canvas.toDataURL('image/jpeg', options.quality);
-                resolve(dataUrl);
-            };
-            img.onerror = (error) => reject(error);
+            // Convert to base64 with quality reduction
+            const dataUrl = canvas.toDataURL('image/jpeg', options.quality);
+            
+            // Cleanup canvas memory
+            canvas.width = 0;
+            canvas.height = 0;
+
+            resolve(dataUrl);
         };
-        reader.onerror = (error) => reject(error);
+        img.onerror = (error) => {
+            URL.revokeObjectURL(objectUrl);
+            reject(error);
+        };
     });
 };
 /**

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipForward, ThumbsUp, ThumbsDown, Music } from 'lucide-react';
+import { Play, Pause, SkipForward, Music, Plus, Minus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -13,6 +13,48 @@ const MiniMusicBar = ({ className = '' }) => {
     const { currentUser } = useAuth();
     const [playback, setPlayback] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [volumeLevel, setVolumeLevel] = useState(7); // Default 7 (70%)
+
+    // Fetch initial server volume
+    useEffect(() => {
+        const fetchVolume = async () => {
+            try {
+                const res = await fetch('/api/music/volume-server');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.volume !== undefined) {
+                        const level = Math.max(1, Math.min(10, Math.round(data.volume * 10)));
+                        setVolumeLevel(level);
+                    }
+                }
+            } catch (err) {
+                console.warn('Error fetching server volume:', err);
+            }
+        };
+        fetchVolume();
+    }, []);
+
+    const handleVolumeChange = async (direction) => {
+        let nextLevel = volumeLevel;
+        if (direction === 'up' && volumeLevel < 10) {
+            nextLevel = volumeLevel + 1;
+        } else if (direction === 'down' && volumeLevel > 1) {
+            nextLevel = volumeLevel - 1;
+        }
+        if (nextLevel === volumeLevel) return;
+
+        setVolumeLevel(nextLevel);
+
+        try {
+            await fetch('/api/music/volume-server', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volume: nextLevel / 10 })
+            });
+        } catch (err) {
+            console.error('Error setting server volume:', err);
+        }
+    };
 
     // Fetch initial playback state
     useEffect(() => {
@@ -193,7 +235,7 @@ const MiniMusicBar = ({ className = '' }) => {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
                 {/* Play/Pause */}
                 <button
                     onClick={() => sendCommand(playback.is_playing ? 'pause' : 'play')}
@@ -208,31 +250,26 @@ const MiniMusicBar = ({ className = '' }) => {
                     )}
                 </button>
 
-                {/* Like */}
-                <button
-                    onClick={() => rateSong(isLiked ? 0 : 5)}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all
-                        ${isLiked
-                            ? 'bg-green-100 text-green-600'
-                            : 'text-gray-400 hover:text-green-500 hover:bg-gray-200'
-                        }`}
-                    title="אהבתי"
-                >
-                    <ThumbsUp className="w-3 h-3" />
-                </button>
-
-                {/* Dislike */}
-                <button
-                    onClick={() => rateSong(isDisliked ? 0 : 1)}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all
-                        ${isDisliked
-                            ? 'bg-red-100 text-red-600'
-                            : 'text-gray-400 hover:text-red-500 hover:bg-gray-200'
-                        }`}
-                    title="לא אהבתי"
-                >
-                    <ThumbsDown className="w-3 h-3" />
-                </button>
+                {/* Volume Controller (Minus, Value Display, Plus) */}
+                <div className="flex items-center bg-gray-200 rounded-full px-1 py-0.5" dir="ltr">
+                    <button
+                        onClick={() => handleVolumeChange('down')}
+                        className="w-5 h-5 rounded-full hover:bg-gray-300 flex items-center justify-center transition-all text-gray-600 hover:text-gray-900"
+                        title="החלש ווליום בשרת"
+                    >
+                        <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="w-5 text-center text-[10px] font-bold text-gray-700 select-none">
+                        {volumeLevel}
+                    </span>
+                    <button
+                        onClick={() => handleVolumeChange('up')}
+                        className="w-5 h-5 rounded-full hover:bg-gray-300 flex items-center justify-center transition-all text-gray-600 hover:text-gray-900"
+                        title="הגבר ווליום בשרת"
+                    >
+                        <Plus className="w-2.5 h-2.5" />
+                    </button>
+                </div>
 
                 {/* Next */}
                 <button

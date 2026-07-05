@@ -47,5 +47,6 @@ postgres_data/
 backend/studio_output/
 backend/temp_uploads/
 backend/scratch/
-backend/scripts/
 
+# RanTunes Custom YouTube Playlist Downloader Tool
+youtube_playlist_downloader/

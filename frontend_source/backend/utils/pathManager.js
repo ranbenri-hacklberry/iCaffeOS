@@ -10,7 +10,7 @@ import fs from 'fs';
 export const PathManager = {
     // All known external mount candidates (macOS: /Volumes/*, Linux: /mnt/*)
     EXTERNAL_CANDIDATES: process.platform === 'darwin'
-        ? ['/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
+        ? ['/Volumes/RanTunesBackup', '/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
         : [
             '/Volumes/RANTUNES', 
             '/mnt/mac/Volumes/RANTUNES', 

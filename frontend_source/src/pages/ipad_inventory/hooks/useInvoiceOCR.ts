@@ -14,19 +14,7 @@ export const useInvoiceOCR = () => {
         setOcrResult(null);
 
         try {
-            let base64Image: string;
-            if (file.type === 'application/pdf') {
-                base64Image = await fileToBase64(file);
-            } else {
-                // Higher quality for OCR — invoices have small text that needs detail
-                base64Image = await compressAndToBase64(file, {
-                    maxWidth: 2500,
-                    maxHeight: 2500, 
-                    quality: 0.92
-                });
-            }
-
-            const result = await processInvoiceOCR(base64Image, businessId);
+            const result = await processInvoiceOCR(file, businessId);
             setOcrResult(result);
             return result;
         } catch (err: any) {

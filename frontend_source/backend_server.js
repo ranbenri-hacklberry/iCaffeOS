@@ -17,6 +17,8 @@ import fetch from 'node-fetch';
 import musicCoverRouter from './backend/api/musicCoverRoute.js';
 import { getYouTubeApiKey as getYTKeyFromSecrets, getSecrets, getSmsApiKey } from './backend/services/secretsService.js';
 import ocrRoutes from './backend/api/ocrRoutes.js';
+import RantunesWsServer from './backend/services/rantunesWsServer.js';
+import { DriveWatcher } from './backend/services/driveWatcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3693,10 +3695,18 @@ app.get("/music/stream", (req, res) => {
         let actualPath = null;
         const { idPath, namePath } = getMusicCachePath(songId, filePath);
 
+        // Translate /Users/user/ to current user's home folder dynamically (e.g. /Users/rani on Mac Studio)
+        let resolvedPath = filePath;
+        if (filePath && filePath.startsWith('/Users/user/')) {
+            resolvedPath = path.join(os.homedir(), filePath.substring(12));
+        }
+
         if (idPath && fs.existsSync(idPath)) {
             actualPath = idPath;
         } else if (fs.existsSync(namePath)) {
             actualPath = namePath;
+        } else if (fs.existsSync(resolvedPath)) {
+            actualPath = resolvedPath;
         } else if (fs.existsSync(filePath)) {
             // 2. Fallback to external path (drive connected)
             actualPath = filePath;
@@ -3763,14 +3773,21 @@ app.post("/music/cache", async (req, res) => {
         const destPath = idPath || namePath; // Prefer ID-based path to avoid filename collisions
 
         // Check if already cached (by ID path or legacy name path)
+        // Translate /Users/user/ to current user's home folder dynamically (e.g. /Users/rani on Mac Studio)
+        let resolvedPath = filePath;
+        if (filePath && filePath.startsWith('/Users/user/')) {
+            resolvedPath = path.join(os.homedir(), filePath.substring(12));
+        }
+
+        // Check if already cached (by ID path or legacy name path)
         const alreadyCached = fs.existsSync(destPath) || (idPath && fs.existsSync(namePath));
 
         if (!alreadyCached) {
-            if (!fs.existsSync(filePath)) {
+            if (!fs.existsSync(resolvedPath) && !fs.existsSync(filePath)) {
                 return res.status(404).json({ error: 'Source file not found' });
             }
             console.log(`📦 [Cache] Copying to internal storage: ${path.basename(destPath)}...`);
-            fs.copyFileSync(filePath, destPath);
+            fs.copyFileSync(fs.existsSync(resolvedPath) ? resolvedPath : filePath, destPath);
         }
 
         const stats = fs.statSync(destPath);
@@ -5974,3 +5991,20 @@ app.post('/api/onboarding/upload-seed', upload.single('image'), async (req, res)
         res.status(500).json({ error: 'Upload failed', details: error.message });
     }
 });
+
+// ---------------------------------------------------------
+// 🔌 INITIALIZE RANTUNES WEBSOCKET & DRIVE WATCHER SERVICES
+// ---------------------------------------------------------
+try {
+    console.log('🔌 [RanTunes] Initializing WebSocket Server on port 8082...');
+    const rantunesWs = new RantunesWsServer(8082);
+    await rantunesWs.start();
+
+    console.log('💿 [RanTunes] Initializing Drive Watcher...');
+    const driveWatcher = new DriveWatcher(rantunesWs);
+    driveWatcher.start();
+    console.log('✅ [RanTunes] All music playback synchronization services are running.');
+} catch (wsErr) {
+    console.error('❌ [RanTunes] Failed to start WebSocket or DriveWatcher services:', wsErr.message);
+}
+

@@ -57,13 +57,22 @@ export const MusicProvider = ({ children }) => {
     // Loading states
     const [isLoading, setIsLoading] = useState(false);
 
-    // Playback Destination (local browser or server output)
-    const [playbackTarget, setPlaybackTarget] = useState(localStorage.getItem('music_playback_target') || 'server');
+    // Playback Destination (local browser or server output) - Hardcoded to 'local' for standalone
+    const [playbackTarget, setPlaybackTargetState] = useState('local');
 
-    // ─── RanTunes WebSocket (Server Mode) ───────────────────────────────────────
-    // Always connect the WS hook so we receive library/drive events even in local mode.
-    // Commands are only routed through it when playbackTarget === 'server'.
-    const ws = useRantunesWs();
+    // WebSocket speaker connection is deactivated in standalone mode
+    const ws = {
+        state: null,
+        isConnected: false,
+        play: () => {},
+        pause: () => {},
+        seek: () => {},
+        loadQueue: () => {},
+        updateQueue: () => {},
+        next: () => {},
+        prev: () => {}
+    };
+    const isPlayIntendedRef = useRef(false);
 
     // Sync WS state → MusicContext state whenever server mode is active
     useEffect(() => {
@@ -73,6 +82,9 @@ export const MusicProvider = ({ children }) => {
 
         // Mirror server state into existing React state so all UI consumers work unchanged
         setIsPlaying(state.isPlaying);
+        if (ws.isConnected) {
+            isPlayIntendedRef.current = state.isPlaying;
+        }
         if (state.currentSong) setCurrentSong(state.currentSong);
         setCurrentTime(state.position || 0);
         setDuration(state.duration || state.currentSong?.duration_seconds || 0);
@@ -80,50 +92,72 @@ export const MusicProvider = ({ children }) => {
 
         // Sync queue so the Queue panel shows correct state
         if (state.queue?.length > 0) {
-            setPlaylist(state.queue);
-            setPlaylistIndex(state.currentIndex || 0);
+            const idx = state.currentIndex || 0;
+            const cycledQueue = idx >= 0 ? [...state.queue.slice(idx), ...state.queue.slice(0, idx)] : state.queue;
+            setPlaylist(cycledQueue);
+            setPlaylistIndex(0);
         }
     }, [ws.state, playbackTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Persist and transition target selection in real-time
-    const lastTargetRef = useRef(playbackTarget);
-    useEffect(() => {
-        console.log('🔈 [MusicContext] Playback Target Changed:', playbackTarget);
-        localStorage.setItem('music_playback_target', playbackTarget);
+    // Change target and transition synchronously to preserve user gesture context (bypasses browser autoplay blocks)
+    const setPlaybackTarget = useCallback(async (newTarget) => {
+        const shouldPlay = isPlayIntendedRef.current;
+        setPlaybackTargetState(newTarget);
+        localStorage.setItem('music_playback_target', newTarget);
 
-        if (playbackTarget !== lastTargetRef.current && currentSong && isPlaying) {
-            console.log(`🔄 [MusicContext] Transitioning playback destination from ${lastTargetRef.current} to ${playbackTarget} at position ${currentTime}s`);
+        if (currentSong) {
+            console.log(`🔄 [MusicContext] Transitioning destination to ${newTarget} at position ${currentTime}s (shouldPlay: ${shouldPlay})`);
             
-            if (playbackTarget === 'local') {
+            if (newTarget === 'local') {
                 // Pause server playback
                 ws.pause();
                 
-                // Play locally
-                audio1Ref.current.pause(); audio1Ref.current.src = '';
-                audio2Ref.current.pause(); audio2Ref.current.src = '';
-                
+                // Play/Load locally
                 const audioUrl = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(currentSong.file_path || '')}&id=${currentSong.id}`;
                 const player = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+                const otherPlayer = activeAudio === 1 ? audio2Ref.current : audio1Ref.current;
+                
+                otherPlayer.pause(); 
+                otherPlayer.src = '';
+                
                 player.src = audioUrl;
                 player.load();
+                player.currentTime = currentTime;
                 
-                player.play().then(() => {
-                    player.currentTime = currentTime;
-                }).catch(err => console.warn('Local play transition error:', err));
-            } else if (playbackTarget === 'server') {
+                if (shouldPlay) {
+                    try {
+                        await player.play();
+                        setIsPlaying(true);
+                    } catch (err) {
+                        console.warn('Local play user gesture transition error:', err);
+                    }
+                } else {
+                    setIsPlaying(false);
+                }
+            } else if (newTarget === 'server') {
                 // Pause local playback
                 audio1Ref.current.pause();
                 audio2Ref.current.pause();
                 
-                // Start server playback
-                ws.play(currentSong);
-                setTimeout(() => {
-                    ws.seek(currentTime);
-                }, 800);
+                if (shouldPlay) {
+                    setIsPlaying(true);
+                    // Start server playback with full queue sync
+                    if (playlist && playlist.length > 0) {
+                        const idx = playlist.findIndex(s => s.id === currentSong.id);
+                        ws.loadQueue(playlist, idx !== -1 ? idx : 0);
+                    } else {
+                        ws.loadQueue([currentSong], 0);
+                    }
+
+                    setTimeout(() => {
+                        ws.seek(currentTime);
+                    }, 800);
+                } else {
+                    setIsPlaying(false);
+                }
             }
         }
-        lastTargetRef.current = playbackTarget;
-    }, [playbackTarget, currentSong, isPlaying, ws, activeAudio, currentTime, MUSIC_API_URL]);
+    }, [currentSong, ws, activeAudio, currentTime, MUSIC_API_URL, playlist]);
 
     // Initial Load: Restore queue from Dexie
     useEffect(() => {
@@ -160,25 +194,14 @@ export const MusicProvider = ({ children }) => {
     const handleReorder = useCallback(async (newOrder) => {
         setPlaylist(newOrder);
 
-        // Find what moved or just bulk update if it's small, 
-        // but Task 2/3 suggest fractional update for the moved item.
-        // For simplicity with <Reorder.Group>, we can do a smart diff or just update all positions.
-        // Given Task 2 requirements: "Avoids bulk-updating the entire table".
-
-        // Let's implement a quick position recalculation for the whole array and only update shifted ones.
-        // Or just re-save the whole thing if it's not huge (usually queue is < 500 items).
-        // Actually, let's use the provided fractional utility to update THE whole table positions
-        // if we want to be pure, but usually Reorder.Group provides the NEW array.
-
-        // Strategy: Just bulkPut with updated positions to keep it simple but persistent.
-        const entries = newOrder.map((s, idx) => ({
-            ...s,
-            position: idx + 1 // We can still use integers if we re-save all, but fractional is for single-item moves.
-        }));
+        // If in server mode, sync the reordered queue with the server immediately without stopping playback
+        if (playbackTarget === 'server') {
+            ws.updateQueue(newOrder, 0);
+        }
 
         // Save to DB
         await MusicQueueManager.setQueue(newOrder);
-    }, []);
+    }, [playbackTarget, ws]);
 
     // Trigger Prefetcher whenever song or playlist changes
     // This ensures all songs in the queue are saved to local disk for external drive fallback
@@ -228,17 +251,26 @@ export const MusicProvider = ({ children }) => {
                 // If in server mode, local events should not dictate UI state
                 if (playbackTarget === 'server') return;
                 // Determine if this player is indeed the one that SHOULD be playing UI-wise
-                if (activeAudio === playerNum || isTransitionalRef.current) setIsPlaying(true);
+                if (activeAudio === playerNum || isTransitionalRef.current) {
+                    setIsPlaying(true);
+                    isPlayIntendedRef.current = true;
+                }
             },
             pause: (e) => {
                 // If in server mode, local events should not dictate UI state
                 if (playbackTarget === 'server') return;
                 // Only pause UI if we're not in the middle of a crossfade (where one player pauses)
-                if (!isTransitionalRef.current && activeAudio === playerNum) setIsPlaying(false);
+                if (!isTransitionalRef.current && activeAudio === playerNum) {
+                    setIsPlaying(false);
+                    isPlayIntendedRef.current = false;
+                }
             },
             error: (e) => {
                 console.error(`🎵 Audio Player ${playerNum} Error:`, e.target.error);
-                if (activeAudio === playerNum && playbackTarget === 'local') setIsPlaying(false);
+                if (activeAudio === playerNum && playbackTarget === 'local') {
+                    setIsPlaying(false);
+                    isPlayIntendedRef.current = false;
+                }
             }
         });
 
@@ -448,7 +480,7 @@ export const MusicProvider = ({ children }) => {
 
             console.log('🎵 Starting playback for:', song.title, 'Path:', song.file_path);
 
-            const audioUrl = `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(song.file_path || '')}&id=${song.id}`;
+            const audioUrl = song.storage_url || `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(song.file_path || '')}&id=${song.id}`;
 
             // ── Server-Mode Playback via WebSocket ─────────────────────────────
             console.log('🎵 [MusicContext] playbackTarget current value:', playbackTarget);
@@ -467,9 +499,24 @@ export const MusicProvider = ({ children }) => {
                 setDuration(song.duration_seconds || 0);
                 setCurrentTime(0);
                 setIsPlaying(true);
+                isPlayIntendedRef.current = true;
 
-                // ✅ Send WS PLAY command (replaces dead /music/play-server REST call)
-                ws.play(song);
+                // Sync the full queue to the server first to enable auto-advance and correct metadata broadcast
+                let finalQueue = [];
+                let activePlaylist = playlistSongs && playlistSongs.length > 0 ? playlistSongs : playlist;
+                if (activePlaylist && activePlaylist.length > 0) {
+                    const idx = activePlaylist.findIndex(s => s.id === song.id);
+                    if (idx !== -1) {
+                        finalQueue = [...activePlaylist.slice(idx), ...activePlaylist.slice(0, idx)];
+                    } else {
+                        finalQueue = [song, ...activePlaylist.filter(s => s.id !== song.id)];
+                    }
+                } else {
+                    finalQueue = [song];
+                }
+
+                // Send queue (starts playback automatically on the server)
+                ws.loadQueue(finalQueue, 0);
 
                 return;
             }
@@ -639,9 +686,11 @@ export const MusicProvider = ({ children }) => {
             if (isPlaying) {
                 ws.pause();          // ✅ WS PAUSE (replaces /music/stop-server)
                 setIsPlaying(false);
+                isPlayIntendedRef.current = false;
             } else if (currentSong) {
                 ws.resume();         // ✅ WS RESUME
                 setIsPlaying(true);
+                isPlayIntendedRef.current = true;
             }
             return;
         }
@@ -649,13 +698,16 @@ export const MusicProvider = ({ children }) => {
         const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
         if (audio.paused) {
             audio.play().catch(err => console.warn('⚠️ play() failed:', err));
+            isPlayIntendedRef.current = true;
         } else {
             audio.pause();
+            isPlayIntendedRef.current = false;
         }
     }, [activeAudio, playbackTarget, isPlaying, currentSong, ws]);
 
     // Pause
     const pause = useCallback(() => {
+        isPlayIntendedRef.current = false;
         if (playbackTarget === 'server') {
             ws.pause();              // ✅ WS PAUSE
             setIsPlaying(false);
@@ -687,6 +739,7 @@ export const MusicProvider = ({ children }) => {
 
     // Resume
     const resume = useCallback(() => {
+        isPlayIntendedRef.current = true;
         if (playbackTarget === 'server') {
             ws.resume();             // ✅ WS RESUME
             setIsPlaying(true);

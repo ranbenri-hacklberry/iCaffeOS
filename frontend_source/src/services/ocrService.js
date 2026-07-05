@@ -10,17 +10,32 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
  * @param {string} base64Image - Base64 encoded image (with or without data URL prefix)
  * @returns {Promise<Object>} OCR result with items, supplier, date, etc.
  */
-export const processInvoiceOCR = async (base64Image, businessId) => {
+export const processInvoiceOCR = async (fileOrBase64, businessId) => {
     try {
         console.log('🔄 Sending OCR request to backend...');
 
-        const response = await fetch(`${BACKEND_URL}/api/ocr/process`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ base64Image, businessId }),
-        });
+        let response;
+        if (fileOrBase64 instanceof File) {
+            console.log('📦 Using raw file upload FormData method to avoid OOM crashes...');
+            const formData = new FormData();
+            formData.append('invoice', fileOrBase64);
+            if (businessId) {
+                formData.append('businessId', businessId);
+            }
+            response = await fetch(`${BACKEND_URL}/api/ocr/process-upload`, {
+                method: 'POST',
+                body: formData,
+            });
+        } else {
+            console.log('📝 Using legacy JSON base64 method...');
+            response = await fetch(`${BACKEND_URL}/api/ocr/process`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ base64Image: fileOrBase64, businessId }),
+            });
+        }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));

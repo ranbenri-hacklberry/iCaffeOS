@@ -1,3 +1,14 @@
+export interface PackagingLevel {
+    name: string;
+    qty: number;
+    count_step?: number;
+}
+
+export interface PackagingData {
+    levels: PackagingLevel[];
+    countLevel: number;
+}
+
 export interface InventoryItem {
     id: string;
     name: string;
@@ -19,6 +30,13 @@ export interface InventoryItem {
     location?: string;
     unit?: string | null;
     settings?: any;
+    count_step?: number;
+    recipe_step?: number;
+    case_quantity?: number;
+    yield_percentage?: number;
+    manufacturer_name?: string;
+    supplier_product_name?: string[];
+    packaging?: PackagingData | null;
 }
 
 export interface Supplier {
