@@ -1,6 +1,6 @@
 #!/bin/bash
 export PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
-MIGRATIONS_DIR="/Users/icaffeos/icaffeos/frontend_source/supabase/migrations"
+MIGRATIONS_DIR="./supabase/migrations"
 DB_CONTAINER="supabase_db_scarlet-zodiac"
 
 echo "🐘 Applying migrations to $DB_CONTAINER..."
