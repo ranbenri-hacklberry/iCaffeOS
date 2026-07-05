@@ -373,7 +373,7 @@ const KDSScrollContainer = ({
 
       <div
         ref={scrollRef}
-        className="flex-1 overflow-x-auto overflow-y-hidden whitespace-nowrap p-6 pb-4 custom-scrollbar scroll-smooth"
+        className="flex-1 h-0 min-h-0 overflow-x-auto overflow-y-hidden whitespace-nowrap p-6 pb-4 custom-scrollbar scroll-smooth"
       >
         <div className="flex h-full flex-row justify-start gap-4 items-stretch">
           {children}
@@ -797,7 +797,7 @@ const KdsScreen = () => {
 
                 {/* === CONDITIONAL KDS GRID === */}
                 {/* If Checker -> 2 rows (50%/50%), If Station -> 1 row (100% height) */}
-                <div className={`flex-1 grid ${stationView === 'Checker' ? 'grid-rows-2' : 'grid-rows-1'} min-h-0 w-full overflow-hidden bg-slate-100`}>
+                <div className={`flex-1 h-0 grid ${stationView === 'Checker' ? 'grid-rows-2' : 'grid-rows-1'} min-h-0 w-full overflow-hidden bg-slate-100`}>
                   <KDSScrollContainer
                     title={stationView === 'Checker' ? "בטיפול" : `${stationView} — בטיפול`}
                     orders={stationView === 'Checker' ? stationOrders : stationActiveOrders}
