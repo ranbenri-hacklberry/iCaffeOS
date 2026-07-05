@@ -245,6 +245,13 @@ export function useRantunesWs() {
     }, [sendCommand]);
 
     /**
+     * Update the queue order on the server without interrupting playback.
+     */
+    const updateQueue = useCallback((songs, currentIndex = 0) => {
+        sendCommand('UPDATE_QUEUE', { songs, currentIndex });
+    }, [sendCommand]);
+
+    /**
      * Toggle or set shuffle mode.
      * @param {boolean} enabled
      */
@@ -288,6 +295,7 @@ export function useRantunesWs() {
         seek,
         setVolume,
         loadQueue,
+        updateQueue,
         setShuffle,
         setRepeat,
         getState,

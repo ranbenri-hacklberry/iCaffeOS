@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageDraw
-from rembg import remove
+from rembg import remove, new_session
 from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,10 +28,19 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 # Serve processed images as static files
 app.mount("/images", StaticFiles(directory=str(OUTPUT_DIR)), name="images")
 
-# ── Warm-up rembg model on startup ──
-print("🎬 [Local Studio] Loading rembg model...")
-_warmup = remove(Image.new("RGBA", (8, 8), (0, 0, 0, 255)))
-print("✅ [Local Studio] Model ready.")
+session = None
+
+def get_rembg_session():
+    global session
+    if session is None:
+        print("🎬 [Local Studio] Loading rembg model (isnet-general-use)...")
+        try:
+            session = new_session("isnet-general-use")
+            print("✅ [Local Studio] Loaded ISNet model.")
+        except Exception as e:
+            print(f"⚠️ [Local Studio] Could not load ISNet ({e}). Falling back to default u2net.")
+            session = new_session("u2net")
+    return session
 
 
 def create_infinity_background(cw: int, ch: int) -> Image.Image:
@@ -115,7 +124,7 @@ def draw_contact_shadow(
 def studio_composite(input_image: Image.Image, canvas_w=512, canvas_h=512) -> Image.Image:
     """Full pipeline: remove bg → defringe → infinity bg → contact shadow → composite."""
     # 1. Remove background
-    cutout = remove(input_image.convert("RGBA"))
+    cutout = remove(input_image.convert("RGBA"), session=get_rembg_session())
     bbox = cutout.getbbox()
     if bbox:
         cutout = cutout.crop(bbox)
@@ -123,21 +132,16 @@ def studio_composite(input_image: Image.Image, canvas_w=512, canvas_h=512) -> Im
     # 2. Defringe edges
     cutout = defringe_alpha(cutout)
 
-    # 3. Scale to fit safe zone (for both 1:1 and 5:4 crops)
+    # 3. Scale to fit canvas (maximize size to fill the card)
     cw, ch = canvas_w, canvas_h
-    safe_top = int(ch * 0.08)
-    safe_bottom = int(ch * 0.92)
-    safe_height = safe_bottom - safe_top
-
     pw, ph = cutout.size
-    scale = min((cw * 0.65) / pw, (safe_height * 0.88) / ph)
+    scale = min((cw * 0.96) / pw, (ch * 0.96) / ph)
     new_pw, new_ph = int(pw * scale), int(ph * scale)
     cutout_resized = cutout.resize((new_pw, new_ph), Image.LANCZOS)
 
     # 4. Center on canvas
     x_offset = (cw - new_pw) // 2
-    y_center = (safe_top + safe_bottom) // 2
-    y_offset = y_center - new_ph // 2
+    y_offset = (ch - new_ph) // 2
 
     # 5. Build layers
     bg = create_infinity_background(cw, ch)

@@ -35,14 +35,14 @@ const IncomingOrdersSidebar: React.FC<IncomingOrdersSidebarProps> = ({
 
     if (isLoading) {
         return (
-            <div className="w-80 h-full bg-slate-50 border-l border-slate-200 flex items-center justify-center">
+            <div className="w-full md:w-80 h-full bg-slate-50 border-l border-slate-200 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
             </div>
         );
     }
 
     return (
-        <div className="w-80 h-full bg-slate-50 border-l border-slate-200 overflow-y-auto no-scrollbar pb-20">
+        <div className="w-full md:w-80 h-full bg-slate-50 border-l border-slate-200 overflow-y-auto no-scrollbar pb-20">
             <div className="p-6">
                 <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
                     <Truck size={22} className="text-indigo-600" />

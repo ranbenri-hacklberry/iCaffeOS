@@ -10,7 +10,12 @@ export const MusicQueueManager = {
      * Get the full queue ordered by position.
      */
     async getQueue() {
-        return await playback_queue.orderBy('position').toArray();
+        const items = await playback_queue.orderBy('position').toArray();
+        return items.map(item => ({
+            ...item,
+            queue_id: item.id,
+            id: item.track_id
+        }));
     },
 
     /**
@@ -20,17 +25,15 @@ export const MusicQueueManager = {
         await playback_queue.clear();
         const now = new Date().toISOString();
         const entries = songs.map((song, index) => ({
+            ...song,
             track_id: song.id,
             position: index + 1,
-            is_current: false,
+            is_current: index === 0, // Mark first as current by default
             added_at: now,
-            // Include essential metadata to avoid extra joins if needed
-            title: song.title,
-            artist: song.artist,
-            file_path: song.file_path,
-            duration: song.duration,
             cover_url: song.cover_url || song.album?.cover_url
         }));
+        // Remove `id` so Dexie can auto-increment it without erroring or we just let Dexie overwrite it.
+        entries.forEach(e => delete e.id);
         await playback_queue.bulkAdd(entries);
     },
 
@@ -41,17 +44,17 @@ export const MusicQueueManager = {
         const lastItem = await playback_queue.orderBy('position').last();
         const newPos = calculateNewPosition(lastItem ? lastItem.position : null, null);
 
-        await playback_queue.add({
+        const entry = {
+            ...song,
             track_id: song.id,
             position: newPos,
             is_current: false,
             added_at: new Date().toISOString(),
-            title: song.title,
-            artist: song.artist,
-            file_path: song.file_path,
-            duration: song.duration,
             cover_url: song.cover_url || song.album?.cover_url
-        });
+        };
+        delete entry.id;
+        
+        await playback_queue.add(entry);
     },
 
     /**

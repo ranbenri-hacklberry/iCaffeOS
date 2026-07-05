@@ -3,7 +3,14 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { MusicProvider } from './context/MusicContext';
 import AppRoutes from './Routes';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/auth/Login';
+import MusicPage from './pages/music';
+import YouTubePage from './pages/youtube';
 import './i18n';
+
+const isStandaloneRanTunes = import.meta.env.VITE_STANDALONE_RANTUNES === 'true';
 
 function AppContent() {
   const { isDarkMode } = useTheme();
@@ -49,7 +56,26 @@ function AppContent() {
 
   return (
     <div className={`${isDarkMode ? 'dark' : ''} font-inter`} dir="ltr">
-      <AppRoutes />
+      {isStandaloneRanTunes ? (
+        <HashRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={
+              <ProtectedRoute>
+                <MusicPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/youtube" element={
+              <ProtectedRoute>
+                <YouTubePage />
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </HashRouter>
+      ) : (
+        <AppRoutes />
+      )}
     </div>
   );
 }

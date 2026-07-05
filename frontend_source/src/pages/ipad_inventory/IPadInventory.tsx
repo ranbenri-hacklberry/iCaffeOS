@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Package, Check, AlertTriangle } from 'lucide-react';
 
-const MotionDiv = motion.div as any;
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -22,7 +21,8 @@ import IncomingOrdersList from '@/pages/ipad_inventory/components/IncomingOrders
 import IncomingOrdersSidebar from '@/pages/ipad_inventory/components/IncomingOrdersSidebar';
 import TripleCheckSession from '@/pages/ipad_inventory/components/TripleCheckSession';
 import LowStockReportModal from '@/pages/ipad_inventory/components/LowStockReportModal';
-import { IncomingOrder } from '@/pages/ipad_inventory/types';
+import InventoryItemModal from '@/pages/ipad_inventory/components/InventoryItemModal';
+import { IncomingOrder, InventoryItem } from '@/pages/ipad_inventory/types';
 
 interface IPadInventoryProps {
     onExit: () => void;
@@ -34,12 +34,16 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
 
     // View State
     const [activeTab, setActiveTab] = useState<'counts' | 'shipping'>('counts');
-    const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>('prepared');
+    const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [showReportModal, setShowReportModal] = useState(false);
     const [stockDeltas, setStockDeltas] = useState<Record<string, number>>({});
-    const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    // Modal state
+    const [showItemModal, setShowItemModal] = useState(false);
+    const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+    const [modalInitialData, setModalInitialData] = useState<{ invoiceName?: string; supplierId?: string; unit?: string; price?: number } | undefined>(undefined);
 
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
@@ -87,7 +91,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     }, [items]);
 
     const filteredItems = useMemo(() => {
-        if (!selectedSupplierId) return [];
+        if (!selectedSupplierId) return items; // Return all items for global search
         return items.filter(i => {
             if (selectedSupplierId === 'prepared') return i.category?.includes('prep');
             const supId = String(i.supplier_id || 'uncategorized');
@@ -214,17 +218,9 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 onShowReport={() => setShowReportModal(true)}
                 shortagesCount={shortagesCount}
             />
-
             <main className="flex-1 flex overflow-hidden">
-                <AnimatePresence mode="wait">
                     {activeTab === 'counts' ? (
-                        <MotionDiv
-                            key="counts"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="flex-1 flex h-full relative"
-                        >
+                        <div className="flex-1 flex h-full relative">
                             {/* Desktop Sidebar */}
                             <div className="hidden md:block">
                                 <SuppliersList
@@ -235,68 +231,50 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                 />
                             </div>
 
-                            {/* Mobile Sidebar (Overlay/Drawer) */}
-                            <AnimatePresence>
-                                {showMobileSidebar && (
-                                    <>
-                                        <motion.div 
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            onClick={() => setShowMobileSidebar(false)}
-                                            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] md:hidden"
-                                        />
-                                        <motion.div 
-                                            initial={{ x: '100%' }}
-                                            animate={{ x: 0 }}
-                                            exit={{ x: '100%' }}
-                                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                                            className="fixed inset-y-0 right-0 w-80 bg-white z-[101] shadow-2xl md:hidden"
-                                        >
-                                            <SuppliersList
-                                                suppliers={suppliers}
-                                                selectedSupplierId={selectedSupplierId}
-                                                onSelectSupplier={(id) => {
-                                                    setSelectedSupplierId(id);
-                                                    setShowMobileSidebar(false);
-                                                }}
-                                                supplierCounts={supplierCounts}
-                                            />
-                                        </motion.div>
-                                    </>
-                                )}
-                            </AnimatePresence>
-
-                            {/* Mobile Sidebar Toggle Button */}
-                            <button 
-                                onClick={() => setShowMobileSidebar(true)}
-                                className="fixed bottom-24 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center z-50 md:hidden active:scale-90 transition-transform"
-                            >
-                                <Package size={24} />
-                            </button>
-
                             {selectedSupplierId === 'prepared' ? (
                                 <PreparedItemsView
                                     items={filteredItems}
                                     onUpdateStock={updateStock}
                                     isLoading={dataLoading}
                                 />
+                            ) : selectedSupplierId === null ? (
+                                <>
+                                    {/* Mobile: inline supplier picker (sidebar is hidden) */}
+                                    <div className="md:hidden flex-1">
+                                        <InventoryItemsGrid
+                                            items={filteredItems}
+                                            onUpdateStock={updateStock}
+                                            isLoading={dataLoading}
+                                            emptyMode={true}
+                                            onEditItem={(item) => { setEditingItem(item); setModalInitialData(undefined); setShowItemModal(true); }}
+                                            suppliers={suppliers}
+                                            supplierCounts={supplierCounts}
+                                            onSelectSupplier={setSelectedSupplierId}
+                                        />
+                                    </div>
+                                    {/* Desktop/iPad: simple placeholder (sidebar is visible) */}
+                                    <div className="hidden md:flex flex-1 h-full flex-col items-center justify-center text-slate-300 gap-6 bg-slate-50">
+                                        <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center border-4 border-white shadow-inner">
+                                            <Package size={64} />
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-2xl font-black text-slate-400 block mb-2">ניהול מלאי</span>
+                                            <span className="text-slate-400 font-bold">בחר ספק מהרשימה כדי להתחיל</span>
+                                        </div>
+                                    </div>
+                                </>
                             ) : (
                                 <InventoryItemsGrid
                                     items={filteredItems}
                                     onUpdateStock={updateStock}
                                     isLoading={dataLoading}
+                                    onEditItem={(item) => { setEditingItem(item); setModalInitialData(undefined); setShowItemModal(true); }}
+                                    onSelectSupplier={setSelectedSupplierId}
                                 />
                             )}
-                        </MotionDiv>
+                        </div>
                     ) : (
-                        <MotionDiv
-                            key="shipping"
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            className="flex-1 flex h-full"
-                        >
+                        <div className="flex-1 flex h-full">
                             <IncomingOrdersSidebar
                                 orders={orders}
                                 selectedOrderId={selectedOrderId}
@@ -334,7 +312,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                     />
                                 </div>
                             ) : (
-                                <div className="flex-1 h-full flex flex-col items-center justify-center text-slate-300 gap-6 bg-slate-50">
+                                <div className="hidden md:flex flex-1 h-full flex flex-col items-center justify-center text-slate-300 gap-6 bg-slate-50">
                                     <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center border-4 border-white shadow-inner">
                                         <Package size={64} />
                                     </div>
@@ -344,9 +322,8 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                     </div>
                                 </div>
                             )}
-                        </MotionDiv>
+                        </div>
                     )}
-                </AnimatePresence>
             </main>
 
             {/* Overlays - Only show TripleCheck as overlay for counts tab, not for shipping (it's inline there) */}
@@ -386,6 +363,18 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 items={items}
                 currentStocks={stockDeltas}
                 onUpdateStock={handleStockDelta}
+            />
+
+            {/* Inventory Item Modal */}
+            <InventoryItemModal
+                isOpen={showItemModal}
+                item={editingItem}
+                initialData={modalInitialData}
+                suppliers={suppliers}
+                categories={[...new Set(items.map(i => i.category).filter(Boolean) as string[])]}
+                businessId={businessId || ''}
+                onClose={() => { setShowItemModal(false); setEditingItem(null); setModalInitialData(undefined); }}
+                onSaved={() => { refreshData(); showToast('הפריט נשמר בהצלחה'); }}
             />
 
             {/* Custom Toast Alert */}

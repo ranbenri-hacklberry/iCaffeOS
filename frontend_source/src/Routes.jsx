@@ -50,6 +50,7 @@ import OwnerSettings from './pages/owner-settings';
 import IPadMenuEditor from './pages/ipad-menu-editor';
 import WizardLayout from './pages/onboarding/components/WizardLayout';
 import MenuReviewDashboard from './pages/onboarding/components/MenuReviewDashboard';
+import MobileMenuEditor from './pages/mobile-menu-editor';
 import IPadInventoryPage from './pages/ipad_inventory/IPadInventoryPage';
 import FaceScannerTest from './pages/FaceScannerTest';
 import EnrollFace from './pages/EnrollFace';
@@ -182,6 +183,18 @@ const ProtectedRoute = ({ children }) => {
 
   // 🛡️ MODE-BASED ROOT REDIRECT: Ensure root path always reflects the active mode.
   // This prevents users who are 'Managers' from seeing the 'Kiosk' just because they are on '/'
+
+  // 📱 MOBILE GUARD: POS is not designed for phones — force mobile-appropriate mode
+  const isMobileDevice = window.innerWidth < 768;
+  if (isMobileDevice && deviceMode === 'kiosk') {
+    localStorage.removeItem('kiosk_mode');
+    return <Navigate to="/mode-selection" replace />;
+  }
+  // On mobile, if landing on root '/' (POS screen), redirect to mode selection
+  if (isMobileDevice && location.pathname === '/') {
+    return <Navigate to="/mode-selection" replace />;
+  }
+
   if (location.pathname === '/' && deviceMode && deviceMode !== 'kiosk') {
     // Check if we explicitly want to create an order or edit an order
     const searchParams = new URLSearchParams(location.search);
@@ -375,7 +388,7 @@ const AppRoutes = () => {
       <Route path="/menu-editor" element={
         <ProtectedRoute>
           <ErrorBoundary>
-            <MenuReviewDashboard />
+            <MobileMenuEditor />
           </ErrorBoundary>
         </ProtectedRoute>
       } />

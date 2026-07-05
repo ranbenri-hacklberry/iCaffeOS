@@ -26,6 +26,24 @@ const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
     onAddToCart?.(item);
   }, [item, onAddToCart]);
 
+  const [touchStart, setTouchStart] = useState(null);
+
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (!touchStart) return;
+    const touch = e.changedTouches[0];
+    const dx = Math.abs(touch.clientX - touchStart.x);
+    const dy = Math.abs(touch.clientY - touchStart.y);
+    setTouchStart(null);
+    if (dx > 10 || dy > 10) return; // Ignore drag/scroll
+    e.preventDefault();
+    handleClick(e);
+  }, [touchStart, handleClick]);
+
   // 🛡️ Extra safety for touch devices to prevent bubbling to parent listeners
   const stopPropagation = (e) => e.stopPropagation();
 
@@ -56,11 +74,8 @@ const MenuItemCard = ({ item, onAddToCart, enhancingStatus }) => {
         ${containerClass}
         ${(item?.available === false || item?.is_in_stock === false) ? 'opacity-60 grayscale' : ''}`}
       onClick={handleClick}
-      onTouchEnd={(e) => {
-        // Prevent synthetic click on mobile to avoid ghost clicks on the modal
-        e.preventDefault();
-        handleClick(e);
-      }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       onKeyDown={handleKeyDown}
       tabIndex={0}
       role="button"

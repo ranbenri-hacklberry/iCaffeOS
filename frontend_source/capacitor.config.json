@@ -1,9 +1,10 @@
 {
-  "appId": "com.icaffe.app",
-  "appName": "iCaffeOS",
-  "webDir": "build",
+  "appId": "com.rani.rantunes",
+  "appName": "RanTunes",
+  "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
+    "url": "https://rantunes.yourdomain.com",
     "cleartext": true,
     "androidScheme": "https"
   }
