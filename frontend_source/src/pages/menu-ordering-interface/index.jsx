@@ -2526,77 +2526,7 @@ const MenuOrderingInterface = () => {
         // Note: We don't cache to Dexie here - the sync service will handle it
         // This prevents duplicate items when editing orders
       } else {
-        // OFFLINE: Save locally and queue for sync
-        // [CLEANED] console.log('📴 Offline: Saving order locally...');
-
-        try {
-          const { db } = await import('@/db/database');
-          const { queueAction } = await import('@/services/offlineQueue');
-
-          // Generate local order ID (proper UUID!) and number
-          const localOrderId = uuidv4();
-          const localOrderNumber = `L${Date.now().toString().slice(-6)}`;
-
-          // Save order to local Dexie database
-          // IMPORTANT: Use 'in_progress' so order appears in KDS immediately
-          const localOrder = {
-            id: localOrderId,
-            order_number: localOrderNumber,
-            business_id: currentUser?.business_id,
-            customer_id: orderPayload.p_customer_id,
-            customer_name: orderPayload.p_customer_name,
-            customer_phone: orderPayload.p_customer_phone,
-            order_status: (preparedItems || []).every(item => item.kds_routing_logic === 'GRAB_AND_GO' || item.kds_routing_logic === 'prep_override') ? 'completed' : 'in_progress',
-            is_paid: orderPayload.p_is_paid,
-            total_amount: orderPayload.p_final_total,
-            discount_id: orderPayload.p_discount_id,
-            discount_amount: orderPayload.p_discount_amount,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            is_offline: true, // Flag for offline orders
-            pending_sync: true // Flag to track sync status
-          };
-          await db.orders.put(localOrder);
-
-          // Save order items locally
-          for (const item of preparedItems) {
-            await db.order_items.put({
-              id: uuidv4(), // Use proper UUID
-              order_id: localOrderId,
-              menu_item_id: item.item_id,
-              name: item.name, // 🛡️ SAVE NAME TO DB FOR KDS OFFLINE VIEW
-              quantity: item.quantity,
-              price: item.price,
-              notes: item.notes,
-              mods: {
-                selectedOptions: item.selected_options || [],
-                custom_mods: item.mods || {},
-                kds_override: !!(item.mods?.includes('__KDS_OVERRIDE__'))
-              },
-              item_status: item.item_status || 'new', // Shows in KDS
-              course_stage: item.course_stage || 1,
-              created_at: new Date().toISOString()
-            });
-          }
-
-          // Queue for later sync
-          await queueAction('CREATE_ORDER', {
-            ...orderPayload,
-            localOrderId: localOrderId
-          });
-
-          // Return as if it succeeded
-          orderResult = {
-            order_id: localOrderId,
-            order_number: localOrderNumber,
-            offline: true
-          };
-
-          // [CLEANED] console.log('✅ Order saved locally:', localOrderId);
-        } catch (offlineErr) {
-          console.error('❌ Failed to save order offline:', offlineErr);
-          orderError = { message: 'לא ניתן לשמור הזמנה אופליין. נסה שוב.' };
-        }
+        orderError = { message: 'המערכת אינה מחוברת לשרת. לא ניתן לבצע הזמנות במצב לא מקוון.' };
       }
 
       if (orderError) {

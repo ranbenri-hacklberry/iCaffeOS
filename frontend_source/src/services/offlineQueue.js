@@ -34,35 +34,8 @@ export const initializeQueue = async () => {
  * @param {Object} payload - Action data
  */
 export const queueAction = async (type, payload, table = null, recordId = null) => {
-    const action = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        type,
-        payload,
-        table,
-        recordId,
-        createdAt: new Date().toISOString(),
-        status: 'pending',
-        retries: 0
-    };
-
-    // Try Dexie first
-    try {
-        if (db.offline_queue_v3) {
-            await db.offline_queue_v3.add(action);
-            console.log(`📥 Queued ${type} action:`, action.id);
-            return action;
-        }
-    } catch (e) {
-        console.warn('Dexie queue failed, using localStorage:', e);
-    }
-
-    // Fallback to localStorage
-    const queue = JSON.parse(localStorage.getItem(QUEUE_STORE) || '[]');
-    queue.push(action);
-    localStorage.setItem(QUEUE_STORE, JSON.stringify(queue));
-    console.log(`📥 Queued ${type} action (localStorage):`, action.id);
-
-    return action;
+    console.warn(`⚠️ [OfflineQueue] queueAction called for ${type} but background sync queuing is disabled.`);
+    return null;
 };
 
 /**

@@ -1,20 +1,9 @@
 import React, { useState } from 'react';
 import { Play, Music, Trash2, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { getBackendApiUrl, getCoverUrl } from '@/utils/apiUtils';
 
 const MUSIC_API_URL = getBackendApiUrl();
-
-// Helper to convert local path to backend URL
-const getCoverUrl = (localPath, id) => {
-    if (!localPath && !id) return null;
-    if (localPath?.startsWith('http')) return localPath;
-
-    let url = `${MUSIC_API_URL}/music/cover?`;
-    if (localPath) url += `path=${encodeURIComponent(localPath)}`;
-    if (id) url += `${localPath ? '&' : ''}id=${id}`;
-    return url;
-};
 
 /**
  * Album card with cover art, always-visible info, and hover play/delete buttons.

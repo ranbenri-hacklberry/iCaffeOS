@@ -99,24 +99,7 @@ const UnifiedHeader = ({
                         </div>
                     )}
 
-                    {!useDarkMusicTheme && isMusicPage && (
-                        <div className="flex items-center bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md shrink-0 scale-90 md:scale-100 origin-right">
-                            <button
-                                onClick={() => setPlaybackTarget('local')}
-                                className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-xl transition-all ${playbackTarget === 'local' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
-                                title={isLTR ? "Play on Browser" : "נגן בדפדפן (מקומי)"}
-                            >
-                                <Tablet size={16} />
-                            </button>
-                            <button
-                                onClick={() => setPlaybackTarget('server')}
-                                className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-xl transition-all ${playbackTarget === 'server' ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
-                                title={isLTR ? "Play on Server" : "נגן בשרת (רמקולים)"}
-                            >
-                                <Speaker size={16} />
-                            </button>
-                        </div>
-                    )}
+
 
                     {!useDarkMusicTheme && rightContent && (
                         <div className={`flex items-center gap-3 shrink-0 ${isLTR ? 'flex-row' : 'flex-row-reverse'}`}>

@@ -77,3 +77,25 @@ export const getCortexApiUrl = () => {
 
     return CORTEX_CLOUD_URL;
 };
+
+/**
+ * Format and return the full API URL for a cover image.
+ */
+export const getCoverUrl = (localPath, id) => {
+    if (!localPath && !id) return null;
+    if (localPath?.startsWith('http') || localPath?.startsWith('blob:')) return localPath;
+
+    const MUSIC_API_URL = getBackendApiUrl();
+
+    if (localPath?.startsWith('/api/music/cover') || localPath?.startsWith('/music/cover')) {
+        // Normalize to ensure /api/music prefix
+        const cleanPath = localPath.startsWith('/music') ? `/api${localPath}` : localPath;
+        return `${MUSIC_API_URL}${cleanPath}`;
+    }
+
+    let url = `${MUSIC_API_URL}/api/music/cover?`;
+    if (localPath) url += `path=${encodeURIComponent(localPath)}`;
+    if (id) url += `${localPath ? '&' : ''}id=${id}`;
+    return url;
+};
+

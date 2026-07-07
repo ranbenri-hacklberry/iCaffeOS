@@ -82,19 +82,20 @@ export const useAlbums = () => {
         try {
             const { data, error } = await supabase
                 .from('music_songs')
-                .select('album_name, artist_name, thumbnail_url')
+                .select('album_name, artist_name, album_artist, thumbnail_url')
                 .order('album_name');
             if (error) throw error;
             
             const albumMap = new Map();
             data.forEach(s => {
-                const key = `${s.album_name}|||${s.artist_name}`;
+                const albumArtist = s.album_artist || s.artist_name || 'Unknown Artist';
+                const key = `${s.album_name}|||${albumArtist}`;
                 if (!albumMap.has(key)) {
                     albumMap.set(key, {
-                        id: `album:${s.album_name}`,
+                        id: `album:${s.album_name}|||${albumArtist}`,
                         name: s.album_name || 'Singles',
-                        artist_name: s.artist_name || 'Unknown Artist',
-                        artist: { name: s.artist_name || 'Unknown Artist' },
+                        artist_name: albumArtist,
+                        artist: { name: albumArtist },
                         cover_url: s.thumbnail_url || null
                     });
                 }
@@ -269,18 +270,31 @@ export const useAlbums = () => {
     }, [fetchRatingsMap]);
 
     // Fetch songs for an album matching album_name
-    const fetchAlbumSongs = useCallback(async (albumName) => {
+    const fetchAlbumSongs = useCallback(async (albumId) => {
         try {
             setIsLoading(true);
-            const cleanAlbumName = albumName?.startsWith('album:')
-                ? albumName.substring(6)
-                : albumName;
+            let cleanAlbumName = albumId;
+            let albumArtist = null;
+            if (albumId?.startsWith('album:')) {
+                const parts = albumId.substring(6).split('|||');
+                cleanAlbumName = parts[0];
+                if (parts.length > 1) {
+                    albumArtist = parts[1];
+                }
+            }
 
-            const { data, error } = await supabase
+            let query = supabase
                 .from('music_songs')
                 .select('*')
-                .eq('album_name', cleanAlbumName)
-                .order('title');
+                .eq('album_name', cleanAlbumName);
+
+            if (albumArtist) {
+                query = query.eq('album_artist', albumArtist);
+            }
+
+            const { data, error } = await query
+                .order('track_number', { ascending: true })
+                .order('title', { ascending: true });
             if (error) throw error;
             const ratingMap = await fetchRatingsMap((data || []).map(s => s.id).filter(Boolean));
             return (data || []).map(s => ({ ...s, myRating: ratingMap.get(s.id) || 0 }));
@@ -372,6 +386,31 @@ export const useAlbums = () => {
         }
     }, []);
 
+    // Reorder playlist songs
+    const reorderPlaylistSongs = useCallback(async (playlistId, reorderedSongs) => {
+        try {
+            setIsLoading(true);
+            const updates = reorderedSongs.map((song, index) => ({
+                id: song.playlist_song_entry_id, // The primary key of the row in music_playlist_songs
+                playlist_id: playlistId,
+                song_id: song.id, // The song's ID in music_songs
+                position: index + 1 // Keep it 1-based indexing for consistency
+            }));
+
+            const { error } = await supabase
+                .from('music_playlist_songs')
+                .upsert(updates, { onConflict: 'id' });
+
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error('Error reordering playlist songs:', err);
+            return { success: false, error: err };
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
     // Initial load
     useEffect(() => {
         fetchArtists();
@@ -403,6 +442,7 @@ export const useAlbums = () => {
         addSongToPlaylist,
         updateSongDetails,
         fetchSongPlaylistId,
+        reorderPlaylistSongs,
 
         isMusicDriveConnected: true,
         diskStatus: { mounted: true, path: '/Volumes/RanTunesBackup' },

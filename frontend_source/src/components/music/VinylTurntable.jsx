@@ -1,7 +1,7 @@
 import React from 'react';
 import { Music } from 'lucide-react';
 
-import { getBackendApiUrl } from '../../utils/apiUtils';
+import { getBackendApiUrl, getCoverUrl } from '../../utils/apiUtils';
 
 const MUSIC_API_URL = getBackendApiUrl();
 
@@ -16,17 +16,8 @@ const VinylTurntable = ({ song, isPlaying, albumArt, onTogglePlay, queue = [] })
 
     // Determine cover URL with robust fallback
     const resolveCover = () => {
-        // Preference: 1. Passed albumArt prop, 2. Song fields
         const possibleCover = albumArt || (displaySong?.album?.cover_url || displaySong?.cover_url || displaySong?.thumbnail_url);
-
-        if (!possibleCover) return null;
-
-        // If it's a local file path (not http), it needs to go through the cover proxy
-        if (!possibleCover.startsWith('http') && !possibleCover.startsWith('blob:')) {
-            // Pass the full path to the cover endpoint — it handles path resolution
-            return `${MUSIC_API_URL}/music/cover?path=${encodeURIComponent(possibleCover)}`;
-        }
-        return possibleCover;
+        return getCoverUrl(possibleCover);
     };
 
     const coverUrl = resolveCover();

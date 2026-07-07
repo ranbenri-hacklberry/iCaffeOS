@@ -24,6 +24,16 @@ export const MusicProvider = ({ children }) => {
     }, []);
 
     const [activeAudio, setActiveAudio] = useState(1); // 1 or 2
+    const activeAudioRef = useRef(1);
+    const isPlayingSongRef = useRef(false);
+    const playGenerationRef = useRef(0);
+    const isInitialWsStateRef = useRef(true);
+
+    const switchActiveAudio = (nextIdx) => {
+        setActiveAudio(nextIdx);
+        activeAudioRef.current = nextIdx;
+    };
+
     const isTransitionalRef = useRef(false);
     const fadeIntervalRef = useRef(null);
     const serverProgressIntervalRef = useRef(null);
@@ -34,6 +44,12 @@ export const MusicProvider = ({ children }) => {
     const sourceNode1Ref = useRef(null);
     const sourceNode2Ref = useRef(null);
     const serverEndTimeRef = useRef(0);
+
+    const isMasterPlayer = typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || 
+         window.location.hostname === '127.0.0.1' || 
+         !/Mobi|Android|iPhone|iPad/i.test(window.navigator.userAgent) || 
+         localStorage.getItem('iMusic_is_master_player') === 'true');
 
     const handleNextRef = useRef(() => { });
 
@@ -56,23 +72,25 @@ export const MusicProvider = ({ children }) => {
 
     // Loading states
     const [isLoading, setIsLoading] = useState(false);
+    const [playedCount, setPlayedCount] = useState(0);
 
-    // Playback Destination (local browser or server output) - Hardcoded to 'local' for standalone
-    const [playbackTarget, setPlaybackTargetState] = useState('local');
+    // Playback Destination (local browser or server output) - Defaults to 'server'
+    const [playbackTarget, setPlaybackTargetState] = useState(() => {
+        const saved = localStorage.getItem('music_playback_target');
+        if (saved === 'local') {
+            localStorage.removeItem('music_playback_target');
+            return 'server';
+        }
+        return saved || 'server';
+    });
 
-    // WebSocket speaker connection is deactivated in standalone mode
-    const ws = {
-        state: null,
-        isConnected: false,
-        play: () => {},
-        pause: () => {},
-        seek: () => {},
-        loadQueue: () => {},
-        updateQueue: () => {},
-        next: () => {},
-        prev: () => {}
-    };
+    // Live WebSocket connection to RanTunes server
+    const ws = useRantunesWs();
     const isPlayIntendedRef = useRef(false);
+    const lastPlayedSongIdRef = useRef(null);
+    const lastPlayedSongTimeRef = useRef(0);
+    const lastPlayToggleTimeRef = useRef(0);
+    const lastSeekTimeRef = useRef(0);
 
     // Sync WS state → MusicContext state whenever server mode is active
     useEffect(() => {
@@ -80,22 +98,94 @@ export const MusicProvider = ({ children }) => {
         const { state } = ws;
         if (!state) return;
 
-        // Mirror server state into existing React state so all UI consumers work unchanged
-        setIsPlaying(state.isPlaying);
-        if (ws.isConnected) {
-            isPlayIntendedRef.current = state.isPlaying;
-        }
-        if (state.currentSong) setCurrentSong(state.currentSong);
-        setCurrentTime(state.position || 0);
-        setDuration(state.duration || state.currentSong?.duration_seconds || 0);
-        setVolumeState((state.volume || 75) / 100); // WS uses 0-100, local uses 0-1
+        // Mirror server state into React state — only for remote/mobile clients.
+        // The master player drives its own state from local audio events;
+        // overwriting it here with (potentially stale) WS echoes causes
+        // the display to flicker back to the previous song after a skip.
+        if (!isMasterPlayer) {
+            setIsPlaying(state.isPlaying);
+            if (ws.isConnected) {
+                isPlayIntendedRef.current = state.isPlaying;
+            }
+            if (state.currentSong) setCurrentSong(state.currentSong);
+            setCurrentTime(state.position || 0);
+            setDuration(state.duration || state.currentSong?.duration_seconds || 0);
+            setVolumeState((state.volume || 75) / 100); // WS uses 0-100, local uses 0-1
 
-        // Sync queue so the Queue panel shows correct state
-        if (state.queue?.length > 0) {
-            const idx = state.currentIndex || 0;
-            const cycledQueue = idx >= 0 ? [...state.queue.slice(idx), ...state.queue.slice(0, idx)] : state.queue;
-            setPlaylist(cycledQueue);
-            setPlaylistIndex(0);
+            // Sync queue so the Queue panel shows correct state
+            if (state.queue?.length > 0) {
+                setPlaylist(state.queue);
+                setPlaylistIndex(state.currentIndex || 0);
+            }
+        }
+
+        // Master player: sync local browser HTML5 audio elements to match WebSocket server state
+        if (isMasterPlayer && state.currentSong) {
+            const audio = activeAudioRef.current === 1 ? audio1Ref.current : audio2Ref.current;
+
+            if (isInitialWsStateRef.current) {
+                console.log('🔄 [MasterPlayer] Absorbing initial WS state without auto-playing.');
+                lastPlayedSongIdRef.current = state.currentSong.id;
+                setCurrentSong(state.currentSong);
+                setPlaylist(state.queue || []);
+                setPlaylistIndex(state.currentIndex || 0);
+                setCurrentTime(state.position || 0);
+                setDuration(state.duration || state.currentSong?.duration_seconds || 0);
+                setIsPlaying(false); // Force paused state locally on boot
+                
+                // Load the audio source but do not play
+                const audioUrl = state.currentSong.storage_url || `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(state.currentSong.file_path || '')}&id=${state.currentSong.id}`;
+                audio.src = audioUrl;
+                audio.load();
+                if (state.position) {
+                    audio.currentTime = state.position;
+                }
+                
+                isInitialWsStateRef.current = false;
+                return;
+            }
+
+            // 1. Sync song changes with crossfading (skip if we initiated it ourselves or if it is a stale update in flight)
+            if (state.currentSong.id !== lastPlayedSongIdRef.current) {
+                const timeSinceLocalPlay = Date.now() - lastPlayedSongTimeRef.current;
+                if (timeSinceLocalPlay < 2500) {
+                    console.log('⏳ [MasterPlayer] Ignored potential stale WS song update in flight:', state.currentSong.title);
+                } else {
+                    console.log('🔄 [MasterPlayer] WS triggered song change:', state.currentSong.title);
+                    playSong(state.currentSong, state.queue || playlist, true, true);
+                }
+            }
+
+            // Ignore server commands if we are in the middle of a crossfade/transition
+            // This prevents the old song from seeking to 0 or pausing when the server changes state
+            if (!isTransitionalRef.current) {
+                // 2. Sync play/pause state (skip if recently toggled locally)
+                const timeSinceToggle = Date.now() - lastPlayToggleTimeRef.current;
+                if (timeSinceToggle > 2500) {
+                    if (state.isPlaying && audio.paused) {
+                        console.log('▶️ [MasterPlayer] WS triggered Play');
+                        audio.play().catch(() => {});
+                        setIsPlaying(true);
+                    } else if (!state.isPlaying && !audio.paused) {
+                        console.log('⏸ [MasterPlayer] WS triggered Pause');
+                        audio.pause();
+                        setIsPlaying(false);
+                    }
+                }
+
+                // 3. Sync seek position (if drifted by more than 3 seconds, and not recently seeked locally)
+                const timeSinceSeek = Date.now() - lastSeekTimeRef.current;
+                if (timeSinceSeek > 2500 && state.isPlaying && Math.abs(audio.currentTime - (state.position || 0)) > 3) {
+                    console.log(`⏩ [MasterPlayer] WS triggered Seek to ${state.position}s`);
+                    audio.currentTime = state.position || 0;
+                }
+
+                // 4. Sync volume
+                if (state.volume !== undefined) {
+                    const targetVol = state.volume / 100;
+                    audio.volume = Math.max(0, Math.min(1, targetVol || 0));
+                }
+            }
         }
     }, [ws.state, playbackTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -228,7 +318,7 @@ export const MusicProvider = ({ children }) => {
 
         const createHandlers = (playerNum) => ({
             timeupdate: (e) => {
-                if (activeAudio === playerNum) {
+                if (activeAudioRef.current === playerNum) {
                     setCurrentTime(e.target.currentTime);
                     // Automatic Crossfade Trigger
                     if (!isTransitionalRef.current &&
@@ -240,10 +330,10 @@ export const MusicProvider = ({ children }) => {
                 }
             },
             durationchange: (e) => {
-                if (activeAudio === playerNum) setDuration(e.target.duration || 0);
+                if (activeAudioRef.current === playerNum) setDuration(e.target.duration || 0);
             },
             ended: (e) => {
-                if (activeAudio === playerNum && !isTransitionalRef.current) {
+                if (activeAudioRef.current === playerNum && !isTransitionalRef.current) {
                     handleNextRef.current(false);
                 }
             },
@@ -251,7 +341,7 @@ export const MusicProvider = ({ children }) => {
                 // If in server mode, local events should not dictate UI state
                 if (playbackTarget === 'server') return;
                 // Determine if this player is indeed the one that SHOULD be playing UI-wise
-                if (activeAudio === playerNum || isTransitionalRef.current) {
+                if (activeAudioRef.current === playerNum || isTransitionalRef.current) {
                     setIsPlaying(true);
                     isPlayIntendedRef.current = true;
                 }
@@ -260,14 +350,14 @@ export const MusicProvider = ({ children }) => {
                 // If in server mode, local events should not dictate UI state
                 if (playbackTarget === 'server') return;
                 // Only pause UI if we're not in the middle of a crossfade (where one player pauses)
-                if (!isTransitionalRef.current && activeAudio === playerNum) {
+                if (!isTransitionalRef.current && activeAudioRef.current === playerNum) {
                     setIsPlaying(false);
                     isPlayIntendedRef.current = false;
                 }
             },
             error: (e) => {
                 console.error(`🎵 Audio Player ${playerNum} Error:`, e.target.error);
-                if (activeAudio === playerNum && playbackTarget === 'local') {
+                if (activeAudioRef.current === playerNum && playbackTarget === 'local') {
                     setIsPlaying(false);
                     isPlayIntendedRef.current = false;
                 }
@@ -284,16 +374,16 @@ export const MusicProvider = ({ children }) => {
             Object.keys(h1).forEach(key => a1.removeEventListener(key, h1[key]));
             Object.keys(h2).forEach(key => a2.removeEventListener(key, h2[key]));
         };
-    }, [activeAudio, crossfadeSeconds, playbackTarget]);
+    }, [crossfadeSeconds, playbackTarget]);
 
     // Volume syncing across players
     useEffect(() => {
         targetVolumeRef.current = volume;
         if (!isTransitionalRef.current) {
-            audio1Ref.current.volume = activeAudio === 1 ? volume : 0;
-            audio2Ref.current.volume = activeAudio === 2 ? volume : 0;
+            audio1Ref.current.volume = activeAudioRef.current === 1 ? Math.max(0, Math.min(1, volume || 0)) : 0;
+            audio2Ref.current.volume = activeAudioRef.current === 2 ? Math.max(0, Math.min(1, volume || 0)) : 0;
         }
-    }, [volume, activeAudio]);
+    }, [volume]);
 
     // Handle Remote Commands (from Mobile)
     useEffect(() => {
@@ -398,11 +488,25 @@ export const MusicProvider = ({ children }) => {
     }, [currentUser]);
 
     // Play a song with crossfade capability
-    const playSong = useCallback(async (song, playlistSongs = null, useCrossfade = true) => {
+    const playSong = useCallback(async (song, playlistSongs = null, useCrossfade = true, isWsSync = false) => {
         if (!song) return;
+
+        if (isPlayingSongRef.current && !isWsSync) {
+            console.log('🔄 [playSong] Concurrent execution detected. Clearing fade interval.');
+            if (fadeIntervalRef.current) {
+                clearInterval(fadeIntervalRef.current);
+                fadeIntervalRef.current = null;
+            }
+        }
+        isPlayingSongRef.current = true;
+        const myGeneration = ++playGenerationRef.current;
+
+        lastPlayedSongIdRef.current = song.id;
+        lastPlayedSongTimeRef.current = Date.now();
 
         // Skip disliked
         if ((song.myRating || 0) === 1) {
+            isPlayingSongRef.current = false;
             setTimeout(() => handleNextRef.current(useCrossfade), 100);
             return;
         }
@@ -443,7 +547,7 @@ export const MusicProvider = ({ children }) => {
 
             const player1 = audio1Ref.current;
             const player2 = audio2Ref.current;
-            const currentActiveIdx = activeAudio;
+            const currentActiveIdx = activeAudioRef.current;
             const nextActiveIdx = currentActiveIdx === 1 ? 2 : 1;
             const currentPlayer = currentActiveIdx === 1 ? player1 : player2;
             const nextPlayer = nextActiveIdx === 1 ? player1 : player2;
@@ -451,34 +555,49 @@ export const MusicProvider = ({ children }) => {
             // Verify connection/path
             if (!song.file_path && !song.url) {
                 console.error('❌ Playback blocked: No file path or URL for song:', song);
-                // Optionally show UI alert
-                // alert('Cannot play: File path missing');
+                isPlayingSongRef.current = false;
                 return;
             }
 
             // Update Playlist Context: keep current playing song at index 0, cycle the rest
             let activePlaylist = playlistSongs && playlistSongs.length > 0 ? playlistSongs : playlist;
+            let currentIdx = 0;
             if (activePlaylist && activePlaylist.length > 0) {
                 const idx = activePlaylist.findIndex(s => s.id === song.id);
                 if (idx !== -1) {
                     const cycledPlaylist = [...activePlaylist.slice(idx), ...activePlaylist.slice(0, idx)];
                     setPlaylist(cycledPlaylist);
                     setPlaylistIndex(0);
+                    currentIdx = 0;
                     MusicQueueManager.setQueue(cycledPlaylist);
+                    if (playlistSongs && playlistSongs !== playlist) {
+                        setPlayedCount(0); // Reset played count for new play context
+                    }
                 } else {
                     const mergedPlaylist = [song, ...activePlaylist.filter(s => s.id !== song.id)];
                     setPlaylist(mergedPlaylist);
                     setPlaylistIndex(0);
+                    currentIdx = 0;
                     MusicQueueManager.setQueue(mergedPlaylist);
+                    if (playlistSongs && playlistSongs !== playlist) {
+                        setPlayedCount(0);
+                    }
                 }
             } else {
                 const singlePlaylist = [song];
                 setPlaylist(singlePlaylist);
                 setPlaylistIndex(0);
+                currentIdx = 0;
                 MusicQueueManager.setQueue(singlePlaylist);
+                setPlayedCount(0);
             }
 
             console.log('🎵 Starting playback for:', song.title, 'Path:', song.file_path);
+
+            // Immediate UI feedback — update display before any async work
+            setCurrentSong(song);
+            setDuration(song.duration_seconds || 0);
+            setCurrentTime(0);
 
             const audioUrl = song.storage_url || `${MUSIC_API_URL}/music/stream?path=${encodeURIComponent(song.file_path || '')}&id=${song.id}`;
 
@@ -486,20 +605,7 @@ export const MusicProvider = ({ children }) => {
             console.log('🎵 [MusicContext] playbackTarget current value:', playbackTarget);
 
             if (playbackTarget === 'server') {
-                console.log('🔌 [ServerPlay] Sending WS PLAY command:', song.title);
-
-                // Stop ANY local playback immediately to avoid overlap
-                player1.pause(); player1.src = ''; player1.load();
-                player2.pause(); player2.src = ''; player2.load();
-                if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
-                if (serverProgressIntervalRef.current) { clearInterval(serverProgressIntervalRef.current); serverProgressIntervalRef.current = null; }
-
-                // Optimistic local state — WS state sync will confirm
-                setCurrentSong(song);
-                setDuration(song.duration_seconds || 0);
-                setCurrentTime(0);
-                setIsPlaying(true);
-                isPlayIntendedRef.current = true;
+                console.log('🔌 [ServerPlay] Syncing WS PLAY command:', song.title);
 
                 // Sync the full queue to the server first to enable auto-advance and correct metadata broadcast
                 let finalQueue = [];
@@ -516,9 +622,26 @@ export const MusicProvider = ({ children }) => {
                 }
 
                 // Send queue (starts playback automatically on the server)
-                ws.loadQueue(finalQueue, 0);
+                if (!isWsSync) {
+                    ws.loadQueue(finalQueue, 0);
+                }
 
-                return;
+                if (!isMasterPlayer) {
+                    // Stop ANY local playback immediately to avoid overlap
+                    player1.pause(); player1.src = ''; player1.load();
+                    player2.pause(); player2.src = ''; player2.load();
+                    if (fadeIntervalRef.current) { clearInterval(fadeIntervalRef.current); fadeIntervalRef.current = null; }
+                    if (serverProgressIntervalRef.current) { clearInterval(serverProgressIntervalRef.current); serverProgressIntervalRef.current = null; }
+
+                    // Optimistic local state — WS state sync will confirm
+                    setCurrentSong(song);
+                    setDuration(song.duration_seconds || 0);
+                    setCurrentTime(0);
+                    setIsPlaying(true);
+                    isPlayIntendedRef.current = true;
+                    isPlayingSongRef.current = false;
+                    return;
+                }
             }
 
             // Perform Crossfade if requested AND current player is actually playing (check DOM directly)
@@ -542,12 +665,21 @@ export const MusicProvider = ({ children }) => {
 
                 // Wait for metadata
                 await new Promise((resolve, reject) => {
+                    if (nextPlayer.readyState >= 1) { resolve(); return; }
                     const l = () => { nextPlayer.removeEventListener('loadedmetadata', l); nextPlayer.removeEventListener('error', e); resolve(); };
                     const e = (err) => { nextPlayer.removeEventListener('loadedmetadata', l); nextPlayer.removeEventListener('error', e); reject(err); };
                     nextPlayer.addEventListener('loadedmetadata', l);
                     nextPlayer.addEventListener('error', e);
                     setTimeout(resolve, 800); // Timeout fallback
                 });
+
+                // Abort if a newer playSong call has superseded us
+                if (playGenerationRef.current !== myGeneration) {
+                    console.log('🛑 [playSong] Aborted after metadata: superseded by newer call');
+                    isTransitionalRef.current = false;
+                    isPlayingSongRef.current = false;
+                    return;
+                }
 
                 // Start playing next
                 try {
@@ -556,11 +688,18 @@ export const MusicProvider = ({ children }) => {
                     console.warn('⚠️ nextPlayer.play() failed:', playErr);
                 }
 
-                // Switch UI context IMMEDIATELY so time/controls affect the new track
-                setActiveAudio(nextActiveIdx);
-                setCurrentSong(song);
-                setDuration(nextPlayer.duration || 0);
-                setCurrentTime(0);
+                // Abort if a newer playSong call has superseded us
+                if (playGenerationRef.current !== myGeneration) {
+                    console.log('🛑 [playSong] Aborted after play(): superseded by newer call');
+                    nextPlayer.pause();
+                    isTransitionalRef.current = false;
+                    isPlayingSongRef.current = false;
+                    return;
+                }
+
+                // Switch active audio element for events/controls
+                switchActiveAudio(nextActiveIdx);
+                setDuration(nextPlayer.duration || song.duration_seconds || 0);
 
                 // Server-side Volume Ramp
                 const steps = 30;
@@ -570,7 +709,7 @@ export const MusicProvider = ({ children }) => {
 
                 // Server crossfade: WS server handles this natively via auto-advance
                 // No client-side crossfade needed in server mode
-                if (playbackTarget === 'server') {
+                if (playbackTarget === 'server' && !isMasterPlayer) {
                     // Server handles crossfade via queue auto-advance — just update local UI state
                     ws.play(song);
                     isTransitionalRef.current = false;
@@ -582,8 +721,8 @@ export const MusicProvider = ({ children }) => {
                         const easeOut = 1 - Math.pow(1 - progress, 2);
                         const easeIn = Math.pow(progress, 2);
 
-                        currentPlayer.volume = Math.max(0, startVol * (1 - easeOut));
-                        nextPlayer.volume = Math.min(startVol, startVol * easeIn);
+                        currentPlayer.volume = Math.max(0, Math.min(1, startVol * (1 - easeOut)));
+                        nextPlayer.volume = Math.max(0, Math.min(1, Math.min(startVol, startVol * easeIn)));
 
                         if (step >= steps) {
                             clearInterval(fadeIntervalRef.current);
@@ -591,7 +730,7 @@ export const MusicProvider = ({ children }) => {
                             currentPlayer.pause();
                             currentPlayer.currentTime = 0;
                             isTransitionalRef.current = false;
-                            nextPlayer.volume = targetVolumeRef.current;
+                            nextPlayer.volume = Math.max(0, Math.min(1, targetVolumeRef.current || 0));
                         }
                     }, interval);
                 }
@@ -605,7 +744,7 @@ export const MusicProvider = ({ children }) => {
                 currentPlayer.pause();
 
                 nextPlayer.src = audioUrl;
-                nextPlayer.volume = targetVolumeRef.current;
+                nextPlayer.volume = Math.max(0, Math.min(1, targetVolumeRef.current || 0));
                 nextPlayer.load();
                 try {
                     await nextPlayer.play();
@@ -613,8 +752,16 @@ export const MusicProvider = ({ children }) => {
                     console.warn('⚠️ nextPlayer.play() failed:', playErr);
                 }
 
-                setActiveAudio(nextActiveIdx);
-                setCurrentSong(song);
+                // Abort if a newer playSong call has superseded us
+                if (playGenerationRef.current !== myGeneration) {
+                    console.log('🛑 [playSong] Aborted after immediate play(): superseded by newer call');
+                    nextPlayer.pause();
+                    isPlayingSongRef.current = false;
+                    return;
+                }
+
+                switchActiveAudio(nextActiveIdx);
+                setDuration(nextPlayer.duration || song.duration_seconds || 0);
             }
 
             // Sync playlist state
@@ -673,54 +820,95 @@ export const MusicProvider = ({ children }) => {
             isTransitionalRef.current = false;
         } finally {
             setIsLoading(false);
+            isPlayingSongRef.current = false;
         }
-    }, [currentUser, playlist, isPlaying, activeAudio, crossfadeSeconds, playbackTarget, MUSIC_API_URL]);
+    }, [currentUser, playlist, crossfadeSeconds, playbackTarget, MUSIC_API_URL]);
 
     // Play/Pause toggle
     const togglePlay = useCallback(() => {
+        lastPlayToggleTimeRef.current = Date.now();
         if (playbackTarget === 'server') {
-            // Ensure local audio is silent
-            audio1Ref.current.pause();
-            audio2Ref.current.pause();
+            if (!isMasterPlayer) {
+                // Ensure local audio is silent
+                audio1Ref.current.pause();
+                audio2Ref.current.pause();
+            }
 
             if (isPlaying) {
                 ws.pause();          // ✅ WS PAUSE (replaces /music/stop-server)
                 setIsPlaying(false);
                 isPlayIntendedRef.current = false;
+                
+                if (isMasterPlayer) {
+                    playGenerationRef.current++;
+                    if (fadeIntervalRef.current) {
+                        clearInterval(fadeIntervalRef.current);
+                        fadeIntervalRef.current = null;
+                        isTransitionalRef.current = false;
+                    }
+                    audio1Ref.current.pause();
+                    audio2Ref.current.pause();
+                }
             } else if (currentSong) {
                 ws.resume();         // ✅ WS RESUME
                 setIsPlaying(true);
                 isPlayIntendedRef.current = true;
+                
+                if (isMasterPlayer) {
+                    const audio = activeAudioRef.current === 1 ? audio1Ref.current : audio2Ref.current;
+                    audio.play().catch(err => console.warn('⚠️ play() failed:', err));
+                }
             }
             return;
         }
 
-        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        const audio = activeAudioRef.current === 1 ? audio1Ref.current : audio2Ref.current;
         if (audio.paused) {
             audio.play().catch(err => console.warn('⚠️ play() failed:', err));
             isPlayIntendedRef.current = true;
         } else {
-            audio.pause();
+            // Abort pending playSong and clear crossfade
+            playGenerationRef.current++;
+            if (fadeIntervalRef.current) {
+                clearInterval(fadeIntervalRef.current);
+                fadeIntervalRef.current = null;
+                isTransitionalRef.current = false;
+            }
+            audio1Ref.current.pause();
+            audio2Ref.current.pause();
             isPlayIntendedRef.current = false;
         }
-    }, [activeAudio, playbackTarget, isPlaying, currentSong, ws]);
+    }, [playbackTarget, isPlaying, currentSong, ws]);
 
     // Pause
     const pause = useCallback(() => {
+        lastPlayToggleTimeRef.current = Date.now();
         isPlayIntendedRef.current = false;
+        // Abort pending playSong and clear crossfade
+        playGenerationRef.current++;
+        if (fadeIntervalRef.current) {
+            clearInterval(fadeIntervalRef.current);
+            fadeIntervalRef.current = null;
+            isTransitionalRef.current = false;
+        }
+        
         if (playbackTarget === 'server') {
             ws.pause();              // ✅ WS PAUSE
             setIsPlaying(false);
+            if (isMasterPlayer) {
+                audio1Ref.current.pause();
+                audio2Ref.current.pause();
+            }
             return;
         }
-        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
-        audio.pause();
+        audio1Ref.current.pause();
+        audio2Ref.current.pause();
         setIsPlaying(false); // Explicit sync
-    }, [activeAudio, playbackTarget, ws]);
+    }, [playbackTarget, ws]);
 
     // Stop local audio when target changes to server
     useEffect(() => {
-        if (playbackTarget === 'server') {
+        if (playbackTarget === 'server' && !isMasterPlayer) {
             const a1 = audio1Ref.current;
             const a2 = audio2Ref.current;
             a1.pause();
@@ -739,17 +927,18 @@ export const MusicProvider = ({ children }) => {
 
     // Resume
     const resume = useCallback(() => {
+        lastPlayToggleTimeRef.current = Date.now();
         isPlayIntendedRef.current = true;
         if (playbackTarget === 'server') {
             ws.resume();             // ✅ WS RESUME
             setIsPlaying(true);
             return;
         }
-        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        const audio = activeAudioRef.current === 1 ? audio1Ref.current : audio2Ref.current;
         audio.play().catch(err => console.warn('⚠️ resume play() failed:', err));
-    }, [activeAudio, playbackTarget, ws]);
+    }, [playbackTarget, ws]);
 
-    // Next song with forced crossfade option - Enforces strict linear cycling loop
+    // Next song with forced crossfade option - FIFO cycling rotation loop
     const handleNext = useCallback((forceCrossfade = true) => {
         if (!playlist.length) return;
 
@@ -761,13 +950,31 @@ export const MusicProvider = ({ children }) => {
             logSkip(currentSong, true);
         }
 
-        // Pop current item (index 0) and push to the bottom of the playlist stack
-        const nextPlaylist = [...playlist.slice(1), playlist[0]];
-        setPlaylist(nextPlaylist);
-        setPlaylistIndex(0);
+        const nextCount = playedCount + 1;
+        const isPlaylistQueue = playlist.some(s => s.playlist_id !== undefined && s.playlist_id !== null);
 
-        playSong(nextPlaylist[0], nextPlaylist, shouldCrossfade);
-    }, [playlist, currentSong, currentTime, duration, logSkip, playSong]);
+        if (isPlaylistQueue && nextCount >= playlist.length) {
+            console.log("Playlist completed. Auto-reshuffling...");
+            const reshuffled = [...playlist];
+            for (let i = reshuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [reshuffled[i], reshuffled[j]] = [reshuffled[j], reshuffled[i]];
+            }
+            setPlaylist(reshuffled);
+            setPlaylistIndex(0);
+            MusicQueueManager.setQueue(reshuffled);
+            setPlayedCount(0);
+            playSong(reshuffled[0], reshuffled, shouldCrossfade);
+        } else {
+            // Normal FIFO rotation cycle
+            const nextPlaylist = [...playlist.slice(1), playlist[0]];
+            setPlaylist(nextPlaylist);
+            setPlaylistIndex(0);
+            MusicQueueManager.setQueue(nextPlaylist);
+            setPlayedCount(nextCount);
+            playSong(nextPlaylist[0], nextPlaylist, shouldCrossfade);
+        }
+    }, [playlist, currentSong, currentTime, duration, logSkip, playSong, playedCount]);
 
     // Keep ref in sync with handleNext
     useEffect(() => {
@@ -776,16 +983,25 @@ export const MusicProvider = ({ children }) => {
         togglePlayRef.current = togglePlay;
     }, [handleNext, playSong, togglePlay]);
 
-    // Previous song - Disabled for strict commercial rotation loop
+    // Previous song - FIFO cycling rotation loop
     const handlePrevious = useCallback(() => {
-        console.log('⏮️ Previous track navigation is disabled in commercial mode.');
-    }, []);
+        if (!playlist.length) return;
+
+        setPlayedCount(prev => Math.max(0, prev - 1));
+
+        const prevPlaylist = [playlist[playlist.length - 1], ...playlist.slice(0, playlist.length - 1)];
+        setPlaylist(prevPlaylist);
+        setPlaylistIndex(0);
+        MusicQueueManager.setQueue(prevPlaylist);
+        playSong(prevPlaylist[0], prevPlaylist, false); // No crossfade when skipping backwards
+    }, [playlist, playSong]);
 
     // Seek to position
     const seek = useCallback((time) => {
-        const audio = activeAudio === 1 ? audio1Ref.current : audio2Ref.current;
+        lastSeekTimeRef.current = Date.now();
+        const audio = activeAudioRef.current === 1 ? audio1Ref.current : audio2Ref.current;
         audio.currentTime = time;
-    }, [activeAudio]);
+    }, []);
 
     // Rate a song (like/dislike only) - use backend service to bypass RLS
     const rateSong = useCallback(async (songId, rating) => {
@@ -844,10 +1060,10 @@ export const MusicProvider = ({ children }) => {
 
         // If not fading, update audio element volume directly
         if (!isTransitionalRef.current) {
-            audio1Ref.current.volume = activeAudio === 1 ? clampedVol : 0;
-            audio2Ref.current.volume = activeAudio === 2 ? clampedVol : 0;
+            audio1Ref.current.volume = activeAudioRef.current === 1 ? Math.max(0, Math.min(1, clampedVol || 0)) : 0;
+            audio2Ref.current.volume = activeAudioRef.current === 2 ? Math.max(0, Math.min(1, clampedVol || 0)) : 0;
         }
-    }, [activeAudio, playbackTarget, ws]);
+    }, [playbackTarget, ws]);
 
     // Update remaining refs
     useEffect(() => {
@@ -859,6 +1075,8 @@ export const MusicProvider = ({ children }) => {
 
     // Stop playback
     const stop = useCallback(() => {
+        playGenerationRef.current++; // Abort any pending playSong
+        
         if (playbackTarget === 'server') {
             ws.stop();               // ✅ WS STOP
         }
@@ -914,14 +1132,11 @@ export const MusicProvider = ({ children }) => {
             return newPlaylist;
         });
 
-        // If nothing playing, start it
-        setCurrentSong(prev => {
-            if (!prev) {
-                playSong(song);
-            }
-            return prev;
-        });
-    }, [playlistIndex, playSong]);
+        // If nothing playing, start it (use playlist length from updater to avoid stale closure)
+        if (playlist.length === 0) {
+            playSong(song);
+        }
+    }, [playlistIndex, playSong, playlist.length]);
 
     const addPlaylistToQueue = useCallback(async (songs, mode = 'last') => {
         if (!songs || songs.length === 0) return;
@@ -944,22 +1159,19 @@ export const MusicProvider = ({ children }) => {
             return newPlaylist;
         });
 
-        setCurrentSong(prev => {
-            if (!prev) {
-                playSong(songs[0]);
-            }
-            return prev;
-        });
-    }, [playlistIndex, playSong]);
+        if (playlist.length === 0) {
+            playSong(songs[0]);
+        }
+    }, [playlistIndex, playSong, playlist.length]);
 
     // handleNext/handlePrevious in server mode: delegate to WS
     const handleNextWs = useCallback(() => {
-        if (playbackTarget === 'server') { ws.next(); return; }
+        if (playbackTarget === 'server' && !isMasterPlayer) { ws.next(); return; }
         handleNextRef.current(true);
     }, [playbackTarget, ws]);
 
     const handlePreviousWs = useCallback(() => {
-        if (playbackTarget === 'server') { ws.prev(); return; }
+        if (playbackTarget === 'server' && !isMasterPlayer) { ws.prev(); return; }
         // handlePrevious is already defined above via handlePreviousRef
         handlePreviousRef.current();
     }, [playbackTarget, ws]);

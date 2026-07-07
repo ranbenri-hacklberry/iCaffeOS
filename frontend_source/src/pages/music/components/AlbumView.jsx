@@ -7,20 +7,9 @@ import SongRow from '@/components/music/SongRow';
 import QueueModeModal from '@/components/music/QueueModeModal';
 import '@/styles/music.css';
 
-import { getBackendApiUrl } from '@/utils/apiUtils';
+import { getBackendApiUrl, getCoverUrl } from '@/utils/apiUtils';
 
 const MUSIC_API_URL = getBackendApiUrl();
-
-// Helper to convert local path to backend URL
-const getCoverUrl = (localPath, id) => {
-    if (!localPath && !id) return null;
-    if (localPath?.startsWith('http')) return localPath;
-
-    let url = `${MUSIC_API_URL}/music/cover?`;
-    if (localPath) url += `path=${encodeURIComponent(localPath)}`;
-    if (id) url += `${localPath ? '&' : ''}id=${id}`;
-    return url;
-};
 
 /**
  * Album view component - shows album details and song list
@@ -175,17 +164,6 @@ const AlbumView = ({ album, onBack }) => {
                         </div>
                     </div>
                 </div>
-
-                {/* Play button */}
-                <button
-                    onClick={handlePlayAll}
-                    disabled={songs.length === 0}
-                    className="absolute left-6 bottom-6 w-14 h-14 rounded-full bg-white 
-                    flex items-center justify-center shadow-xl
-                    hover:scale-105 transition-transform disabled:opacity-50"
-                >
-                    <Play className="w-7 h-7 text-purple-600 fill-purple-600 mr-[-3px]" />
-                </button>
 
                 {/* Gradient fade */}
                 <div className="absolute bottom-0 left-0 right-0 h-32 

@@ -140,6 +140,23 @@ export const useKDSDataLocal = () => {
                     db.order_items.delete(payload.old.id).catch(e => console.warn('Realtime Dexie delete failed:', e));
                 }
                 triggerSync();
+            })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'menu_items'
+            }, (payload) => {
+                console.log(`🔔 KDS Realtime (menu_items): ${payload.eventType}`, payload.new?.id);
+                if (payload.eventType === 'UPDATE' && payload.new) {
+                    db.menu_items.update(payload.new.id, payload.new)
+                        .catch(e => console.warn('Realtime Dexie menu_items update failed:', e));
+                } else if (payload.eventType === 'INSERT' && payload.new) {
+                    db.menu_items.put(payload.new)
+                        .catch(e => console.warn('Realtime Dexie menu_items insert failed:', e));
+                } else if (payload.eventType === 'DELETE' && payload.old) {
+                    db.menu_items.delete(payload.old.id)
+                        .catch(e => console.warn('Realtime Dexie menu_items delete failed:', e));
+                }
             });
 
         channel.subscribe();
@@ -1223,7 +1240,7 @@ export const useKDSDataLocal = () => {
     }, [businessId]);
 
     // Station list from ALL menu_items in Dexie (always visible, not dependent on active orders)
-    const [availableStations, setAvailableStations] = useState(['Checker']);
+    const [availableStations, setAvailableStations] = useState(['Checker', 'Kitchen', 'Bar']);
     useEffect(() => {
         const loadStations = async () => {
             try {
@@ -1243,12 +1260,12 @@ export const useKDSDataLocal = () => {
                     await db.menu_items.bulkPut(data).catch(e => console.warn('Dexie silent sync error', e));
                 }
 
-                const stationSet = new Set();
+                const stationSet = new Set(['Kitchen', 'Bar']);
                 (data || []).forEach(item => {
                     if (item.production_area) {
                         item.production_area.split(',').forEach(s => {
                             const trimmed = s.trim();
-                            if (trimmed && trimmed !== 'Checker') {
+                            if (trimmed && trimmed !== 'Checker' && trimmed !== 'צ׳קר') {
                                 stationSet.add(trimmed);
                             }
                         });
