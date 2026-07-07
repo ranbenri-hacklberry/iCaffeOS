@@ -530,11 +530,13 @@ export const MusicProvider = ({ children }) => {
         setIsPlaying(true); // 🚀 Immediate UI feedback
         setIsLoading(true);
 
-        /*
         // Lazy-init Web Audio API analyser on first play
-        if (!audioContextRef.current) {
+        if (!audioContextRef.current && typeof window !== 'undefined') {
             try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                // TEMPORARILY DISABLED TO PREVENT BROWSER METALLIC ECHO BUG
+                /*
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
                 const analyser = ctx.createAnalyser();
                 analyser.fftSize = 256;
                 analyser.smoothingTimeConstant = 0.8;
@@ -550,11 +552,12 @@ export const MusicProvider = ({ children }) => {
                 sourceNode1Ref.current = src1;
                 sourceNode2Ref.current = src2;
                 console.log('🎛️ Web Audio API analyser initialised (fftSize=256)');
+                */
+                console.log('🎛️ Web Audio API analyser temporarily disabled to prevent echo');
             } catch (err) {
                 console.warn('⚠️ Web Audio API init failed:', err);
             }
         }
-        */
         // Resume AudioContext if it was suspended (browser autoplay policy)
         if (audioContextRef.current?.state === 'suspended') {
             await audioContextRef.current.resume();

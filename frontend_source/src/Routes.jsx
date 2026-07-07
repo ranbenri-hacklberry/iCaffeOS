@@ -499,15 +499,13 @@ const Routes = () => {
             <AbraHatProvider realSDK={realSDK}>
               <ConnectivityStatus />
               {/* <SyncStatusModal /> - USER REQUESTED TO HIDE THIS MODAL */}
-              <MusicProvider>
-                <ScrollToTop />
-                <MayaOverlay />
-                <OrderPusher /> {/* 🔄 Added Background Sync inside AuthProvider */}
-                <AppRoutes />
+              <ScrollToTop />
+              <MayaOverlay />
+              <OrderPusher /> {/* 🔄 Added Background Sync inside AuthProvider */}
+              <AppRoutes />
 
-                <AbraPreviewDrawer />
-                <AbraInspector />
-              </MusicProvider>
+              <AbraPreviewDrawer />
+              <AbraInspector />
             </AbraHatProvider>
           </AuthProvider>
         </MayaAuthProvider>
