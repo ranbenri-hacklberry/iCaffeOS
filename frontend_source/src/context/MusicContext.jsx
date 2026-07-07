@@ -162,7 +162,7 @@ export const MusicProvider = ({ children }) => {
             }
 
             // 1. Sync song changes with crossfading (skip if we initiated it ourselves or if it is a stale update in flight)
-            if (state.currentSong.id !== lastPlayedSongIdRef.current) {
+            if (String(state.currentSong.id) !== String(lastPlayedSongIdRef.current)) {
                 const timeSinceLocalPlay = Date.now() - lastPlayedSongTimeRef.current;
                 if (timeSinceLocalPlay < 2500) {
                     console.log('⏳ [MasterPlayer] Ignored potential stale WS song update in flight:', state.currentSong.title);
@@ -530,6 +530,7 @@ export const MusicProvider = ({ children }) => {
         setIsPlaying(true); // 🚀 Immediate UI feedback
         setIsLoading(true);
 
+        /*
         // Lazy-init Web Audio API analyser on first play
         if (!audioContextRef.current) {
             try {
@@ -553,6 +554,7 @@ export const MusicProvider = ({ children }) => {
                 console.warn('⚠️ Web Audio API init failed:', err);
             }
         }
+        */
         // Resume AudioContext if it was suspended (browser autoplay policy)
         if (audioContextRef.current?.state === 'suspended') {
             await audioContextRef.current.resume();
@@ -692,8 +694,6 @@ export const MusicProvider = ({ children }) => {
                 // Abort if a newer playSong call has superseded us
                 if (playGenerationRef.current !== myGeneration) {
                     console.log('🛑 [playSong] Aborted after metadata: superseded by newer call');
-                    isTransitionalRef.current = false;
-                    isPlayingSongRef.current = false;
                     return;
                 }
 
@@ -708,8 +708,6 @@ export const MusicProvider = ({ children }) => {
                 if (playGenerationRef.current !== myGeneration) {
                     console.log('🛑 [playSong] Aborted after play(): superseded by newer call');
                     nextPlayer.pause();
-                    isTransitionalRef.current = false;
-                    isPlayingSongRef.current = false;
                     return;
                 }
 
