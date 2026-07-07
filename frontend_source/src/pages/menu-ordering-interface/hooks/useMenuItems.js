@@ -144,7 +144,8 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
             }
         } catch (err) {
             console.error('🔥 Fetch Error:', err);
-            setMenuLoading(false); // Only set to false on unexpected error.
+            setMenuLoading(false);
+            setItemsFetched(true);
         }
     }, [businessId]);
 
