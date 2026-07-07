@@ -1573,30 +1573,7 @@ const MusicPageContent = () => {
                                         const activePlaylistId = playlist[0]?.playlist_id;
                                         return (
                                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                                        {isManager && (
-                                            <motion.div
-                                                whileHover={{ scale: 1.02, y: -4 }}
-                                                whileTap={{ scale: 0.97 }}
-                                                onClick={() => setShowPlaylistBuilder(true)}
-                                                className="group cursor-pointer rounded-2xl overflow-hidden border border-white/10 hover:border-purple-400/60 bg-gradient-to-br from-purple-600/30 to-indigo-600/30 backdrop-blur-md relative transition-all duration-500 hover:shadow-2xl hover:shadow-white/5 w-full h-full aspect-square"
-                                            >
-                                                <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors" />
-                                                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-black/20 rounded-full blur-2xl" />
 
-                                                <div className="flex flex-col items-center justify-center h-full relative z-10 p-6">
-                                                    <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center border border-white/10 shadow-xl shadow-black/20 group-hover:scale-110 group-hover:rotate-90 transition-all duration-700 ease-out mb-4">
-                                                        <Plus className="w-8 h-8 text-purple-400" />
-                                                        <div className="absolute inset-0 rounded-full border border-white/20 animate-ping opacity-20 group-hover:opacity-40" />
-                                                    </div>
-
-                                                    <div className="text-center">
-                                                        <h3 className="text-white font-black text-lg leading-tight">צור פלייליסט</h3>
-                                                        <p className="text-white/50 text-xs font-bold mt-1">צור פלייליסט חכם חדש</p>
-                                                    </div>
-                                                </div>
-                                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-600 to-indigo-600 opacity-50 group-hover:opacity-100 transition-opacity" />
-                                            </motion.div>
-                                        )}
                                         {filteredPlaylists.map(pl => {
                                             const isSelected = selectedItems.includes(pl.id);
                                             const isNowPlaying = activePlaylistId && activePlaylistId === pl.id && isPlaying;
