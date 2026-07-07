@@ -98,7 +98,13 @@ export const useStore = create((set, get) => ({
     fetchMenu: async () => {
         const { currentUser } = get();
         try {
-            if (navigator.onLine && currentUser?.business_id && currentUser?.id !== 'icaffe-master-user') {
+            if (!navigator.onLine) {
+                console.warn("Offline: Cannot fetch menu.");
+                return;
+            }
+
+            let items = [];
+            if (currentUser?.business_id && currentUser?.id !== 'icaffe-master-user') {
                 const { data, error } = await supabase
                     .from('menu_items')
                     .select('*')
@@ -106,24 +112,24 @@ export const useStore = create((set, get) => ({
                     .eq('is_active', true);
 
                 if (!error && data) {
-                    await db.menu_items.bulkPut(data);
+                    items = data;
+                } else if (error) {
+                    console.error("Supabase menu fetch error", error);
+                }
+            } else {
+                const { data, error } = await supabase
+                    .from('menu_items')
+                    .select('*')
+                    .eq('is_active', true);
+                if (!error && data) {
+                    items = data;
                 }
             }
 
-            let items = [];
-            if (currentUser?.business_id) {
-                items = await db.menu_items.where('business_id').equals(currentUser.business_id).toArray();
-            } else {
-                items = await db.menu_items.toArray();
-            }
-
-            // CRITICAL: DO NOT automatically fallback to demo items if items.length === 0
-            // This prevents "Ghost" data flickers during first load.
-            // If the user wants a demo, they should explicitly trigger it.
             set({ menuItems: items });
         } catch (e) {
             console.error("Fetch Menu Error", e);
-            set({ menuItems: [] }); // Clear items on error to avoid stale ghost
+            set({ menuItems: [] }); // Clear items on error
         }
     },
 
@@ -151,107 +157,110 @@ export const useStore = create((set, get) => ({
     fetchKDSOrders: async () => {
         const { currentUser } = get();
         try {
-            if (navigator.onLine && currentUser?.business_id) {
-                const today = new Date();
-                today.setHours(5, 0, 0, 0);
-                if (new Date() < today) today.setDate(today.getDate() - 1);
-
-                const { data, error } = await supabase.rpc('get_kds_orders', {
-                    p_date: today.toISOString(),
-                    p_business_id: currentUser.business_id
-                });
-
-                if (!error && data) {
-                    let currentMenuItems = get().menuItems;
-                    if (currentMenuItems.length === 0) {
-                        await get().fetchMenu();
-                        currentMenuItems = get().menuItems;
-                    }
-
-                    for (const order of data) {
-                        await db.orders.put({
-                            ...order,
-                            pending_sync: false
-                        });
-                        if (order.items_detail) {
-                            for (const item of order.items_detail) {
-                                let finalItem = { ...item, order_id: order.id };
-                                if (item.menu_items && item.menu_items.name) {
-                                    finalItem.name = item.menu_items.name;
-                                }
-                                if (!finalItem.name && finalItem.menu_item_id) {
-                                    const menuItem = currentMenuItems.find(m => m.id === finalItem.menu_item_id);
-                                    if (menuItem) finalItem.name = menuItem.name;
-                                }
-                                await db.order_items.put(finalItem);
-                            }
-                        }
-                    }
-                }
+            if (!navigator.onLine) {
+                console.warn("Offline: Cannot fetch active KDS orders.");
+                return;
             }
 
-            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            let query = db.orders
-                .where('created_at')
-                .above(twentyFourHoursAgo)
-                .filter(order => {
+            const today = new Date();
+            today.setHours(5, 0, 0, 0);
+            if (new Date() < today) today.setDate(today.getDate() - 1);
+
+            const { data, error } = await supabase.rpc('get_kds_orders', {
+                p_date: today.toISOString(),
+                p_business_id: currentUser.business_id
+            });
+
+            if (error) {
+                console.error("KDS Fetch Server Error", error);
+                return;
+            }
+
+            if (data) {
+                let currentMenuItems = get().menuItems;
+                if (currentMenuItems.length === 0) {
+                    await get().fetchMenu();
+                    currentMenuItems = get().menuItems;
+                }
+
+                const fullOrders = data.map(order => {
+                    const items = (order.items_detail || []).map(item => {
+                        let finalItem = { ...item, order_id: order.id };
+                        if (item.menu_items && item.menu_items.name) {
+                            finalItem.name = item.menu_items.name;
+                        }
+                        if (!finalItem.name && finalItem.menu_item_id) {
+                            const menuItem = currentMenuItems.find(m => m.id === finalItem.menu_item_id);
+                            if (menuItem) finalItem.name = menuItem.name;
+                        }
+                        return finalItem;
+                    });
+
+                    return {
+                        ...order,
+                        items
+                    };
+                }).filter(order => {
                     const s = order.order_status || order.status;
                     return s !== 'completed' && s !== 'cancelled';
-                });
+                }).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-            const orders = await query.toArray();
-            const orderIds = orders.map(o => o.id);
-            const items = await db.order_items.where('order_id').anyOf(orderIds).toArray();
-
-            const fullOrders = orders.map(order => ({
-                ...order,
-                items: items.filter(i => i.order_id === order.id)
-            })).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-
-            set({ activeOrders: fullOrders });
-        } catch (e) { console.error("KDS Fetch Error", e); }
+                set({ activeOrders: fullOrders });
+            }
+        } catch (e) {
+            console.error("KDS Fetch Error", e);
+        }
     },
 
     markOrderCompleted: async (orderId) => {
+        if (!navigator.onLine) return;
         const updateData = { order_status: 'completed', updated_at: new Date().toISOString() };
-        await db.orders.update(orderId, updateData);
-        if (navigator.onLine) {
-            await supabase.from('orders').update(updateData).eq('id', orderId);
+        try {
+            const { error } = await supabase.from('orders').update(updateData).eq('id', orderId);
+            if (!error) {
+                await supabase.from('order_items').update({ item_status: 'completed' }).eq('order_id', orderId);
+                get().fetchKDSOrders();
+            }
+        } catch (e) {
+            console.error("KDS Mark Completed Error", e);
         }
-        const items = await db.order_items.where('order_id').equals(orderId).toArray();
-        await Promise.all(items.map(i => db.order_items.update(i.id, { item_status: 'completed' })));
-        get().fetchKDSOrders();
     },
 
     undoReady: async (orderId) => {
+        if (!navigator.onLine) return;
         const updateData = { order_status: 'in_progress', updated_at: new Date().toISOString() };
-        await db.orders.update(orderId, updateData);
-        if (navigator.onLine) {
-            await supabase.from('orders').update(updateData).eq('id', orderId);
+        try {
+            const { error } = await supabase.from('orders').update(updateData).eq('id', orderId);
+            if (!error) get().fetchKDSOrders();
+        } catch (e) {
+            console.error("KDS Undo Ready Error", e);
         }
-        get().fetchKDSOrders();
     },
 
     markOrderReady: async (orderId) => {
+        if (!navigator.onLine) return;
         const updateData = { order_status: 'ready', updated_at: new Date().toISOString() };
-        await db.orders.update(orderId, updateData);
-        if (navigator.onLine) {
-            await supabase.from('orders').update(updateData).eq('id', orderId);
+        try {
+            const { error } = await supabase.from('orders').update(updateData).eq('id', orderId);
+            if (!error) get().fetchKDSOrders();
+        } catch (e) {
+            console.error("KDS Mark Ready Error", e);
         }
-        get().fetchKDSOrders();
     },
 
     updateItemServedStatus: async (itemId, isServed) => {
+        if (!navigator.onLine) return;
         const status = isServed ? 'completed' : 'in_progress';
         const updateData = {
             item_status: status,
             served_at: isServed ? new Date().toISOString() : null
         };
-        await db.order_items.update(itemId, updateData);
-        if (navigator.onLine) {
-            await supabase.from('order_items').update(updateData).eq('id', itemId);
+        try {
+            const { error } = await supabase.from('order_items').update(updateData).eq('id', itemId);
+            if (!error) get().fetchKDSOrders();
+        } catch (e) {
+            console.error("KDS Update Item Served Error", e);
         }
-        get().fetchKDSOrders();
     },
 
     submitOrder: async (options = {}) => {
@@ -262,73 +271,52 @@ export const useStore = create((set, get) => ({
         const customerName = options.customerName || null;
         const customerPhone = (options.phoneNumber || '').replace(/\D/g, '');
 
-        const newOrder = {
-            id: crypto.randomUUID(),
-            order_number: Math.floor(100 + Math.random() * 900),
-            business_id: currentUser.business_id,
-            created_at: new Date().toISOString(),
-            order_status: 'in_progress',
-            status: 'in_progress',
-            is_paid: true,
-            payment_method: paymentMethod,
-            total_amount: cart.reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0),
-            pending_sync: true,
-            customer_name: customerName,
-            customer_phone: customerPhone
-        };
+        if (!navigator.onLine) {
+            return { success: false, error: "אין חיבור לרשת. לא ניתן לשלוח הזמנות במצב לא מקוון." };
+        }
+
+        const newOrderId = crypto.randomUUID();
 
         try {
-            await db.orders.add(newOrder);
-            const itemsToSave = cart.map(item => ({
-                id: crypto.randomUUID(),
-                order_id: newOrder.id,
-                menu_item_id: item.id,
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity || 1,
-                item_status: 'in_progress',
-                mods: item.selectedOptions || item.mods || []
-            }));
-            await db.order_items.bulkAdd(itemsToSave);
+            const { data, error } = await supabase.rpc('submit_order_v3', {
+                p_customer_phone: customerPhone,
+                p_customer_name: customerName,
+                p_items: cart.map(i => ({
+                    menu_item_id: i.id,
+                    quantity: i.quantity || 1,
+                    mods: i.selectedOptions || i.mods || []
+                })),
+                p_payment_method: paymentMethod,
+                p_is_paid: true,
+                p_order_id: newOrderId,
+                p_business_id: currentUser.business_id
+            });
+
+            if (error) {
+                return { success: false, error: error.message };
+            }
+
+            const orderNumber = data?.order_number || '';
             set({ cart: [] });
             get().fetchKDSOrders();
 
             let smsResult = null;
-            if (navigator.onLine) {
-                const { error } = await supabase.rpc('submit_order_v3', {
-                    p_customer_phone: customerPhone,
-                    p_customer_name: customerName,
-                    p_items: cart.map(i => ({
-                        menu_item_id: i.id,
-                        quantity: i.quantity || 1,
-                        mods: i.selectedOptions || i.mods || []
-                    })),
-                    p_payment_method: paymentMethod,
-                    p_is_paid: true,
-                    p_order_id: newOrder.id,
-                    p_business_id: currentUser.business_id
-                });
-
-                if (!error) {
-                    await db.orders.update(newOrder.id, { pending_sync: false });
-// Redundant update removed - parameters now sent in RPC
-                    if (customerPhone) {
-                        try {
-                            const { error: smsError } = await supabase.functions.invoke('send-sms', {
-                                body: {
-                                    phone: customerPhone,
-                                    message: `היי ${customerName || ''}, הזמנתך #${newOrder.order_number} התקבלה בהצלחה!`.trim(),
-                                    businessId: currentUser.business_id
-                                }
-                            });
-                            smsResult = smsError ? `❌ שגיאת SMS` : `✅ SMS נשלח`;
-                        } catch (e) { smsResult = `❌ כשל ב-SMS`; }
-                    }
-                } else {
-                    return { success: false, error: error.message };
+            if (customerPhone && orderNumber) {
+                try {
+                    const { error: smsError } = await supabase.functions.invoke('send-sms', {
+                        body: {
+                            phone: customerPhone,
+                            message: `היי ${customerName || ''}, הזמנתך #${orderNumber} התקבלה בהצלחה!`.trim(),
+                            businessId: currentUser.business_id
+                        }
+                    });
+                    smsResult = smsError ? `❌ שגיאת SMS` : `✅ SMS נשלח`;
+                } catch (e) { 
+                    smsResult = `❌ כשל ב-SMS`; 
                 }
             }
-            return { success: true, smsResult };
+
+            return { success: true, orderId: newOrderId, orderNumber, smsResult };
         } catch (e) {
             console.error("Submit Order Failed", e);
             return { success: false, error: e.message };

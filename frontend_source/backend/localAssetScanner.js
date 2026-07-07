@@ -124,6 +124,32 @@ export class LocalAssetScanner {
             .trim();
     }
 
+    _findCoverPath(filePath) {
+        try {
+            const parentDir = path.dirname(filePath);
+            const coverCandidates = ['cover.jpg', 'Cover.jpg', 'folder.jpg', 'Folder.jpg', 'cover.png', 'Cover.png', 'album.jpg', 'Album.jpg', 'album.png', 'Album.png'];
+            for (const cand of coverCandidates) {
+                const fullCandPath = path.join(parentDir, cand);
+                if (fs.existsSync(fullCandPath)) {
+                    return fullCandPath;
+                }
+            }
+            // CD subdirectory fallback
+            const grandparentDir = path.dirname(parentDir);
+            if (/^(CD|Disc|Disk|Part)\s*\d+/i.test(path.basename(parentDir))) {
+                for (const cand of coverCandidates) {
+                    const fullCandPath = path.join(grandparentDir, cand);
+                    if (fs.existsSync(fullCandPath)) {
+                        return fullCandPath;
+                    }
+                }
+            }
+        } catch (err) {
+            // Ignore
+        }
+        return null;
+    }
+
     async _extractMetadata(filePath) {
         try {
             const metadata = await parseFile(filePath, { skipCovers: true, duration: true });
@@ -133,6 +159,10 @@ export class LocalAssetScanner {
             let rawArtist = common.artist;
             let rawAlbum = common.album;
             let rawAlbumArtist = common.albumartist;
+
+            if (common.compilation || (rawAlbumArtist && /^(various|various artists)/i.test(rawAlbumArtist.trim()))) {
+                rawAlbumArtist = 'Various Artists';
+            }
 
             const folderName1 = this._getFolderFallback(filePath, 1);  // Direct parent (e.g. "CD 1")
             const folderName2 = this._getFolderFallback(filePath, 2);  // Grandparent (e.g. album folder)
@@ -174,6 +204,9 @@ export class LocalAssetScanner {
                 }
             }
 
+            const coverPath = this._findCoverPath(filePath);
+            const coverUrl = coverPath ? `/api/music/cover?path=${encodeURIComponent(coverPath)}` : null;
+
             return {
                 id: this._generateId(filePath),
                 file_path: filePath,
@@ -181,11 +214,12 @@ export class LocalAssetScanner {
                 title: common.title || path.basename(filePath, path.extname(filePath)),
                 artist: rawArtist || 'Unknown Artist',
                 album: rawAlbum || 'Unknown Album',
-                album_artist: rawAlbumArtist || null,
+                album_artist: rawAlbumArtist || rawArtist || 'Unknown Artist',
                 track_number: common.track?.no || null,
                 genre: common.genre ? common.genre[0] : null,
                 year: common.year || null,
                 duration: format.duration || 0,
+                cover_url: coverUrl,
                 scanned_at: new Date().toISOString()
             };
         } catch (error) {
@@ -210,6 +244,9 @@ export class LocalAssetScanner {
                 if (album === 'Unknown Album' && p2.length > 0) album = p2.join(' - ').trim();
             }
 
+            const coverPath = this._findCoverPath(filePath);
+            const coverUrl = coverPath ? `/api/music/cover?path=${encodeURIComponent(coverPath)}` : null;
+
             return {
                 id: this._generateId(filePath),
                 file_path: filePath,
@@ -217,7 +254,9 @@ export class LocalAssetScanner {
                 title: path.basename(filePath, path.extname(filePath)),
                 artist: artist,
                 album: album,
+                album_artist: artist,
                 duration: 0,
+                cover_url: coverUrl,
                 scanned_at: new Date().toISOString()
             };
         }

@@ -112,7 +112,7 @@ const ModeSelectionScreen = () => {
                         </button>
                     )}
 
-                    {/* 1b. RunTunes (Music) - UNDER COCKPIT */}
+                    {/* 1b. iMusic - UNDER COCKPIT */}
                     <button
                         onClick={() => handleModeSelect('music')}
                         className="group relative bg-indigo-900/40 rounded-2xl p-5 hover:bg-indigo-900/60 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-indigo-500/30 hover:border-indigo-400"
@@ -122,7 +122,7 @@ const ModeSelectionScreen = () => {
                             <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-12 transition-transform">
                                 <Music size={20} strokeWidth={2.5} />
                             </div>
-                            <h2 className="text-xl font-black text-white mb-1">RunTunes (נגן)</h2>
+                            <h2 className="text-xl font-black text-white mb-1">iMusic (נגן)</h2>
                             <p className="text-indigo-200 text-sm leading-relaxed font-medium">
                                 ניהול מוזיקה ואווירה
                             </p>

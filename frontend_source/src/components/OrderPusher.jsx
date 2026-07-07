@@ -1,7 +1,8 @@
 import { useOrderPush } from '../hooks/useOrderPush';
 
 const OrderPusher = () => {
-    useOrderPush();
+    // Background order pusher disabled to enforce direct-to-server writes
+    // useOrderPush();
     return null;
 };
 

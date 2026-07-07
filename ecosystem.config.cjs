@@ -68,5 +68,16 @@ module.exports = {
         PORT: 8000,
       },
     },
+    {
+      name: 'icaffe-rantunes-downloader',
+      script: 'run_pm2.sh',
+      cwd: './youtube_playlist_downloader',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      env: {
+        PORT: 8087,
+      },
+    },
   ],
 };

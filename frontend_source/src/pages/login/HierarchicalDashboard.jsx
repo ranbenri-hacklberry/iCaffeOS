@@ -180,10 +180,9 @@ const HierarchicalDashboard = () => {
                         />
                     )}
 
-                    {/* Music Player - Hero Card (New) */}
                     {isAppVisible('music') && (
                         <HeroCard
-                            title="RanTunes"
+                            title="iMusic"
                             subtitle="ניהול אווירה ופלייליסטים"
                             icon={Music}
                             Pattern={() => (

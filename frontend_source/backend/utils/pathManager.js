@@ -10,7 +10,7 @@ import fs from 'fs';
 export const PathManager = {
     // All known external mount candidates (macOS: /Volumes/*, Linux: /mnt/*)
     EXTERNAL_CANDIDATES: process.platform === 'darwin'
-        ? ['/Volumes/RanTunesBackup', '/Volumes/RANTUNES', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
+        ? ['/Volumes/RANTUNES', '/Volumes/RanTunesBackup', '/Volumes/Ran1', '/Volumes/RanTunes', '/Volumes/RANTUNES1']
         : [
             '/Volumes/RANTUNES', 
             '/mnt/mac/Volumes/RANTUNES', 
@@ -27,6 +27,13 @@ export const PathManager = {
             if (fs.existsSync(candidate)) return candidate;
         }
         return this.EXTERNAL_CANDIDATES[0];
+    },
+
+    getActiveExternalRoot() {
+        for (const candidate of this.EXTERNAL_CANDIDATES) {
+            if (fs.existsSync(candidate)) return candidate;
+        }
+        return null;
     },
 
     // Legacy alias — always returns the currently-mounted root

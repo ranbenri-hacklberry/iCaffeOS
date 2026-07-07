@@ -105,7 +105,7 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
             // Always fetch from Supabase first — it's local, fast, and authoritative
             const [{ data: cloudData, error: menuError }, { data: cloudInventory }] = await Promise.all([
                 supabase.from('menu_items')
-                    .select('id, name, price, sale_price, category, category_id, is_hot_drink, kds_routing_logic, allow_notes, is_in_stock, description, modifiers, image_url, inventory_settings, is_deleted')
+                    .select('id, name, price, sale_price, category, category_id, is_hot_drink, kds_routing_logic, allow_notes, is_in_stock, description, modifiers, image_url, inventory_settings, is_deleted, kds_station, production_area, display_kds')
                     .eq('business_id', effectiveId)
                     .not('is_deleted', 'eq', true)
                     .order('id', { ascending: true }),
@@ -232,6 +232,8 @@ export const useMenuItems = (defaultCategory = 'hot-drinks', businessId = null) 
                 ),
                 kds_routing_logic: item.kds_routing_logic,
                 kds_station: item.kds_station,
+                production_area: item.production_area,
+                display_kds: item.display_kds,
                 is_in_stock: item.is_in_stock,
                 db_category: item.category,
                 modifiers: item.modifiers || [],

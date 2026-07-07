@@ -1140,9 +1140,11 @@ const ModifierModal = (props) => {
     setLinkingItemKey(null);
     setLinkSearch('');
     setEditTab('modifiers');
+    const kdsVal1 = (selectedItem?.kds_station || '').toLowerCase();
+    const prodAreaVal1 = (selectedItem?.production_area || '').toLowerCase();
     setEditKdsStation({
-      kitchen: (selectedItem?.kds_station || '').includes('kitchen') || (selectedItem?.kds_station || '').includes('both'),
-      bar: (selectedItem?.kds_station || '').includes('bar') || (selectedItem?.kds_station || '').includes('both'),
+      kitchen: kdsVal1.includes('kitchen') || kdsVal1.includes('both') || prodAreaVal1.includes('kitchen') || prodAreaVal1.includes('מטבח'),
+      bar: kdsVal1.includes('bar') || kdsVal1.includes('both') || prodAreaVal1.includes('bar') || prodAreaVal1.includes('בר'),
     });
     setEditKdsRouting(selectedItem?.kds_routing_logic || 'MADE_TO_ORDER');
     setEditIsInStock(selectedItem?.is_in_stock !== false);
@@ -1351,9 +1353,11 @@ const ModifierModal = (props) => {
         setLinkingItemKey(null);
         setLinkSearch('');
         setEditTab('modifiers');
+        const kdsVal2 = (selectedItem?.kds_station || '').toLowerCase();
+        const prodAreaVal2 = (selectedItem?.production_area || '').toLowerCase();
         setEditKdsStation({
-          kitchen: (selectedItem?.kds_station || '').includes('kitchen') || (selectedItem?.kds_station || '').includes('both'),
-          bar: (selectedItem?.kds_station || '').includes('bar') || (selectedItem?.kds_station || '').includes('both'),
+          kitchen: kdsVal2.includes('kitchen') || kdsVal2.includes('both') || prodAreaVal2.includes('kitchen') || prodAreaVal2.includes('מטבח'),
+          bar: kdsVal2.includes('bar') || kdsVal2.includes('both') || prodAreaVal2.includes('bar') || prodAreaVal2.includes('בר'),
         });
         setEditKdsRouting(selectedItem?.kds_routing_logic || 'MADE_TO_ORDER');
         setEditIsInStock(selectedItem?.is_in_stock !== false);
@@ -1668,6 +1672,7 @@ const ModifierModal = (props) => {
         kds_routing_logic: editKdsRouting,
         is_in_stock: editIsInStock,
         display_kds: ['Checker', ...(editKdsStation.kitchen ? ['Kitchen'] : []), ...(editKdsStation.bar ? ['Bar'] : [])],
+        production_area: ['Checker', ...(editKdsStation.kitchen ? ['Kitchen'] : []), ...(editKdsStation.bar ? ['Bar'] : [])].join(','),
       };
       // Handle photo upload — save whatever we have NOW (original or enhanced)
       if (capturedPhoto && photoFile) {
@@ -1755,6 +1760,8 @@ const ModifierModal = (props) => {
           current_stock: editStock !== null ? editStock : selectedItem.current_stock,
           is_in_stock: editIsInStock,
           kds_station: menuUpdate.kds_station,
+          production_area: menuUpdate.production_area,
+          display_kds: menuUpdate.display_kds,
           kds_routing_logic: editKdsRouting,
           category: menuUpdate.category,
           category_id: menuUpdate.category_id,

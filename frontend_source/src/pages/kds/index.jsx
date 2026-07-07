@@ -373,7 +373,7 @@ const KDSScrollContainer = ({
 
       <div
         ref={scrollRef}
-        className="flex-1 h-0 min-h-0 overflow-x-auto overflow-y-hidden whitespace-nowrap p-6 pb-4 custom-scrollbar scroll-smooth"
+        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden whitespace-nowrap p-6 pb-4 custom-scrollbar scroll-smooth"
       >
         <div className="flex h-full flex-row justify-start gap-4 items-stretch">
           {children}
@@ -716,12 +716,9 @@ const KdsScreen = () => {
   };
 
   return (
-    <div className="h-[100dvh] w-screen bg-slate-50 flex flex-col font-heebo overflow-hidden" dir="rtl">
+    <div className="h-screen w-screen bg-slate-50 flex flex-col font-heebo overflow-hidden" dir="rtl">
       <style>{kdsStyles}</style>
 
-      <div className="absolute top-0 left-0 w-full z-[100]">
-        <ConnectionStatusBar />
-      </div>
 
       <div className="w-full h-full flex flex-col relative">
         {(isLoading || isRefreshing) && (
@@ -797,85 +794,89 @@ const KdsScreen = () => {
 
                 {/* === CONDITIONAL KDS GRID === */}
                 {/* If Checker -> 2 rows (50%/50%), If Station -> 1 row (100% height) */}
-                <div className={`flex-1 h-0 grid ${stationView === 'Checker' ? 'grid-rows-2' : 'grid-rows-1'} min-h-0 w-full overflow-hidden bg-slate-100`}>
-                  <KDSScrollContainer
-                    title={stationView === 'Checker' ? "בטיפול" : `${stationView} — בטיפול`}
-                    orders={stationView === 'Checker' ? stationOrders : stationActiveOrders}
-                    colorClass="border-b-4 border-gray-200 bg-slate-100/50"
-                    badgeClass="bg-white/90 border border-gray-200 text-slate-600"
-                  >
-                      {(stationView === 'Checker' ? stationOrders : stationActiveOrders).map(order => {
-                        const CardWrapper = isLiteMode ? 'div' : motion.div;
-                        const wrapperProps = isLiteMode ? { className: "flex-shrink-0 kds-card-item h-full py-2" } : {
-                          layout: false,
-                          initial: { opacity: 0.8, scale: 0.98 },
-                          animate: { opacity: 1, scale: 1 },
-                          exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
-                          transition: { opacity: { duration: 0.15 }, scale: { duration: 0.15 } },
-                          className: "flex-shrink-0 kds-card-item h-full py-2"
-                        };
-                        return (
-                          <CardWrapper key={order.id} {...wrapperProps}>
-                            <OrderCard
-                              key={order.id}
-                              order={order}
-                              glowClass={newOrderIds.has(order.id) ? (isLiteMode ? 'border-2 border-orange-400' : 'glow-active') : ''}
-                              onOrderStatusUpdate={handleStatusUpdate}
-                              onPaymentCollected={handlePaymentCollected}
-                              onFireItems={handleFireItems}
-                              onReadyItems={handleReadyItems}
-                              onDeliverItems={handleDeliverItems}
-                              onEditOrder={handleEditOrder}
-                              onCancelOrder={handleCancelOrder}
-                              onRefresh={fetchOrders}
-                              onRefireItem={handleRefireItem}
-                              getSmsStatus={getSmsStatus}
-                              isStationView={isStationMode}
-                            />
-                          </CardWrapper>
-                        );
-                      })}
-                    </KDSScrollContainer>
-
-                  {stationView === 'Checker' && (
+                <div className="h-[calc(100vh-50px)] md:h-[calc(100vh-65px)] flex flex-col w-full overflow-hidden bg-slate-100">
+                  <div className={stationView === 'Checker' ? 'h-1/2 w-full min-h-0' : 'h-full w-full min-h-0'}>
                     <KDSScrollContainer
-                      title="מוכן למסירה"
-                      orders={completedOrders}
-                      colorClass="bg-white"
-                      badgeClass="bg-green-100 border border-green-200 text-green-700"
+                      title={stationView === 'Checker' ? "בטיפול" : `${stationView} — בטיפול`}
+                      orders={stationView === 'Checker' ? stationOrders : stationActiveOrders}
+                      colorClass="border-b-4 border-gray-200 bg-slate-100/50"
+                      badgeClass="bg-white/90 border border-gray-200 text-slate-600"
                     >
-                      {completedOrders.map(order => {
-                        const CardWrapper = isLiteMode ? 'div' : motion.div;
-                        const wrapperProps = isLiteMode ? { className: "flex-shrink-0 kds-card-item h-full py-2" } : {
-                          layout: false,
-                          initial: { opacity: 0.8, scale: 0.98 },
-                          animate: { opacity: 1, scale: 1 },
-                          exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
-                          transition: { opacity: { duration: 0.15 }, scale: { duration: 0.15 } },
-                          className: "flex-shrink-0 kds-card-item h-full py-2"
-                        };
-                        return (
-                          <CardWrapper key={order.id} {...wrapperProps}>
-                            <OrderCard
-                              key={order.id}
-                              order={order}
-                              isReady={true}
-                              glowClass={newOrderIds.has(order.id) ? (isLiteMode ? 'border-2 border-green-400' : 'glow-ready') : ''}
-                              onOrderStatusUpdate={handleStatusUpdate}
-                              onPaymentCollected={handlePaymentCollected}
-                              onToggleEarlyDelivered={handleToggleEarlyDelivered}
-                              onDeliverItems={handleDeliverItems}
-                              onEditOrder={handleEditOrder}
-                              onCancelOrder={handleCancelOrder}
-                              onRefresh={fetchOrders}
-                              getSmsStatus={getSmsStatus}
-                            />
-                          </CardWrapper>
-                        );
-                      })}
+                        {(stationView === 'Checker' ? stationOrders : stationActiveOrders).map(order => {
+                          const CardWrapper = isLiteMode ? 'div' : motion.div;
+                          const wrapperProps = isLiteMode ? { className: "flex-shrink-0 kds-card-item h-full py-2" } : {
+                            layout: false,
+                            initial: { opacity: 0.8, scale: 0.98 },
+                            animate: { opacity: 1, scale: 1 },
+                            exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
+                            transition: { opacity: { duration: 0.15 }, scale: { duration: 0.15 } },
+                            className: "flex-shrink-0 kds-card-item h-full py-2"
+                          };
+                          return (
+                            <CardWrapper key={order.id} {...wrapperProps}>
+                              <OrderCard
+                                key={order.id}
+                                order={order}
+                                glowClass={newOrderIds.has(order.id) ? (isLiteMode ? 'border-2 border-orange-400' : 'glow-active') : ''}
+                                onOrderStatusUpdate={handleStatusUpdate}
+                                onPaymentCollected={handlePaymentCollected}
+                                onFireItems={handleFireItems}
+                                onReadyItems={handleReadyItems}
+                                onDeliverItems={handleDeliverItems}
+                                onEditOrder={handleEditOrder}
+                                onCancelOrder={handleCancelOrder}
+                                onRefresh={fetchOrders}
+                                onRefireItem={handleRefireItem}
+                                getSmsStatus={getSmsStatus}
+                                isStationView={isStationMode}
+                              />
+                            </CardWrapper>
+                          );
+                        })}
                       </KDSScrollContainer>
-                  )}
-                </div>
+                    </div>
+
+                    {stationView === 'Checker' && (
+                      <div className="h-1/2 w-full min-h-0 bg-white">
+                        <KDSScrollContainer
+                          title="מוכן למסירה"
+                          orders={completedOrders}
+                          colorClass="bg-white"
+                          badgeClass="bg-green-100 border border-green-200 text-green-700"
+                        >
+                          {completedOrders.map(order => {
+                            const CardWrapper = isLiteMode ? 'div' : motion.div;
+                            const wrapperProps = isLiteMode ? { className: "flex-shrink-0 kds-card-item h-full py-2" } : {
+                              layout: false,
+                              initial: { opacity: 0.8, scale: 0.98 },
+                              animate: { opacity: 1, scale: 1 },
+                              exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
+                              transition: { opacity: { duration: 0.15 }, scale: { duration: 0.15 } },
+                              className: "flex-shrink-0 kds-card-item h-full py-2"
+                            };
+                            return (
+                              <CardWrapper key={order.id} {...wrapperProps}>
+                                <OrderCard
+                                  key={order.id}
+                                  order={order}
+                                  isReady={true}
+                                  glowClass={newOrderIds.has(order.id) ? (isLiteMode ? 'border-2 border-green-400' : 'glow-ready') : ''}
+                                  onOrderStatusUpdate={handleStatusUpdate}
+                                  onPaymentCollected={handlePaymentCollected}
+                                  onToggleEarlyDelivered={handleToggleEarlyDelivered}
+                                  onDeliverItems={handleDeliverItems}
+                                  onEditOrder={handleEditOrder}
+                                  onCancelOrder={handleCancelOrder}
+                                  onRefresh={fetchOrders}
+                                  getSmsStatus={getSmsStatus}
+                                />
+                              </CardWrapper>
+                            );
+                          })}
+                        </KDSScrollContainer>
+                      </div>
+                    )}
+                  </div>
               </>
             );
           })() : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Music, Disc, ListMusic, Search, Plus, RefreshCw,
@@ -6,7 +6,7 @@ import {
     Pause, SkipForward, SkipBack, Trash2, X, HardDrive, AlertCircle, Home, Download, Archive, List,
     Volume2, VolumeX, ThumbsUp, ThumbsDown, Edit2, ChevronDown
 } from 'lucide-react';
-import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
 import { useAlbums } from '@/hooks/useAlbums';
 import { useImportContext } from '@/hooks/useImportContext';
@@ -16,6 +16,30 @@ import AddMusicCard from '@/components/music/AddMusicCard';
 import VinylTurntable from '@/components/music/VinylTurntable';
 import AudioVisualizer from '@/components/music/AudioVisualizer';
 import SongRow from '@/components/music/SongRow';
+
+// Reorderable wrapper for SongRow using Framer Motion's useDragControls for touch-friendly dragging on mobile
+const ReorderableSongRow = React.forwardRef(({ song, isCurrentSong = false, isPlaying = false, onPlay }, ref) => {
+    const dragControls = useDragControls();
+    return (
+        <Reorder.Item
+            value={song}
+            dragListener={false}
+            dragControls={dragControls}
+            className="list-none"
+            ref={ref}
+        >
+            <SongRow
+                song={song}
+                isCurrentSong={isCurrentSong}
+                isPlaying={isPlaying}
+                onEdit={onPlay}
+                isDraggable={true}
+                dragControls={dragControls}
+            />
+        </Reorder.Item>
+    );
+});
+ReorderableSongRow.displayName = 'ReorderableSongRow';
 import MiniMusicPlayer from '@/components/music/MiniMusicPlayer';
 import AlbumView from '@/pages/music/components/AlbumView';
 import PlaylistBuilder from '@/pages/music/components/PlaylistBuilder';
@@ -106,7 +130,8 @@ const MusicPageContent = () => {
         archiveItem,
         generateSmartPlaylist,
         updateSongDetails,
-        fetchSongPlaylistId
+        fetchSongPlaylistId,
+        reorderPlaylistSongs
     } = useAlbums();
 
     const {
@@ -117,6 +142,7 @@ const MusicPageContent = () => {
         handleNext,
         handlePrevious,
         playlist, // This is the current playback queue
+        playlistIndex,
         rateSong,
         currentTime,
         duration,
@@ -175,6 +201,31 @@ const MusicPageContent = () => {
 
     const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+
+    const activeSongRef = useRef(null);
+    const scrollContainerRef = useRef(null);
+
+    // Scroll active song into view at the top of the scroll container
+    useEffect(() => {
+        if (activeSongRef.current && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            const element = activeSongRef.current;
+            
+            const containerTop = container.getBoundingClientRect().top;
+            const elementTop = element.getBoundingClientRect().top;
+            const relativeTop = elementTop - containerTop;
+            
+            container.scrollTo({
+                top: container.scrollTop + relativeTop,
+                behavior: 'smooth'
+            });
+        }
+    }, [currentSong?.id, playlistIndex]);
+
+    // Set dynamic document title and manifest for iMusic mode
+    useEffect(() => {
+        document.title = 'iCaffeOS - iMusic';
+    }, []);
 
     // Track mobile viewport
     useEffect(() => {
@@ -488,18 +539,21 @@ const MusicPageContent = () => {
                 } else {
                     // Try to match songs from the already-loaded allSongs first.
                     // This works regardless of whether album_id FK links are set in the DB.
-                    const folderPath = selectedAlbum.folder_path?.replace(/\/+$/, '');
-                    const fromMemory = folderPath
-                        ? (allSongs || []).filter(s =>
-                            s.album_id === selectedAlbum.id ||
-                            (s.file_path && s.file_path.startsWith(folderPath + '/')) ||
-                            s.file_path === folderPath
-                        ).sort((a, b) => {
-                            const trackSort = (a.track_number || 0) - (b.track_number || 0);
-                            if (trackSort !== 0) return trackSort;
-                            return (a.file_name || '').localeCompare(b.file_name || '');
-                        })
-                        : (allSongs || []).filter(s => s.album_id === selectedAlbum.id);
+                    const fromMemory = (allSongs || []).filter(s => {
+                        const albumArtist = s.album_artist || s.artist_name || 'Unknown Artist';
+                        const isSameAlbum = s.album_name === selectedAlbum.name && albumArtist === selectedAlbum.artist_name;
+                        if (isSameAlbum) return true;
+                        
+                        const folderPath = selectedAlbum.folder_path?.replace(/\/+$/, '');
+                        if (folderPath && s.file_path) {
+                            return s.file_path.startsWith(folderPath + '/') || s.file_path === folderPath;
+                        }
+                        return false;
+                    }).sort((a, b) => {
+                        const trackSort = (a.track_number || 0) - (b.track_number || 0);
+                        if (trackSort !== 0) return trackSort;
+                        return (a.title || '').localeCompare(b.title || '', 'he');
+                    });
 
                     if (fromMemory.length > 0) {
                         // Found songs in memory — use them immediately (no network needed)
@@ -780,14 +834,17 @@ const MusicPageContent = () => {
                         setCurrentAlbumSongs(songs);
                     } else {
                         // Prefer in-memory allSongs to avoid 0-song issue from DB album_id = null
-                        const fp = selectedAlbum.folder_path?.replace(/\/+$/, '');
-                        const fromMem = fp
-                            ? (allSongs || []).filter(s =>
-                                s.album_id === selectedAlbum.id ||
-                                (s.file_path && s.file_path.startsWith(fp + '/')) ||
-                                s.file_path === fp
-                            ).sort((a, b) => (a.track_number || 0) - (b.track_number || 0))
-                            : (allSongs || []).filter(s => s.album_id === selectedAlbum.id);
+                        const fromMem = (allSongs || []).filter(s => {
+                            const albumArtist = s.album_artist || s.artist_name || 'Unknown Artist';
+                            const isSameAlbum = s.album_name === selectedAlbum.name && albumArtist === selectedAlbum.artist_name;
+                            if (isSameAlbum) return true;
+                            
+                            const fp = selectedAlbum.folder_path?.replace(/\/+$/, '');
+                            if (fp && s.file_path) {
+                                return s.file_path.startsWith(fp + '/') || s.file_path === fp;
+                            }
+                            return false;
+                        }).sort((a, b) => (a.track_number || 0) - (b.track_number || 0));
                         if (fromMem.length > 0) {
                             setCurrentAlbumSongs(fromMem);
                         } else {
@@ -1060,6 +1117,16 @@ const MusicPageContent = () => {
                                     </div>
 
                                     <div className="flex items-center gap-6 animate-fade-in" dir="ltr">
+                                        {/* Previous Button */}
+                                        <button
+                                            onClick={handlePrevious}
+                                            disabled={!currentSong && playlist.length === 0}
+                                            className="w-14 h-14 rounded-full music-glass flex items-center justify-center hover:scale-110 transition-transform border border-white/10 disabled:opacity-50"
+                                            title="שיר קודם"
+                                        >
+                                            <SkipBack className="w-6 h-6 text-white" />
+                                        </button>
+
                                         {/* Play/Pause Button */}
                                         <button
                                             onClick={() => {
@@ -1138,6 +1205,12 @@ const MusicPageContent = () => {
 
                             <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                                 <button
+                                    onClick={handlePrevious}
+                                    className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 active:scale-95 transition-all animate-fade-in"
+                                >
+                                    <SkipBack className="w-5 h-5 text-white" />
+                                </button>
+                                <button
                                     onClick={togglePlay}
                                     className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center shadow-lg active:scale-95 transition-all animate-fade-in"
                                 >
@@ -1187,24 +1260,34 @@ const MusicPageContent = () => {
                                     <div className="flex flex-col flex-1 min-w-0">
                                         <div className="flex items-center gap-4 mb-1">
                                             <h2 className="text-white text-4xl font-black tracking-tight truncate drop-shadow-lg" dir="ltr" style={{ textAlign: 'right' }}>{selectedAlbum.name}</h2>
-                                            {!selectedAlbum.isPlaylist && (
-                                                <button
-                                                    onClick={async () => {
-                                                        const songs = await fetchAlbumSongs(selectedAlbum.id);
-                                                        const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
-                                                        if (playable.length > 0) {
-                                                            playSong(playable[0], playable, true);
+                                            <button
+                                                onClick={async () => {
+                                                    const songs = selectedAlbum.isPlaylist
+                                                        ? await fetchPlaylistSongs(selectedAlbum.id)
+                                                        : await fetchAlbumSongs(selectedAlbum.id);
+                                                    const playable = (songs || []).filter(s => (s?.myRating || 0) !== 1);
+                                                    if (playable.length > 0) {
+                                                        let queueSongs = [...playable];
+                                                        if (selectedAlbum.isPlaylist) {
+                                                            // Map to include playlist_id for auto-reshuffling
+                                                            queueSongs = queueSongs.map(s => ({ ...s, playlist_id: selectedAlbum.id }));
+                                                            // Shuffle playlist songs
+                                                            queueSongs.sort(() => Math.random() - 0.5);
+                                                        } else {
+                                                            // Sort album songs by track number
+                                                            queueSongs.sort((a, b) => (a.track_number || 0) - (b.track_number || 0));
                                                         }
-                                                    }}
-                                                    className="group relative"
-                                                    title="נגן הכל"
-                                                >
-                                                    <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    <div className="relative w-11 h-11 rounded-2xl bg-purple-600 border border-purple-500 flex items-center justify-center transition-all group-hover:scale-110 group-active:scale-95 shadow-2xl">
-                                                        <Play className="w-6 h-6 text-white fill-current" />
-                                                    </div>
-                                                </button>
-                                            )}
+                                                        playSong(queueSongs[0], queueSongs, true);
+                                                    }
+                                                }}
+                                                className="group relative animate-fade-in animate-duration-300"
+                                                title="נגן הכל"
+                                            >
+                                                <div className="absolute inset-0 bg-purple-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                <div className="relative w-11 h-11 rounded-2xl bg-purple-600 border border-purple-500 flex items-center justify-center transition-all group-hover:scale-110 group-active:scale-95 shadow-2xl">
+                                                    <Play className="w-6 h-6 text-white fill-current" />
+                                                </div>
+                                            </button>
                                         </div>
                                         <div className="flex items-center justify-between mt-1">
                                             <p className="text-white/60 font-bold">
@@ -1243,18 +1326,21 @@ const MusicPageContent = () => {
                             </div>
 
                             {/* SCROLLABLE SONG LIST */}
-                            <div className="flex-1 overflow-y-auto music-scrollbar p-4">
+                            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto music-scrollbar p-4">
                                 <div className="space-y-1">
                                     {(() => {
                                         const filteredSongs = filterSongs(currentAlbumSongs);
-                                        const isPlaylistPlaying = selectedAlbum?.isPlaylist && playlist.length > 0 && playlist.some(s => s.playlist_id === selectedAlbum.id);
+                                        const isQueueViewActive = selectedAlbum && playlist.length > 0 && (
+                                            (selectedAlbum.isPlaylist && playlist.some(s => s.playlist_id === selectedAlbum.id)) ||
+                                            (!selectedAlbum.isPlaylist && playlist.some(s => s.album_name === selectedAlbum.name))
+                                        );
 
-                                        if (isPlaylistPlaying) {
+                                        if (isQueueViewActive) {
                                             return (
-                                                <div className="flex flex-col">
+                                                <div className="flex flex-col animate-fade-in">
                                                     {/* Currently playing song */}
                                                     {playlist[0] && (
-                                                        <div className="mb-2">
+                                                        <div className="mb-2" ref={activeSongRef}>
                                                             <div className="text-purple-300 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2 flex items-center gap-2">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
                                                                 מתנגן כעת
@@ -1269,7 +1355,7 @@ const MusicPageContent = () => {
                                                         </div>
                                                     )}
 
-                                                    {/* Upcoming songs list */}
+                                                    {/* Upcoming tracks */}
                                                     {playlist.length > 1 && (
                                                         <div className="mt-2">
                                                             <div className="text-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2">
@@ -1279,27 +1365,18 @@ const MusicPageContent = () => {
                                                                 axis="y"
                                                                 values={playlist.slice(1)}
                                                                 onReorder={(newUpcoming) => {
-                                                                    if (playlist[0]) {
-                                                                        handleReorder([playlist[0], ...newUpcoming]);
-                                                                    }
+                                                                    handleReorder([playlist[0], ...newUpcoming]);
                                                                 }}
                                                                 className="space-y-1"
                                                             >
-                                                                {playlist.slice(1).map((song) => (
-                                                                    <Reorder.Item
-                                                                        key={song.id || song.track_id}
-                                                                        value={song}
-                                                                        dragListener={true}
-                                                                        className="list-none"
-                                                                    >
-                                                                        <SongRow
-                                                                            song={song}
-                                                                            isCurrentSong={false}
-                                                                            isPlaying={false}
-                                                                            onEdit={handleEditClick}
-                                                                            isDraggable={true}
-                                                                        />
-                                                                    </Reorder.Item>
+                                                                {playlist.slice(1).map((song, sIdx) => (
+                                                                    <ReorderableSongRow
+                                                                        key={song.id || song.track_id || `upcoming-${sIdx}`}
+                                                                        song={song}
+                                                                        isCurrentSong={false}
+                                                                        isPlaying={false}
+                                                                        onPlay={handleEditClick}
+                                                                    />
                                                                 ))}
                                                             </Reorder.Group>
                                                         </div>
@@ -1308,62 +1385,46 @@ const MusicPageContent = () => {
                                             );
                                         }
 
-                                        // If we are viewing an album, and a song from this album is currently playing, pin it to the top
-                                        const isCurrentAlbumActive = currentSong && !selectedAlbum?.isPlaylist && filteredSongs.some(s => s.id === currentSong.id);
-
-                                        if (isCurrentAlbumActive) {
-                                            const activeSongInAlbum = filteredSongs.find(s => s.id === currentSong.id);
-                                            const otherAlbumSongs = filteredSongs.filter(s => s.id !== currentSong.id);
-                                            const sortedOthers = [...otherAlbumSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
-
+                                        // Static display of album/playlist songs
+                                        if (selectedAlbum?.isPlaylist) {
                                             return (
-                                                <div className="flex flex-col">
-                                                    {/* Currently playing song */}
-                                                    <div className="mb-2">
-                                                        <div className="text-purple-300 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2 flex items-center gap-2">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-                                                            מתנגן כעת
-                                                        </div>
-                                                        <SongRow
-                                                            song={activeSongInAlbum}
-                                                            isCurrentSong={true}
-                                                            isPlaying={isPlaying}
-                                                            onEdit={handleEditClick}
+                                                <Reorder.Group
+                                                    axis="y"
+                                                    values={currentAlbumSongs}
+                                                    onReorder={async (newSongsOrder) => {
+                                                        setCurrentAlbumSongs(newSongsOrder);
+                                                        await reorderPlaylistSongs(selectedAlbum.id, newSongsOrder);
+                                                    }}
+                                                    className="space-y-1"
+                                                >
+                                                    {currentAlbumSongs.map((song, index) => (
+                                                        <ReorderableSongRow
+                                                            key={song.id || `playlist-song-${index}`}
+                                                            song={song}
+                                                            isCurrentSong={currentSong?.id === song.id}
+                                                            isPlaying={isPlaying && currentSong?.id === song.id}
+                                                            onPlay={handleEditClick}
                                                         />
-                                                    </div>
-
-                                                    {/* Other album songs */}
-                                                    {sortedOthers.length > 0 && (
-                                                        <div className="mt-2">
-                                                            <div className="text-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-2 pr-2">
-                                                                שירים באלבום ({sortedOthers.length})
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                {sortedOthers.map((song) => (
-                                                                    <SongRow
-                                                                        key={song.id}
-                                                                        song={song}
-                                                                        isPlaying={false}
-                                                                        isCurrentSong={false}
-                                                                        onEdit={handleEditClick}
-                                                                    />
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                    ))}
+                                                </Reorder.Group>
                                             );
                                         }
 
-                                        // Static display of album/playlist songs sorted alphabetically
-                                        const sortedSongs = [...filteredSongs].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'he'));
+                                        const sortedSongs = [...filteredSongs].sort((a, b) => {
+                                            if (selectedAlbum?.isPlaylist) {
+                                                return (a.position || 0) - (b.position || 0);
+                                            }
+                                            const trackDiff = (a.track_number || 0) - (b.track_number || 0);
+                                            if (trackDiff !== 0) return trackDiff;
+                                            return (a.title || '').localeCompare(b.title || '', 'he');
+                                        });
                                         return sortedSongs.map((song) => (
                                             <SongRow
                                                 key={song.id}
                                                 song={song}
                                                 isPlaying={isPlaying && currentSong?.id === song.id}
                                                 isCurrentSong={currentSong?.id === song.id}
-                                                onEdit={selectedAlbum?.isPlaylist ? handlePlaylistSongClick : handleEditClick}
+                                                onEdit={handleEditClick}
                                             />
                                         ));
                                     })()}
