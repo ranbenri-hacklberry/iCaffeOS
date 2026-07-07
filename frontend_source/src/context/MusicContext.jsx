@@ -21,6 +21,22 @@ export const MusicProvider = ({ children }) => {
     useEffect(() => {
         if (audio1Ref.current) audio1Ref.current.crossOrigin = "anonymous";
         if (audio2Ref.current) audio2Ref.current.crossOrigin = "anonymous";
+
+        return () => {
+            // Cleanup on unmount (critical for Vite HMR to prevent ghost audio echoes)
+            if (audio1Ref.current) {
+                audio1Ref.current.pause();
+                audio1Ref.current.src = '';
+            }
+            if (audio2Ref.current) {
+                audio2Ref.current.pause();
+                audio2Ref.current.src = '';
+            }
+            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+                audioContextRef.current.close().catch(console.warn);
+            }
+            if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+        };
     }, []);
 
     const [activeAudio, setActiveAudio] = useState(1); // 1 or 2
