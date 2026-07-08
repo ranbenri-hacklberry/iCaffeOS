@@ -4,7 +4,7 @@ import {
     Music, Disc, ListMusic, Search, Plus, RefreshCw,
     ArrowRight, Sparkles, User, Play, FolderOpen, Heart, Youtube,
     Pause, SkipForward, SkipBack, Trash2, X, HardDrive, AlertCircle, Home, Download, Archive, List,
-    Volume2, VolumeX, ThumbsUp, ThumbsDown, Edit2, ChevronDown
+    Volume2, VolumeX, ThumbsUp, ThumbsDown, Edit2, ChevronDown, Minus
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
@@ -1046,16 +1046,16 @@ const MusicPageContent = () => {
                 >
                     {/* Chevron down collapse button shown ONLY in mobile-expanded state */}
                     {isMobile && isPlayerExpanded && (
-                        <button
+                        <div 
+                            className="absolute top-0 left-0 right-0 w-full h-16 flex flex-col items-center justify-start pt-4 z-50 cursor-pointer"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setIsPlayerExpanded(false);
                             }}
-                            className="absolute top-6 left-6 p-2.5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors z-50 active:scale-95 flex items-center justify-center"
-                            title="סגור נגן"
                         >
-                            <ChevronDown className="w-6 h-6 text-white" />
-                        </button>
+                            <div className="w-12 h-1.5 bg-white/30 rounded-full mb-2" />
+                            <ChevronDown className="w-5 h-5 text-white/50" />
+                        </div>
                     )}
 
                     {/* Vinyl Turntable is always rendered so it doesn't unmount */}
@@ -1116,7 +1116,7 @@ const MusicPageContent = () => {
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center gap-6 animate-fade-in" dir="ltr">
+                                    <div className="flex items-center justify-center gap-6 animate-fade-in w-full" dir="ltr">
                                         {/* Previous Button */}
                                         <button
                                             onClick={handlePrevious}
@@ -1178,7 +1178,7 @@ const MusicPageContent = () => {
 
                     {/* Inline Collapsed Mobile Bar Elements (shown ONLY when collapsed on mobile) */}
                     {isMobile && !isPlayerExpanded && (
-                        <div className="absolute top-0 left-0 right-0 h-[72px] flex items-center justify-between w-full px-4 cursor-pointer select-none">
+                        <div className="absolute top-0 left-0 right-0 h-[72px] flex items-center justify-between w-full px-4 cursor-pointer select-none bg-[#1c1c1e]">
                             {/* Progress bar line */}
                             <div className="absolute top-0 left-0 right-0 h-1 bg-white/10">
                                 <div 
@@ -1187,44 +1187,63 @@ const MusicPageContent = () => {
                                 />
                             </div>
 
-                            <div className="flex items-center gap-3 min-w-0">
-                                <img
-                                    src={currentSong?.album?.cover_url || currentSong?.cover_url || currentSong?.thumbnail_url}
-                                    alt="Cover"
-                                    className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"
-                                />
-                                <div className="min-w-0 text-right">
+                            <div className="flex-1 flex items-center min-w-0 pl-1 pr-3" dir="rtl">
+                                <div className="min-w-0 text-right w-full">
                                     <p className="text-white text-sm font-bold truncate leading-tight">
                                         {currentSong?.title}
                                     </p>
-                                    <p className="text-white/60 text-xs truncate leading-tight mt-0.5">
+                                    <p className="text-white/60 text-xs truncate leading-tight mt-0.5 uppercase tracking-wider">
                                         {currentSong?.artist?.name || currentSong?.artist_name || 'Unknown Artist'}
                                     </p>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                    onClick={handlePrevious}
-                                    className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 active:scale-95 transition-all animate-fade-in"
-                                >
-                                    <SkipBack className="w-5 h-5 text-white" />
-                                </button>
+                            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()} dir="ltr">
+                                {/* Play/Pause */}
                                 <button
                                     onClick={togglePlay}
-                                    className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center shadow-lg active:scale-95 transition-all animate-fade-in"
+                                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center border border-white/10 active:scale-95 transition-all"
                                 >
                                     {isPlaying ? (
-                                        <Pause className="w-5 h-5 text-white fill-current" />
+                                        <Pause className="w-4 h-4 text-white fill-current" />
                                     ) : (
-                                        <Play className="w-5 h-5 text-white fill-current" />
+                                        <Play className="w-4 h-4 text-white fill-current ml-0.5" />
                                     )}
                                 </button>
+
+                                {/* Volume Controller */}
+                                <div className="flex items-center bg-white/10 rounded-full px-2 py-1.5">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const currentVol = Math.round((volume || 1) * 10);
+                                            if (currentVol > 1) setVolume((currentVol - 1) / 10);
+                                        }}
+                                        className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition-all text-white/70 hover:text-white"
+                                    >
+                                        <Minus className="w-4 h-4" />
+                                    </button>
+                                    <span className="w-6 text-center text-sm font-bold text-white select-none">
+                                        {Math.round((volume || 1) * 10)}
+                                    </span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const currentVol = Math.round((volume || 1) * 10);
+                                            if (currentVol < 10) setVolume((currentVol + 1) / 10);
+                                        }}
+                                        className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition-all text-white/70 hover:text-white"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                {/* Next */}
                                 <button
                                     onClick={handleNext}
-                                    className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 active:scale-95 transition-all animate-fade-in"
+                                    className="w-10 h-10 rounded-full bg-transparent hover:bg-white/10 flex items-center justify-center transition-all text-white/70 hover:text-white active:scale-95"
                                 >
-                                    <SkipForward className="w-5 h-5 text-white" />
+                                    <SkipForward className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
