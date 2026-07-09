@@ -159,11 +159,18 @@ export const useKDSDataLocal = () => {
                 }
             });
 
+        // 🔄 Polling fallback: Run sync every 15 seconds to guarantee KDS updates even if Realtime disconnects
+        const pollingInterval = setInterval(() => {
+            console.log('🔄 [KDS Polling] Running periodic fallback sync...');
+            triggerSync();
+        }, 15000);
+
         channel.subscribe();
 
         return () => {
             if (debounceTimer) clearTimeout(debounceTimer);
             clearInterval(cleanupInterval);
+            clearInterval(pollingInterval);
             supabase.removeChannel(channel);
         };
     }, [businessId]);
