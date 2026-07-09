@@ -20,6 +20,7 @@ import { groupOrderItems, isHotDrink as isHotDrinkUtil, isKitchenPrep } from '@/
 import { useKDSSms } from '@/pages/kds/hooks/useKDSSms';
 
 import { supabase } from '@/lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useKDSDataLocal = () => {
     const { currentUser } = useAuth();
@@ -174,6 +175,88 @@ export const useKDSDataLocal = () => {
             supabase.removeChannel(channel);
         };
     }, [businessId]);
+
+    // Heartbeat for System Health (Super Admin Stats)
+    useEffect(() => {
+        if (!currentUser?.business_id) return;
+
+        let deviceId = localStorage.getItem('kds_device_id');
+        if (!deviceId) {
+            deviceId = 'kds_' + uuidv4();
+            localStorage.setItem('kds_device_id', deviceId);
+        }
+
+        const fetchIp = async () => {
+            if (!navigator.onLine) return null;
+            const cached = sessionStorage.getItem('device_public_ip');
+            if (cached) return cached;
+            try {
+                const services = [
+                    'https://api.ipify.org?format=json',
+                    'https://api.my-ip.io/ip.json'
+                ];
+                for (const url of services) {
+                    try {
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        const ip = data.ip || data.success?.ip;
+                        if (ip) {
+                            sessionStorage.setItem('device_public_ip', ip);
+                            console.log('🌐 Got IP:', ip);
+                            return ip;
+                        }
+                    } catch { /* try next */ }
+                }
+                return null;
+            } catch {
+                return null;
+            }
+        };
+
+        const sendHeartbeat = async () => {
+            if (!navigator.onLine) {
+                console.log('📴 Skipping heartbeat - device is offline');
+                return;
+            }
+            try {
+                const ip = await fetchIp();
+                const screenRes = `${window.screen.width}x${window.screen.height}`;
+                const payload = {
+                    p_business_id: currentUser.business_id,
+                    p_device_id: deviceId,
+                    p_device_type: 'kds',
+                    p_ip_address: ip || 'לא זמין',
+                    p_user_agent: navigator.userAgent?.substring(0, 200) || 'Unknown',
+                    p_screen_resolution: screenRes,
+                    p_user_name: currentUser.name || currentUser.employee_name || 'אורח',
+                    p_employee_id: currentUser.id || null
+                };
+                console.log('💓 Sending KDS heartbeat:', { deviceId, ip, screenRes, user: payload.p_user_name });
+                const { error } = await supabase.rpc('send_device_heartbeat', payload);
+                if (error) throw error;
+                console.log('✅ Heartbeat success');
+            } catch (err) {
+                console.warn('⚠️ Device heartbeat failed:', err.message);
+                if (navigator.onLine) {
+                    try {
+                        await supabase.rpc('send_kds_heartbeat', {
+                            p_business_id: currentUser.business_id
+                        });
+                    } catch (e) {
+                        console.error('❌ All heartbeats failed');
+                    }
+                }
+            }
+        };
+
+        fetchIp().then(() => {
+            sendHeartbeat();
+        });
+
+        const interval = setInterval(sendHeartbeat, 30000); // 30s heartbeat
+
+        return () => clearInterval(interval);
+    }, [currentUser]);
 
     // ============================================
     // LIVE QUERIES - Auto-update when data changes
