@@ -2,6 +2,8 @@
  * Utility to get the Backend API URL (N150 Local Server or Cloud Proxy).
  */
 
+import { getActiveEndpoint } from '../services/networkResolver';
+
 export const CORTEX_CLOUD_URL = 'https://aimanageragentrani-625352399481.europe-west1.run.app';
 export const BACKEND_CLOUD_URL = 'https://api-icaffe.hacklberryfinn.com'; // Fallback for general backend if needed
 
@@ -35,32 +37,20 @@ export const resolveUrl = async () => {
         return 'http://' + window.location.hostname + ':8081';
     }
 
-    // 2. Local/LAN Access
-    if (checkIsLocalOrLan()) {
-        return `http://${window.location.hostname}:8081`;
-    }
-
-    // 3. Remote/Cloud Access (Fallback to known backend cloud URL)
-    return BACKEND_CLOUD_URL;
+    return getActiveEndpoint();
 };
 
 /**
  * Legacy support for sync calls - used by Splash and other services
  */
 export const getBackendApiUrl = () => {
-    if (isElectron()) return 'http://' + window.location.hostname + ':8081';
-
     // Priority 1: Direct backend override
     const backendEnv = import.meta.env.VITE_DATA_MANAGER_API_URL || import.meta.env.VITE_MANAGER_API_URL;
     if (backendEnv) return backendEnv.replace(/\/$/, '');
 
-    // Priority 2: Local check
-    if (checkIsLocalOrLan()) {
-        return `http://${window.location.hostname}:8081`;
-    }
+    if (isElectron()) return 'http://' + window.location.hostname + ':8081';
 
-    // Priority 3: Cloud fallback
-    return BACKEND_CLOUD_URL;
+    return getActiveEndpoint();
 };
 
 /**

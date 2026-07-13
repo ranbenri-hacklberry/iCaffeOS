@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { AuthProvider } from './context/AuthContext';
+import { initActiveEndpoint } from './services/networkResolver';
+import { setupApiInterceptor } from './utils/apiInterceptor';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { MusicProvider } from './context/MusicContext';
 import AppRoutes from './Routes';
@@ -48,9 +51,27 @@ function AppContent() {
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleError);
 
+    // Capacitor back button handler
+    const isCapacitor = window.location.hostname === 'localhost' && /android|iphone|ipad/i.test(navigator.userAgent);
+    let backButtonListener;
+    if (isCapacitor) {
+      CapApp.addListener('backButton', ({ canGoBack }) => {
+        if (canGoBack) {
+          window.history.back();
+        } else {
+          CapApp.exitApp();
+        }
+      }).then(listener => {
+        backButtonListener = listener;
+      });
+    }
+
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleError);
+      if (backButtonListener) {
+        backButtonListener.remove();
+      }
     };
   }, []);
 
@@ -81,6 +102,32 @@ function AppContent() {
 }
 
 function App() {
+  const [isInitializing, setIsInitializing] = React.useState(true);
+
+  React.useEffect(() => {
+    async function bootApp() {
+      // 1. Resolve active endpoint (local or remote)
+      await initActiveEndpoint();
+      // 2. Set up our global API fetch interceptor
+      setupApiInterceptor();
+      // 3. Complete boot
+      setIsInitializing(false);
+    }
+    bootApp();
+  }, []);
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center font-inter" dir="rtl">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-6"></div>
+          <h3 className="text-lg font-bold text-white mb-2">מתחבר לשרת iCaffeOS...</h3>
+          <p className="text-xs text-white/50">מזהה רשת ומאמת הגדרות חיבור</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AuthProvider>
       <ThemeProvider>

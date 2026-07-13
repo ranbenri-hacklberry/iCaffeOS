@@ -2,12 +2,23 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/db/database';
 import { useAuth } from '@/context/AuthContext';
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Calendar, BarChart3, PieChart, ChevronDown, ChevronUp, Package, X, Phone, User, Clock, Hash, Receipt, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Calendar, BarChart3, PieChart, ChevronDown, ChevronUp, Package, X, Phone, User, Clock, Hash, Receipt, Info, RefreshCcw } from 'lucide-react';
 import { liveQuery } from 'dexie';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
+import { isKitchenPrep } from '@/utils/kdsUtils';
 
-const SalesDashboard = () => {
+const PAYMENT_LABELS = {
+  cash: '💵 מזומן',
+  credit: '💳 אשראי',
+  bit: '📱 ביט',
+  paybox: '📦 פייבוקס',
+  transfer: '🏦 העברה',
+  cibus: '🥗 סיבוס',
+  givebite: '🎁 GivBite'
+};
+
+const SalesDashboard = ({ mode = 'orders' }) => {
   const { currentUser, isAuthenticated } = useAuth();
 
   console.log('🔍 SalesDashboard Debug:', {
@@ -40,6 +51,15 @@ const SalesDashboard = () => {
   // Orders List Accordion State
   const [expandedOrderIds, setExpandedOrderIds] = useState(new Set());
 
+  // SMS logs Cache State
+  const [smsCache, setSmsCache] = useState({});
+
+  // Today's SMS logs list
+  const [todaySmsLogs, setTodaySmsLogs] = useState([]);
+
+  // Active status filter for the Orders view
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('in_progress'); // 'in_progress', 'ready', 'completed'
+
   // Helper to format currency
   const formatCurrency = (amount) => `₪${amount.toFixed(0)}`;
 
@@ -50,10 +70,80 @@ const SalesDashboard = () => {
     setExpandedCategories(newSet);
   };
 
+  const fetchSmsStatus = async (phone, orderStatus, force = false) => {
+    if (!phone) return;
+    
+    const cleanPhone = phone.trim();
+    if (cleanPhone.startsWith('GUEST_')) {
+      setSmsCache(prev => ({
+        ...prev,
+        [cleanPhone]: { status: 'guest', loading: false }
+      }));
+      return;
+    }
+    
+    const cached = smsCache[cleanPhone];
+    const isFinalState = cached && (cached.status === 'success' || cached.status === 'guest');
+    
+    if (!force && isFinalState) {
+      return;
+    }
+    
+    if (orderStatus !== 'completed' && orderStatus !== 'ready' && !force) {
+      setSmsCache(prev => ({
+        ...prev,
+        [cleanPhone]: { status: 'pending_order', loading: false }
+      }));
+      return;
+    }
+    
+    setSmsCache(prev => ({
+      ...prev,
+      [cleanPhone]: { ...(prev[cleanPhone] || {}), loading: true }
+    }));
+    
+    try {
+      const response = await fetch(`/api/admin/sms-logs?phone=${encodeURIComponent(cleanPhone)}`);
+      const data = await response.json();
+      
+      if (data && data.success && data.logs && data.logs.length > 0) {
+        const mostRecent = data.logs[0];
+        setSmsCache(prev => ({
+          ...prev,
+          [cleanPhone]: {
+            status: mostRecent.status,
+            error: mostRecent.error,
+            sentAt: mostRecent.sent_at || mostRecent.created_at,
+            loading: false
+          }
+        }));
+      } else {
+        setSmsCache(prev => ({
+          ...prev,
+          [cleanPhone]: { status: 'none', loading: false }
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch SMS status:', err);
+      setSmsCache(prev => ({
+        ...prev,
+        [cleanPhone]: { status: 'error_fetch', error: err.message, loading: false }
+      }));
+    }
+  };
+
   const toggleOrder = (orderId) => {
     const newSet = new Set(expandedOrderIds);
-    if (newSet.has(orderId)) newSet.delete(orderId);
-    else newSet.add(orderId);
+    const isExpanding = !newSet.has(orderId);
+    if (isExpanding) {
+      newSet.add(orderId);
+      const order = currentRawOrders.find(o => o.id === orderId);
+      if (order && order.customer_phone) {
+        fetchSmsStatus(order.customer_phone, order.order_status || order.orderStatus);
+      }
+    } else {
+      newSet.delete(orderId);
+    }
     setExpandedOrderIds(newSet);
   };
 
@@ -154,100 +244,318 @@ const SalesDashboard = () => {
     setError(null);
 
     try {
-      const { currentStart, currentEnd, previousStart, previousEnd } = getDateRanges(viewMode, selectedDate);
+      const start = new Date(selectedDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(selectedDate);
+      end.setHours(23, 59, 59, 999);
 
-      const fetchPeriodLocal = async (start, end) => {
-        console.log(`🔍 [SalesDashboard] Fetching LOCAL data: ${start.toISOString()} - ${end.toISOString()}`);
+      // 1. Fetch SMS logs for the selected date in background
+      try {
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const dateParam = `${year}-${month}-${day}`;
+        const res = await fetch(`/api/admin/sms-logs?date=${dateParam}`);
+        const smsData = await res.json();
+        if (smsData && smsData.success && smsData.logs) {
+          setTodaySmsLogs(smsData.logs);
+          
+          // Pre-populate SMS cache
+          const cache = {};
+          smsData.logs.forEach(log => {
+            const cleanPhone = log.phone?.trim();
+            if (cleanPhone && !cache[cleanPhone]) {
+              cache[cleanPhone] = {
+                status: log.status,
+                error: log.error,
+                sentAt: log.sent_at || log.created_at,
+                loading: false
+              };
+            }
+          });
+          setSmsCache(prev => ({ ...cache, ...prev }));
+        }
+      } catch (err) {
+        console.error('Failed to pre-fetch daily SMS logs:', err);
+      }
 
-        // 1. Fetch orders in range
-        const orders = await db.orders
+      // 2. Fetch Orders - Always try direct server/Supabase query first (paginated). Fall back to local Dexie on failure.
+      let orders = [];
+      const flattened = [];
+      const rawOrders = [];
+
+      try {
+        console.log(`📡 [SalesDashboard] Fetching directly from server/Supabase: ${start.toISOString()} - ${end.toISOString()}`);
+        
+        let page = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data: pageOrders, error: supabaseErr } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              order_number,
+              customer_phone,
+              customer_name,
+              order_status,
+              is_paid,
+              paid_amount,
+              customer_id,
+              created_at,
+              completed_at,
+              updated_at,
+              payment_method,
+              total_amount,
+              order_type,
+              order_origin,
+              order_items (
+                id,
+                quantity,
+                price,
+                mods,
+                notes,
+                item_status,
+                menu_items (
+                  id,
+                  name,
+                  category,
+                  price
+                )
+              )
+            `)
+            .eq('business_id', currentUser?.business_id)
+            .gte('created_at', start.toISOString())
+            .lte('created_at', end.toISOString())
+            .order('created_at', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+          if (supabaseErr) throw supabaseErr;
+          if (!pageOrders || pageOrders.length === 0) break;
+          orders.push(...pageOrders);
+          if (pageOrders.length < pageSize) break;
+          page++;
+        }
+        
+        orders.forEach(order => {
+          const itemsWithMenu = [];
+          const isOth = order.payment_method === 'oth';
+          order.order_items?.forEach(item => {
+            const menuItem = item.menu_items;
+            flattened.push({
+              quantity: item.quantity || 0,
+              price: isOth ? 0 : (item.price || menuItem?.price || 0),
+              category: menuItem?.category || 'אחר',
+              name: menuItem?.name || item.name || 'לא ידוע',
+              date: order.created_at
+            });
+            itemsWithMenu.push({ ...item, menu_items: menuItem });
+          });
+          
+          rawOrders.push({ 
+            ...order, 
+            total_amount: isOth ? 0 : (order.total_amount || 0),
+            order_items: itemsWithMenu 
+          });
+        });
+      } catch (serverErr) {
+        console.warn('⚠️ Server query failed, falling back to local Dexie backup...', serverErr);
+        
+        const localOrders = await db.orders
           .where('created_at')
           .between(start.toISOString(), end.toISOString(), true, true)
           .toArray();
 
-        // 2. Filter by business_id (Dexie index might not be perfect for this yet, so filter)
-        const businessOrders = orders.filter(o => String(o.business_id) === String(currentUser?.business_id));
-
-        const flattened = [];
-        const rawOrders = [];
-
+        const businessOrders = localOrders.filter(o => String(o.business_id) === String(currentUser?.business_id));
+        
         for (const order of businessOrders) {
-          // 3. Fetch items for this order
           const items = await db.order_items.where('order_id').equals(order.id).toArray();
           const itemsWithMenu = [];
+          const isOth = order.payment_method === 'oth';
 
           for (const item of items) {
-            // 4. Join with menu_items for category/name
             const menuItem = await db.menu_items.get(item.menu_item_id);
-            if (menuItem) {
-              flattened.push({
-                quantity: item.quantity || 0,
-                price: item.price || menuItem.price || 0,
-                category: menuItem.category || 'אחר',
-                name: menuItem.name || 'לא ידוע',
-                date: order.created_at
-              });
-              itemsWithMenu.push({ ...item, menu_items: menuItem });
-            }
-          }
-          rawOrders.push({ ...order, order_items: itemsWithMenu });
-        }
-
-        return { flattened, raw: rawOrders };
-      };
-
-      // Fallback to Supabase if local is empty (initial load not done)
-      const checkLocalCount = 0;
-      if (checkLocalCount === 0 && navigator.onLine) {
-        console.log('⚠️ Local Sales cache empty, falling back to Supabase RPC...');
-        const fetchPeriodRemote = async (start, end) => {
-          const { data, error } = await supabase.rpc('get_sales_data', {
-            p_business_id: currentUser?.business_id,
-            p_start_date: start.toISOString(),
-            p_end_date: end.toISOString()
-          });
-          if (error) throw error;
-          const flattened = [];
-          data?.forEach(order => {
-            order.order_items?.forEach(item => {
-              if (item.menu_items) {
-                flattened.push({
-                  quantity: item.quantity || 0,
-                  price: item.price || 0,
-                  category: item.menu_items.category || 'אחר',
-                  name: item.menu_items.name || 'לא ידוע',
-                  date: order.created_at
-                });
-              }
+            flattened.push({
+              quantity: item.quantity || 0,
+              price: isOth ? 0 : (item.price || menuItem?.price || 0),
+              category: menuItem?.category || 'אחר',
+              name: menuItem?.name || item.name || 'לא ידוע',
+              date: order.created_at
             });
+            itemsWithMenu.push({ ...item, menu_items: menuItem });
+          }
+          
+          rawOrders.push({ 
+            ...order, 
+            total_amount: isOth ? 0 : (order.total_amount || 0),
+            order_items: itemsWithMenu 
           });
-          return { flattened, raw: data };
-        };
-
-        const [curr, prev] = await Promise.all([
-          fetchPeriodRemote(currentStart, currentEnd),
-          fetchPeriodRemote(previousStart, previousEnd)
-        ]);
-
-        setCurrentSales(curr.flattened);
-        setCurrentRawOrders(curr.raw);
-        setPreviousSales(prev.flattened);
-        return;
+        }
       }
 
-      // Main Logic: Use local data
-      const [curr, prev] = await Promise.all([
-        fetchPeriodLocal(currentStart, currentEnd),
-        fetchPeriodLocal(previousStart, previousEnd)
-      ]);
+      // Check and auto-complete orders
+      const cleanedRawOrders = [];
+      for (const order of rawOrders) {
+        if (order.order_status === 'in_progress') {
+          const items = order.order_items || [];
+          if (items.length > 0) {
+            const hasNonTerminalItems = items.some(i => {
+              const menuItem = i.menu_items;
+              const isPrep = isKitchenPrep({
+                ...i,
+                is_hot_drink: menuItem?.is_hot_drink,
+                category: menuItem?.category,
+                kds_routing_logic: i.kds_routing_logic || menuItem?.kds_routing_logic
+              });
+              const kdsLogic = menuItem?.kds_routing_logic || 'MADE_TO_ORDER';
 
-      setCurrentSales(curr.flattened);
-      setCurrentRawOrders(curr.raw);
-      setPreviousSales(prev.flattened);
+              let hasOverride = false;
+              const mods = i.mods;
+              if (typeof mods === 'string' && (mods.includes('__KDS_OVERRIDE__') || mods.includes('__KDS_OVER_RIDE__'))) hasOverride = true;
+              else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVER_REIDE__'))) hasOverride = true;
+              else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVERRIDE__'))) hasOverride = true;
+
+              const effectiveLogic = i.kds_routing_logic || kdsLogic;
+
+              let isPrepRequired = true;
+              if (hasOverride) isPrepRequired = true;
+              else if (isPrep) isPrepRequired = true;
+              else if (effectiveLogic === 'MADE_TO_ORDER') isPrepRequired = true;
+              else if (effectiveLogic === 'GRAB_AND_GO') isPrepRequired = false;
+              else if (effectiveLogic === 'prep_override') isPrepRequired = false;
+              else if (effectiveLogic === 'CONDITIONAL') isPrepRequired = hasOverride;
+
+              return isPrepRequired && !['completed', 'shipped', 'cancelled'].includes(i.item_status || i.status || 'new');
+            });
+
+            // Calculate paid status
+            const allItems = items.filter(i => (i.item_status || i.status) !== 'cancelled');
+            const calculatedTotal = allItems.reduce((sum, i) => {
+              const menuItem = i.menu_items;
+              return sum + (menuItem?.price || 0) * (i.quantity || 1);
+            }, 0);
+
+            const totalAmount = order.total_amount || calculatedTotal;
+            const paidAmount = order.paid_amount || 0;
+            const unpaidAmount = totalAmount - paidAmount;
+            const isOrderPaid = order.is_paid === true;
+            const isEffectivelyUnpaid = !isOrderPaid && unpaidAmount > 0.01;
+
+            console.log(`🕵️ [SalesDashboard Debug] Order #${order.order_number}:`, {
+              hasNonTerminalItems,
+              isEffectivelyUnpaid,
+              isOrderPaid,
+              totalAmount,
+              paidAmount,
+              unpaidAmount,
+              itemsCount: items.length,
+              items: items.map(i => ({ name: i.menu_items?.name || i.name, status: i.item_status || i.status, isPrep: isKitchenPrep(i) }))
+            });
+
+            if (!hasNonTerminalItems && !isEffectivelyUnpaid) {
+              console.log(`🤖 [SalesDashboard Auto-Complete] Auto-completing order #${order.order_number}`);
+              // Mutate in-memory for instant UI update
+              order.order_status = 'completed';
+              
+              // Trigger DB updates asynchronously
+              supabase
+                .from('orders')
+                .update({ order_status: 'completed', updated_at: new Date().toISOString() })
+                .eq('id', order.id)
+                .then(({ error }) => {
+                  if (error) console.error('Error auto-completing order on server:', error);
+                });
+
+              db.orders.update(order.id, { order_status: 'completed', updated_at: new Date().toISOString() }).catch(() => {});
+            }
+          }
+        }
+        cleanedRawOrders.push(order);
+      }
+
+      setCurrentSales(flattened);
+      setCurrentRawOrders(cleanedRawOrders);
+
+      // Comparison period (previous week same day)
+      const prevStart = new Date(start);
+      prevStart.setDate(prevStart.getDate() - 7);
+      const prevEnd = new Date(end);
+      prevEnd.setDate(prevEnd.getDate() - 7);
+      const prevFlattened = [];
+
+      try {
+        let prevOrders = [];
+        let page = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data: pageOrders, error: prevErr } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              created_at,
+              payment_method,
+              order_items (
+                quantity,
+                price,
+                menu_items (
+                  price,
+                  category,
+                  name
+                )
+              )
+            `)
+            .eq('business_id', currentUser?.business_id)
+            .gte('created_at', prevStart.toISOString())
+            .lte('created_at', prevEnd.toISOString())
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+          if (prevErr) throw prevErr;
+          if (!pageOrders || pageOrders.length === 0) break;
+          prevOrders.push(...pageOrders);
+          if (pageOrders.length < pageSize) break;
+          page++;
+        }
+
+        prevOrders.forEach(order => {
+          const isOth = order.payment_method === 'oth';
+          order.order_items?.forEach(item => {
+            const menuItem = item.menu_items;
+            prevFlattened.push({
+              quantity: item.quantity || 0,
+              price: isOth ? 0 : (item.price || menuItem?.price || 0),
+              category: menuItem?.category || 'אחר',
+              name: menuItem?.name || item.name || 'לא ידוע',
+              date: order.created_at
+            });
+          });
+        });
+      } catch (prevServerErr) {
+        console.warn('⚠️ Server comparison query failed, falling back to local Dexie backup...', prevServerErr);
+        
+        const prevLocalOrders = await db.orders
+          .where('created_at')
+          .between(prevStart.toISOString(), prevEnd.toISOString(), true, true)
+          .toArray();
+        const prevBusinessOrders = prevLocalOrders.filter(o => String(o.business_id) === String(currentUser?.business_id));
+        
+        for (const order of prevBusinessOrders) {
+          const items = await db.order_items.where('order_id').equals(order.id).toArray();
+          for (const item of items) {
+            const menuItem = await db.menu_items.get(item.menu_item_id);
+            prevFlattened.push({
+              quantity: item.quantity || 0,
+              price: item.price || menuItem?.price || 0,
+              category: menuItem?.category || 'אחר',
+              name: menuItem?.name || item.name || 'לא ידוע',
+              date: order.created_at
+            });
+          }
+        }
+      }
+      setPreviousSales(prevFlattened);
 
     } catch (err) {
       console.error('Error fetching sales:', err);
-      setError('שגיאה בטעינת נתוני מכירות');
+      setError('שגיאה בטעינת נתוני מכירות והזמנות');
     } finally {
       setLoading(false);
     }
@@ -427,6 +735,61 @@ const SalesDashboard = () => {
       };
     }
   }, [viewMode, currentSales, previousSales, totalPeriodStats, previousStats]);
+
+  // Hourly metrics (Orders count & Prep times)
+  const hourlyMetrics = useMemo(() => {
+    const hoursMap = new Map(); // hour -> { orderCount: 0, totalPrepTime: 0, completedCount: 0 }
+    
+    currentRawOrders.forEach(order => {
+      const date = new Date(order.created_at);
+      const h = date.getHours();
+      
+      if (!hoursMap.has(h)) {
+        hoursMap.set(h, { orderCount: 0, totalPrepTime: 0, completedCount: 0 });
+      }
+      
+      const metrics = hoursMap.get(h);
+      metrics.orderCount += 1;
+      
+      const compTime = order.completed_at || (order.order_status === 'completed' ? order.updated_at : null);
+      if (compTime) {
+        const diffMs = new Date(compTime) - new Date(order.created_at);
+        const diffMins = Math.round(diffMs / 1000 / 60);
+        if (diffMins >= 0 && diffMins < 180) {
+          metrics.totalPrepTime += diffMins;
+          metrics.completedCount += 1;
+        }
+      }
+    });
+
+    let minHour = 23;
+    let maxHour = 0;
+    for (let h of hoursMap.keys()) {
+      if (h < minHour) minHour = h;
+      if (h > maxHour) maxHour = h;
+    }
+    
+    if (hoursMap.size === 0) {
+      minHour = 8;
+      maxHour = 20;
+    } else {
+      minHour = Math.max(0, minHour - 1);
+      maxHour = Math.min(23, maxHour + 1);
+    }
+
+    const result = [];
+    for (let i = minHour; i <= maxHour; i++) {
+      const metrics = hoursMap.get(i) || { orderCount: 0, totalPrepTime: 0, completedCount: 0 };
+      const avgPrep = metrics.completedCount > 0 ? Math.round(metrics.totalPrepTime / metrics.completedCount) : 0;
+      result.push({
+        name: `${i}:00`,
+        key: i,
+        orderCount: metrics.orderCount,
+        avgPrepTime: avgPrep
+      });
+    }
+    return result;
+  }, [currentRawOrders]);
 
   // Graph Data Preparation
   const graphData = useMemo(() => {
@@ -660,167 +1023,453 @@ const SalesDashboard = () => {
     visible: { opacity: 1, y: 0 }
   };
 
-  return (
-    <div className="space-y-4 pb-20 p-4">
-      <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100 flex justify-center sticky top-0 z-10">
-        <div className="flex bg-gray-100 p-1 rounded-xl w-full max-w-md">
-          {[
-            { id: 'daily', label: 'יומי', icon: Calendar },
-            { id: 'weekly', label: 'שבועי', icon: BarChart3 },
-            { id: 'monthly', label: 'חודשי', icon: PieChart }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setViewMode(tab.id);
-                setDateTuple([new Date().getTime(), 0]);
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <tab.icon size={16} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+  const getCleanMods = (mods) => {
+    if (!mods) return [];
+    return mods.filter(m => {
+      const name = typeof m === 'string' ? m : (m.name || m.value_name || '');
+      return name && !name.includes('__KDS_OVERRIDE__');
+    });
+  };
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Main Stats Card */}
-        <div className="relative h-44 w-full">
-          <AnimatePresence initial={false} custom={direction} mode="popLayout">
-            <motion.div
-              key={`${viewMode}-${dateMs}`}
-              custom={direction}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{
-                x: { type: "tween", duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-                opacity: { duration: 0.3 }
-              }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={1}
-              onDragEnd={(e, { offset }) => {
-                if (offset.x < -50) goToPreviousPeriod();
-                else if (offset.x > 50 && !isNextDisabled()) goToNextPeriod();
-              }}
-              className="absolute inset-0 bg-gradient-to-br from-blue-600 to-blue-800 text-white rounded-2xl shadow-lg flex flex-col justify-center px-4 cursor-grab active:cursor-grabbing overflow-hidden"
-            >
-              <div className="flex justify-between items-center w-full relative z-10 h-full py-3">
-                <button
-                  onClick={goToPreviousPeriod}
-                  aria-label="תקופה קודמת"
-                  className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white absolute right-1 top-1/2 -translate-y-1/2 transition-colors"
-                >
-                  <ChevronRight size={24} />
-                </button>
+  const renderSmsStatusIcon = (smsInfo) => {
+    if (!smsInfo) return <span className="text-slate-400">💬</span>;
+    if (smsInfo.loading) return <span className="text-blue-500 animate-pulse">🔄</span>;
+    if (smsInfo.status === 'success' || smsInfo.status === 'sent') return <span className="text-emerald-600 font-bold">✅</span>;
+    if (smsInfo.status === 'offline') return <span className="text-yellow-600">🔌</span>;
+    if (smsInfo.status === 'failed') return <span className="text-red-500">❌</span>;
+    if (smsInfo.status === 'pending_order') return <span className="text-slate-400">⏳</span>;
+    return <span className="text-slate-400">💬</span>;
+  };
 
-                <div className="flex-1 flex items-center justify-center px-8 h-full">
-                  {(viewMode === 'weekly' || viewMode === 'monthly') && splitStats ? (
-                    <div className="flex flex-col w-full h-full">
-                      <div className="flex w-full flex-1 divide-x divide-white/20 divide-x-reverse min-h-0">
-                        {/* Right Side: Partial (Cumulative Comparison) */}
-                        <div className="flex-1 flex flex-col items-center justify-center px-2">
-                          {/* Row 1: Title with Info Tooltip */}
-                          <div className="text-blue-200 text-[10px] font-bold uppercase tracking-wider h-4 flex items-center gap-1">
-                            <span>מצטבר</span>
-                            <span
-                              title="השוואה הוגנת: משווה מכירות עד אותו יום ושעה בתקופה הקודמת"
-                              className="cursor-help opacity-60 hover:opacity-100 transition-opacity"
-                            >
-                              <Info size={10} />
-                            </span>
-                          </div>
-                          {/* Row 2: Amount (Same height on both sides) */}
-                          <div className="text-3xl font-black h-10 flex items-center">{formatCurrency(splitStats.partial.total)}</div>
-                          {/* Row 3: Subtitle */}
-                          <div className="text-[9px] text-blue-200/80 h-4 flex items-center">{getPartialLabel()}</div>
-                          {/* Row 4: Badge */}
-                          <div className="h-5 flex items-center">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${splitStats.partial.change >= 0 ? 'bg-green-400/20 text-green-200' : 'bg-red-400/20 text-red-200'}`}>
-                              {splitStats.partial.change >= 0 ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
-                              {Math.abs(splitStats.partial.change).toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
+  const getSmsTooltip = (smsInfo) => {
+    if (!smsInfo) return 'לא נשלחה הודעה';
+    if (smsInfo.loading) return 'טוען סטטוס...';
+    if (smsInfo.status === 'success' || smsInfo.status === 'sent') {
+      const time = smsInfo.sentAt ? new Date(smsInfo.sentAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '';
+      return `נשלח בהצלחה${time ? ` ב-${time}` : ''}`;
+    }
+    if (smsInfo.status === 'offline') return 'אופליין - ההודעה ממתינה ברשת המקומית';
+    if (smsInfo.status === 'failed') return `נכשל: ${smsInfo.error || 'שגיאת ספק'}`;
+    if (smsInfo.status === 'pending_order') return 'ממתין לסיום ההזמנה';
+    return 'לא נשלחה הודעה';
+  };
 
-                        {/* Left Side: Full Period */}
-                        <div className="flex-1 flex flex-col items-center justify-center px-2">
-                          {/* Row 1: Title */}
-                          <div className="text-blue-200 text-[10px] font-bold uppercase tracking-wider h-4 flex items-center">{viewMode === 'weekly' ? 'סה״כ שבועי' : 'סה״כ חודשי'}</div>
-                          {/* Row 2: Amount (Same height on both sides) */}
-                          <div className="text-3xl font-black h-10 flex items-center">{formatCurrency(splitStats.full.total)}</div>
-                          {/* Row 3: Subtitle (empty placeholder for alignment) */}
-                          <div className="text-[9px] text-blue-200/80 h-4 flex items-center opacity-0">-</div>
-                          {/* Row 4: Badge */}
-                          <div className="h-5 flex items-center">
-                            {isNextDisabled() ? (
-                              <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full">בתהליך</span>
-                            ) : (
-                              <span className="text-[10px] text-blue-200/80">סופי</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+  const renderOrderCard = (order) => {
+    const isExpanded = expandedOrderIds.has(order.id);
+    const timeStr = new Date(order.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    const orderNum = order.order_number || (order.id?.toString() || '').slice(-4) || 'N/A';
+    const status = order.order_status || order.orderStatus || 'completed';
+    
+    // Get SMS cache info
+    const cleanPhone = order.customer_phone?.trim();
+    const smsInfo = cleanPhone ? smsCache[cleanPhone] : null;
 
-                      {/* Bottom Date Range Label */}
-                      <div className="border-t border-white/10 mt-2 pt-1.5 text-center">
-                        <span className="text-[10px] text-blue-100 font-medium">{getPeriodRangeLabel()}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    // Default Single View (Daily only)
-                    <div className="text-center">
-                      <div className="text-blue-100 text-sm font-medium opacity-90">{getPeriodLabel()}</div>
-                      <div className="text-4xl font-black tracking-tight mt-2">{formatCurrency(totalPeriodStats.total)}</div>
-                      <div className="flex items-center justify-center gap-2 mt-2">
-                        <span className="text-xs text-blue-100 opacity-75">{getComparisonLabel()}: {formatCurrency(previousStats.total)}</span>
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${percentageChange >= 0 ? 'bg-green-400/20 text-green-200' : 'bg-red-400/20 text-red-200'}`}>
-                          {percentageChange >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                          {Math.abs(percentageChange).toFixed(1)}%
+    return (
+      <div
+        key={order.id}
+        className="bg-white border text-sm border-gray-200 rounded-xl overflow-hidden shadow-sm transition-all hover:border-gray-300"
+      >
+        <div
+          onClick={() => toggleOrder(order.id)}
+          className={`p-3 flex items-center justify-between cursor-pointer gap-4 ${isExpanded ? 'bg-blue-50/50' : 'bg-white'}`}
+        >
+          {/* Right Column: Time, Customer Name, Inline Phone/SMS, Prep Time */}
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center justify-center w-12 h-10 bg-gray-100 rounded-lg text-gray-600 shrink-0">
+              <Clock size={12} className="mb-0.5 opacity-70" />
+              <span className="font-bold font-mono text-xs">{timeStr}</span>
+            </div>
+            
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-black text-gray-900 text-base">
+                  {order.customer_name || order.customerName || 'לקוח מזדמן'}
+                </span>
+                {order.order_origin && (
+                  <span className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[9px] font-bold text-slate-500">
+                    {order.order_origin}
+                  </span>
+                )}
+                <span className="text-[10px] text-gray-450 font-bold font-mono">#{orderNum}</span>
+                
+                {/* Inline Phone and SMS Badge */}
+                {cleanPhone && !cleanPhone.startsWith('GUEST_') ? (
+                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                    <span className="text-gray-600 font-mono">{cleanPhone.replace('972', '0')}</span>
+                    {status !== 'in_progress' && (
+                      <span title={getSmsTooltip(smsInfo)} className="cursor-help flex items-center">
+                        {renderSmsStatusIcon(smsInfo)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-400">
+                    👤 ללא טלפון
+                  </span>
+                )}
+              </div>
+
+              {/* Preparation duration badge */}
+              {(() => {
+                const compTime = order.completed_at || (status === 'completed' ? order.updated_at : null);
+                if (compTime) {
+                  const diffMs = new Date(compTime) - new Date(order.created_at);
+                  const diffMins = Math.round(diffMs / 1000 / 60);
+                  if (diffMins >= 0 && diffMins < 180) {
+                    return (
+                      <div className="mt-0.5">
+                        <span className="px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[10px] font-black text-indigo-600 inline-flex items-center gap-0.5">
+                          <span>⏱️ {diffMins} דק׳ הכנה</span>
                         </span>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    );
+                  }
+                }
+                return null;
+              })()}
+            </div>
+          </div>
 
-                <button
-                  onClick={goToNextPeriod}
-                  disabled={isNextDisabled()}
-                  aria-label="תקופה הבאה"
-                  className={`p-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white absolute left-1 top-1/2 -translate-y-1/2 transition-colors ${isNextDisabled() ? 'opacity-30 cursor-not-allowed' : ''}`}
-                >
-                  <ChevronLeft size={24} />
-                </button>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+          {/* Left Column: Totals, Payment Method, and Chevron */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              {order.payment_method && (
+                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black">
+                  {PAYMENT_LABELS[order.payment_method] || order.payment_method}
+                </span>
+              )}
+              <span className="font-black text-slate-900 text-base">{formatCurrency(order.total_amount || 0)}</span>
+            </div>
+
+            {isExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+          </div>
         </div>
 
-        {/* Sales Graph - Interactive */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0 }}
+              animate={{ height: "auto" }}
+              exit={{ height: 0 }}
+              className="overflow-hidden bg-gray-50 border-t border-gray-100"
+            >
+              <div className="p-4 space-y-4">
+                
+                {/* Order Details Table */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <table className="w-full text-right text-xs">
+                    <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200">
+                      <tr>
+                        <th className="py-2 px-3 text-right">פריט</th>
+                        <th className="py-2 px-3 text-center">כמות</th>
+                        <th className="py-2 px-3 text-left">מחיר</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {order.order_items.map((item, idx) => {
+                        const itemMods = getCleanMods(item.mods || item.modifiers);
+                        return (
+                          <tr key={idx} className="hover:bg-gray-50/50">
+                            <td className="py-3 px-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-gray-800 text-sm">
+                                  {item.menu_items?.name || 'פריט לא ידוע'}
+                                </span>
+                                {/* Modifiers List - Badges Wrap */}
+                                {itemMods.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1.5 max-w-lg">
+                                    {itemMods.map((mod, mIdx) => (
+                                      <span key={mIdx} className="text-[9px] font-black bg-amber-100/70 border border-amber-200/50 text-amber-800 px-2 py-0.5 rounded-full select-none">
+                                        {typeof mod === 'string' ? mod : (mod.name || mod.value_name || '')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {item.notes && (
+                                  <span className="text-[10px] text-orange-600 mt-1 font-bold">
+                                    📝 הערה: {item.notes}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center font-mono font-bold text-gray-700">
+                              {item.quantity}x
+                            </td>
+                            <td className="py-3 px-3 text-left font-medium text-gray-900">
+                              {formatCurrency((item.price || item.menu_items?.price || 0) * item.quantity)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SMS Notification Log Detail */}
+                {cleanPhone && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-400 font-bold uppercase tracking-wider block mr-1">סטטוס מסרון ללקוח:</span>
+                    
+                    {(() => {
+                      if (!smsInfo) {
+                        return (
+                          <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 text-gray-400 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base animate-pulse">⏳</span>
+                              <span className="text-xs font-bold">טוען סטטוס מסרון...</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      if (smsInfo.loading) {
+                        return (
+                          <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 text-gray-400 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <RefreshCcw size={14} className="animate-spin text-gray-500" />
+                              <span className="text-xs font-bold">מתעדכן מול השרת...</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (smsInfo.status === 'guest') {
+                        return (
+                          <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl">
+                            <span className="text-base">⚠️</span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-xs">אורח אנונימי (הזמנה מקיוסק/טאבלט)</span>
+                              <span className="text-[10px] opacity-85">הלקוח לא הזין מספר טלפון, לכן לא נשלח מסרון.</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (smsInfo.status === 'success' || smsInfo.status === 'sent') {
+                        const time = smsInfo.sentAt ? new Date(smsInfo.sentAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : 'היום';
+                        return (
+                          <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">✅</span>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-xs">מסרון נשלח בהצלחה!</span>
+                                <span className="text-[10px] opacity-85">נשלח בהצלחה בשעה {time} למספר {cleanPhone}</span>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); fetchSmsStatus(cleanPhone, status, true); }}
+                              className="p-1.5 bg-green-100 hover:bg-green-200 rounded-lg text-green-800 transition-all cursor-pointer"
+                              title="רענן"
+                            >
+                              <RefreshCcw size={12} />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      if (smsInfo.status === 'offline') {
+                        return (
+                          <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🔌</span>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-xs">מצב אופליין (צומת מקומי ללא אינטרנט)</span>
+                                <span className="text-[10px] opacity-85">אין חיבור רשת חיצוני בסניף. ההודעה ממתינה ותישלח אוטומטית ברגע שהאינטרנט יחזור.</span>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); fetchSmsStatus(cleanPhone, status, true); }}
+                              className="p-1.5 bg-yellow-100 hover:bg-yellow-200 rounded-lg text-yellow-800 transition-all cursor-pointer"
+                              title="רענן"
+                            >
+                              <RefreshCcw size={12} />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      if (smsInfo.status === 'failed') {
+                        return (
+                          <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">❌</span>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-xs">שגיאה בשליחת מסרון</span>
+                                <span className="text-[10px] opacity-85">השליחה נכשלה. סיבה: {smsInfo.error || 'שגיאת ספק'}</span>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); fetchSmsStatus(cleanPhone, status, true); }}
+                              className="p-1.5 bg-red-100 hover:bg-red-200 rounded-lg text-red-800 transition-all cursor-pointer"
+                              title="נסה שוב"
+                            >
+                              <RefreshCcw size={12} />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      if (smsInfo.status === 'pending_order') {
+                        return (
+                          <div className="flex items-center justify-between p-3 bg-gray-100 border border-gray-200 text-gray-600 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">⏳</span>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-xs">ההזמנה עדיין בהכנה</span>
+                                <span className="text-[10px] opacity-85">מסרון מוכנות יישלח אוטומטית ברגע שההזמנה תסומן כהושלמה במטבח.</span>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); fetchSmsStatus(cleanPhone, status, true); }}
+                              className="p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition-all cursor-pointer"
+                              title="רענן"
+                            >
+                              <RefreshCcw size={12} />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 text-gray-500 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">💬</span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-xs">לא נשלחה הודעה</span>
+                              <span className="text-[10px] opacity-85">לא נמצאו לוגים של מסרונים למספר {cleanPhone} עבור הזמנה זו.</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); fetchSmsStatus(cleanPhone, status, true); }}
+                            className="p-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-500 transition-all cursor-pointer"
+                            title="רענן"
+                          >
+                            <RefreshCcw size={12} />
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Call customer action */}
+                {cleanPhone && !cleanPhone.startsWith('GUEST_') && (
+                  <div className="flex justify-start pt-1">
+                    <a
+                      href={`tel:${cleanPhone}`}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors active:scale-95"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Phone size={14} />
+                      התקשר ללקוח ({cleanPhone})
+                    </a>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  const sortedOrders = [...currentRawOrders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const activeOrders = sortedOrders.filter(o => {
+    const s = o.order_status || o.orderStatus || 'completed';
+    return s === 'in_progress';
+  });
+  const readyOrders = sortedOrders.filter(o => {
+    const s = o.order_status || o.orderStatus || 'completed';
+    return s === 'ready';
+  });
+  const completedOrders = sortedOrders.filter(o => {
+    const s = o.order_status || o.orderStatus || 'completed';
+    return s === 'completed';
+  });
+  const activeOrdersCount = activeOrders.length + readyOrders.length;
+  const completedOrdersCount = completedOrders.length;
+  const smsSentCount = todaySmsLogs.filter(log => log.status === 'success' || log.status === 'sent').length;
+
+  return (
+    <div className="space-y-4 pb-20 p-4 font-heebo" dir="rtl">
+      {/* Top Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        {/* Daily Turnover Card with Day Navigation */}
+        <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white rounded-2xl shadow-lg p-5 flex flex-col justify-between h-44 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-8 -mt-8 pointer-events-none" />
+          
+          <div className="flex justify-between items-center relative z-10">
+            <span className="text-xs font-black uppercase tracking-wider text-blue-200">מחזור המכירות של היום</span>
+            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">יומי</span>
+          </div>
+
+          <div className="flex items-center justify-between my-2 relative z-10">
+            <button
+              onClick={goToPreviousPeriod}
+              aria-label="יום קודם"
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all active:scale-90"
+            >
+              <ChevronRight size={20} />
+            </button>
+
+            <div className="text-center">
+              <div className="text-3xl sm:text-4xl font-black tracking-tight">{formatCurrency(totalPeriodStats.total)}</div>
+              <div className="text-xs text-blue-100 font-bold mt-1">{getPeriodLabel()}</div>
+            </div>
+
+            <button
+              onClick={goToNextPeriod}
+              disabled={isNextDisabled()}
+              aria-label="יום הבא"
+              className={`p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all active:scale-90 ${isNextDisabled() ? 'opacity-20 pointer-events-none' : ''}`}
+            >
+              <ChevronLeft size={20} />
+            </button>
+          </div>
+
+          <div className="text-center text-[10px] text-blue-200/70 border-t border-white/10 pt-2 relative z-10">
+            השוואה ליום מקביל שבוע שעבר: {formatCurrency(previousStats.total)} ({percentageChange >= 0 ? '+' : ''}{percentageChange.toFixed(1)}%)
+          </div>
+        </div>
+
+        {/* Orders & SMS Summary Metrics Card */}
+        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col justify-between h-44">
+          <span className="text-xs font-black text-slate-400 uppercase tracking-wider">נתוני הזמנות ומסרונים</span>
+          
+          <div className="grid grid-cols-3 gap-2 text-center py-2">
+            <div className="flex flex-col items-center border-l border-slate-100 last:border-0">
+              <span className="text-3xl font-black text-amber-500">{activeOrdersCount}</span>
+              <span className="text-[10px] text-slate-500 font-black mt-1">על הפס</span>
+            </div>
+            <div className="flex flex-col items-center border-l border-slate-100 last:border-0">
+              <span className="text-3xl font-black text-emerald-500">{completedOrdersCount}</span>
+              <span className="text-[10px] text-slate-500 font-black mt-1">הושלמו</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-3xl font-black text-cyan-500">{smsSentCount}</span>
+              <span className="text-[10px] text-slate-500 font-black mt-1">נשלחו SMS</span>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-400 text-center border-t border-slate-50 pt-2 font-bold">
+            נכון ליום {getPeriodLabel()}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Hourly Charts Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Chart 1: Sales by Hour */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col justify-center h-40">
           <h3 className="font-bold text-gray-800 mb-1 text-sm px-2 flex justify-between items-center h-6">
-            <span className="flex items-center gap-2">
-              {selectedGraphBar ? (
-                <button
-                  onClick={() => setSelectedGraphBar(null)}
-                  className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md text-xs transition-colors hover:bg-blue-100"
-                >
-                  <X size={12} />
-                  חזור לסיכום יומי
-                </button>
-              ) : (
-                <span>{viewMode === 'daily' ? 'מכירות לפי שעות (פעילות)' : 'מכירות לפי ימים'}</span>
-              )}
-            </span>
+            <span>מכירות לפי שעות</span>
             <BarChart3 size={16} className="text-blue-500" />
           </h3>
           <div className="flex-1 w-full min-h-0 text-xs mt-1">
             {graphData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-400 text-xs text-center border-2 border-dashed border-gray-100 rounded-lg">אין נתונים להצגה</div>
+              <div className="h-full flex items-center justify-center text-gray-400 text-xs text-center border border-dashed border-gray-100 rounded-lg">אין נתונים להצגה</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={graphData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
@@ -839,20 +1488,45 @@ const SalesDashboard = () => {
                   />
                   <Bar
                     dataKey="amount"
+                    fill="#60a5fa"
                     radius={[3, 3, 0, 0]}
-                    onClick={(data) => {
-                      if (selectedGraphBar?.key === data.key) setSelectedGraphBar(null);
-                      else setSelectedGraphBar({ key: data.key, type: viewMode === 'daily' ? 'hour' : 'day' });
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {graphData.map((entry, index) => (
-                      <Cell
-                        key={`graph-cell-${entry.key || index}`}
-                        fill={selectedGraphBar?.key === entry.key ? '#2563eb' : (selectedGraphBar ? '#dbeafe' : '#60a5fa')}
-                      />
-                    ))}
-                  </Bar>
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Chart 2: Average Prep Time by Hour */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col justify-center h-40">
+          <h3 className="font-bold text-gray-800 mb-1 text-sm px-2 flex justify-between items-center h-6">
+            <span>זמני הכנה ממוצעים לפי שעות</span>
+            <Clock size={16} className="text-amber-500" />
+          </h3>
+          <div className="flex-1 w-full min-h-0 text-xs mt-1">
+            {hourlyMetrics.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-xs text-center border border-dashed border-gray-100 rounded-lg">אין נתונים להצגה</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourlyMetrics} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                  <XAxis
+                    dataKey="name"
+                    fontSize={9}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={0}
+                  />
+                  <YAxis
+                    fontSize={9}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={val => `${val} דק׳`}
+                  />
+                  <Bar
+                    dataKey="avgPrepTime"
+                    fill="#f59e0b"
+                    radius={[3, 3, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -860,313 +1534,57 @@ const SalesDashboard = () => {
         </div>
       </div>
 
-      {/* Preparation Time Chart - Shows average prep time per hour/day */}
-      {displayedOrders.length > 0 && (() => {
-        // Calculate average prep time per bucket (hour for daily, day for weekly/monthly)
-        const prepTimeByBucket = new Map();
-        displayedOrders.forEach(order => {
-          const start = new Date(order.created_at).getTime();
-          const end = order.ready_at
-            ? new Date(order.ready_at).getTime()
-            : order.updated_at
-              ? new Date(order.updated_at).getTime()
-              : null;
-          if (!end || isNaN(start)) return;
-          const mins = Math.max(0, Math.floor((end - start) / 60000));
-          if (mins > 120) return; // Skip outliers
-
-          // Bucket key depends on view mode
-          let bucketKey;
-          if (viewMode === 'daily') {
-            bucketKey = new Date(order.created_at).getHours();
-          } else {
-            const d = new Date(order.created_at);
-            bucketKey = `${d.getDate()}/${d.getMonth() + 1}`;
-          }
-
-          if (!prepTimeByBucket.has(bucketKey)) {
-            prepTimeByBucket.set(bucketKey, { total: 0, count: 0 });
-          }
-          prepTimeByBucket.get(bucketKey).total += mins;
-          prepTimeByBucket.get(bucketKey).count += 1;
-        });
-
-        // Build chart data matching the same buckets as graphData
-        const prepChartData = graphData.map(g => {
-          const bucketData = prepTimeByBucket.get(g.key);
-          const avgMins = bucketData && bucketData.count > 0
-            ? Math.round(bucketData.total / bucketData.count)
-            : 0;
-          return {
-            name: g.name,
-            key: g.key,
-            avgMins,
-            orderCount: bucketData?.count || 0
-          };
-        });
-
-        // Calculate overall average
-        const allTimes = displayedOrders.map(order => {
-          const start = new Date(order.created_at).getTime();
-          const end = order.ready_at
-            ? new Date(order.ready_at).getTime()
-            : order.updated_at
-              ? new Date(order.updated_at).getTime()
-              : null;
-          if (!end || isNaN(start)) return null;
-          return Math.max(0, Math.floor((end - start) / 60000));
-        }).filter(t => t !== null && t < 120);
-
-        const overallAvg = allTimes.length > 0
-          ? (allTimes.reduce((a, b) => a + b, 0) / allTimes.length).toFixed(1)
-          : '-';
-
-        const periodLabel = viewMode === 'daily' ? 'לפי שעות' : 'לפי ימים';
-        const avgLabel = viewMode === 'daily' ? 'ממוצע יומי' : viewMode === 'weekly' ? 'ממוצע שבועי' : 'ממוצע חודשי';
-
-        return (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 mb-1 text-sm px-2 flex justify-between items-center h-6">
-              <span className="flex items-center gap-2">
-                <Clock size={16} className="text-purple-500" />
-                זמן הכנה ממוצע {periodLabel} (דקות)
-              </span>
-              <span className="text-xs text-gray-500 font-normal">
-                {avgLabel}: {overallAvg} דק׳
-              </span>
-            </h3>
-            <div className="h-28 w-full text-xs mt-1">
-              {prepChartData.every(d => d.avgMins === 0) ? (
-                <div className="h-full flex items-center justify-center text-gray-400 text-xs text-center border-2 border-dashed border-gray-100 rounded-lg">אין נתוני זמן הכנה</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={prepChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                    <XAxis
-                      dataKey="name"
-                      fontSize={9}
-                      tickLine={false}
-                      axisLine={false}
-                      interval={0}
-                    />
-                    <YAxis
-                      fontSize={9}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={val => `${val}`}
-                      domain={[0, 'auto']}
-                    />
-                    <Bar
-                      dataKey="avgMins"
-                      radius={[3, 3, 0, 0]}
-                    >
-                      {prepChartData.map((entry, index) => {
-                        // Color based on avg time (user-defined thresholds)
-                        let color = '#4ade80'; // green - up to 10 min
-                        if (entry.avgMins >= 25) color = '#f87171'; // red - 25+ min
-                        else if (entry.avgMins >= 20) color = '#fb923c'; // orange - 20-24 min
-                        else if (entry.avgMins >= 15) color = '#facc15'; // yellow - 15-19 min
-                        else if (entry.avgMins > 10) color = '#a3e635'; // light green - 10-14 min
-                        return <Cell key={`prep-cell-${index}`} fill={color} />;
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-            {/* Legend */}
-            <div className="flex justify-center gap-3 mt-1 text-[10px] text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-400"></span> עד 10</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-yellow-400"></span> 15</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-orange-400"></span> 20</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-400"></span> 25+</span>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Detailed Category Breakdown */}
-      <div className="space-y-3">
-        <h3 className="font-black text-lg text-gray-800 px-1 flex justify-between items-end">
-          <span>פירוט לפי קטגוריות</span>
-          {selectedGraphBar && (
-            <span className="text-sm font-normal text-blue-600">
-              סינון: {selectedGraphBar.type === 'hour' ? `${selectedGraphBar.key}:00` : selectedGraphBar.key}
-            </span>
-          )}
-        </h3>
-        {Object.entries(currentStats.deepStats).length === 0 ? (
-          <div className="text-center py-10 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            {selectedGraphBar ? 'אין מכירות בשעה/יום שנבחרו' : 'אין נתוני מכירות לתקופה זו'}
-          </div>
-        ) : (
-          <motion.div
-            className="space-y-3"
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            key={`categories-${viewMode}-${dateMs}`}
-          >
-            {Object.entries(currentStats.deepStats)
-              .sort(([, a], [, b]) => b.totalAmount - a.totalAmount)
-              .map(([category, stats]) => {
-                const isExpanded = expandedCategories.has(category);
-                return (
-                  <motion.div
-                    key={category}
-                    variants={itemVariants}
-                    layout
-                    className="bg-white border text-sm border-gray-200 rounded-xl overflow-hidden shadow-sm transition-all hover:border-gray-300"
-                  >
-                    <div
-                      onClick={() => toggleCategory(category)}
-                      className={`p-4 flex items-center justify-between cursor-pointer ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="p-2 bg-blue-100 text-blue-600 rounded-lg"><Package size={18} /></span>
-                        <div>
-                          <h4 className="font-bold text-gray-900 text-base">{category}</h4>
-                          <span className="text-xs text-gray-500">{stats.totalCount} פריטים נמכרו</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-blue-600 text-lg">{formatCurrency(stats.totalAmount)}</span>
-                        {isExpanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
-                      </div>
-                    </div>
-
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="border-t border-gray-100 bg-white overflow-hidden"
-                        >
-                          <table className="w-full text-right">
-                            <thead className="bg-gray-50/50 text-gray-400 text-xs uppercase font-medium">
-                              <tr>
-                                <th className="py-3 px-4 font-medium text-right">שם הפריט</th>
-                                <th className="py-3 px-4 font-medium text-center">כמות</th>
-                                <th className="py-3 px-4 font-medium text-left">סה״כ</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50 text-sm">
-                              {Object.entries(stats.items)
-                                .sort(([, a], [, b]) => b.count - a.count)
-                                .map(([itemName, itemStats]) => (
-                                  <tr key={itemName} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="py-3 px-4 font-bold text-gray-700 text-right">{itemName}</td>
-                                    <td className="py-3 px-4 text-center font-mono bg-gray-50 mx-2 rounded">{itemStats.count}</td>
-                                    <td className="py-3 px-4 text-left font-medium text-gray-900">{formatCurrency(itemStats.total)}</td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                );
-              })}
-          </motion.div>
-        )}
-      </div>
-
-      {/* NEW: Orders List */}
-      <div className="space-y-3 pt-6 border-t border-gray-200">
-        <h3 className="font-black text-xl text-gray-800 px-1">רשימת הזמנות</h3>
-        <div className="space-y-2">
-          {displayedOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 italic">לא נמצאו הזמנות</div>
-          ) : (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              key={`orders-${viewMode}-${dateMs}`}
-              className="space-y-2"
-            >
-              {displayedOrders.map(order => {
-                const isExpanded = expandedOrderIds.has(order.id);
-                const timeStr = new Date(order.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-                const orderNum = order.order_number || (order.id?.toString() || '').slice(-4) || 'N/A';
-
-                return (
-                  <motion.div
-                    key={order.id}
-                    variants={itemVariants}
-                    layout
-                    className="bg-white border text-sm border-gray-200 rounded-xl overflow-hidden shadow-sm transition-all hover:border-gray-300"
-                  >
-                    <div
-                      onClick={() => toggleOrder(order.id)}
-                      className={`p-3 flex items-center justify-between cursor-pointer ${isExpanded ? 'bg-blue-50' : 'bg-white'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col items-center justify-center w-12 h-10 bg-gray-100 rounded-lg text-gray-600">
-                          <Clock size={12} className="mb-0.5 opacity-70" />
-                          <span className="font-bold font-mono text-xs">{timeStr}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-black text-gray-900 text-base">{order.customer_name || order.customerName || 'לקוח מזדמן'}</span>
-                          <span className="text-xs text-gray-500 flex items-center gap-1">
-                            <Hash size={10} /> הזמנה {orderNum}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-gray-900">{formatCurrency(order.total_amount || 0)}</span>
-                        {isExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-                      </div>
-                    </div>
-
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0 }}
-                          animate={{ height: "auto" }}
-                          exit={{ height: 0 }}
-                          className="overflow-hidden bg-gray-50 border-t border-gray-100"
-                        >
-                          <div className="p-4 space-y-4">
-                            {/* Order Items */}
-                            <div className="space-y-2">
-                              {order.order_items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between text-xs text-gray-700 border-b border-gray-200 pb-2 last:border-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="bg-white px-1.5 py-0.5 rounded border border-gray-200 font-mono font-bold">{item.quantity}x</span>
-                                    <span>{item.menu_items?.name || 'פריט לא ידוע'}</span>
-                                  </div>
-                                  <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Action Buttons */}
-                            {order.customer_phone && (
-                              <div className="flex justify-start pt-2">
-                                <a
-                                  href={`tel:${order.customer_phone}`}
-                                  className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors active:scale-95"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Phone size={16} />
-                                  צור קשר ({order.customer_phone})
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
-          )}
+      {/* Status Filter Pills */}
+      <div className="flex justify-center gap-2 pt-2 pb-1">
+        <div className="flex bg-gray-100 p-1 rounded-xl w-full max-w-lg border border-slate-200/50 shadow-inner">
+          {[
+            { id: 'in_progress', label: 'בהכנה', count: activeOrders.length, color: 'text-amber-600', activeBg: 'bg-amber-500 text-white shadow-sm font-black' },
+            { id: 'ready', label: 'מוכנות', count: readyOrders.length, color: 'text-green-600', activeBg: 'bg-green-600 text-white shadow-sm font-black' },
+            { id: 'completed', label: 'הושלמו', count: completedOrders.length, color: 'text-slate-650', activeBg: 'bg-slate-600 text-white shadow-sm font-black' }
+          ].map(pill => {
+            const isActive = selectedStatusFilter === pill.id;
+            return (
+              <button
+                key={pill.id}
+                onClick={() => setSelectedStatusFilter(pill.id)}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  isActive ? pill.activeBg : `${pill.color} hover:bg-white/50`
+                }`}
+              >
+                <span>{pill.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200/60 text-slate-700'}`}>
+                  {pill.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Filtered Orders List */}
+      <div className="space-y-3 pt-3">
+        {(() => {
+          const filteredOrders = 
+            selectedStatusFilter === 'in_progress' ? activeOrders :
+            selectedStatusFilter === 'ready' ? readyOrders :
+            completedOrders;
+
+          const labelStr = 
+            selectedStatusFilter === 'in_progress' ? 'בהכנה' :
+            selectedStatusFilter === 'ready' ? 'מוכנות' :
+            'שהושלמו';
+
+          if (filteredOrders.length === 0) {
+            return (
+              <div className="text-center py-12 text-slate-400 border border-dashed border-slate-200 rounded-2xl text-sm bg-white/50">
+                אין הזמנות {labelStr} כעת
+              </div>
+            );
+          }
+
+          return filteredOrders.map(order => renderOrderCard(order));
+        })()}
+      </div>
     </div>
   );
 };

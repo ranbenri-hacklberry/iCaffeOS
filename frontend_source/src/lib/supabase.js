@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getActiveEndpoint } from '../services/networkResolver';
 
 // Configuration: Detect environment
 const isElectron = typeof window !== 'undefined' && window.navigator.userAgent.toLowerCase().includes('electron');
@@ -16,6 +17,12 @@ const isStrictlyLocal = isElectron || isLocalIp || import.meta.env?.VITE_FORCE_L
 // URLs
 const getLocalUrl = () => {
     if (typeof window !== 'undefined') {
+        const isCapacitor = window.location.hostname === 'localhost' && /android|iphone|ipad/i.test(navigator.userAgent);
+        if (isCapacitor) {
+            const activeEndpoint = getActiveEndpoint();
+            const host = activeEndpoint.replace(/https?:\/\//, '').split(':')[0];
+            return `http://${host}:54321`;
+        }
         return `${window.location.protocol}//${window.location.hostname}:54321`;
     }
     if (import.meta.env?.VITE_LOCAL_SUPABASE_URL) {
@@ -24,32 +31,43 @@ const getLocalUrl = () => {
     return 'http://127.0.0.1:54321';
 };
 
-const localUrl = getLocalUrl();
 const localKey = import.meta.env?.VITE_LOCAL_SUPABASE_ANON_KEY || 'no-key';
 
-// Initialize the primary client
-const client = createClient(localUrl, localKey, {
-    auth: {
-        persistSession: true,
-        storageKey: 'supabase.auth.token',
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
+let cachedClient = null;
+
+const getClient = () => {
+    if (!cachedClient) {
+        const url = getLocalUrl();
+        cachedClient = createClient(url, localKey, {
+            auth: {
+                persistSession: true,
+                storageKey: 'supabase.auth.token',
+                storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
+    }
+    return cachedClient;
+};
+
+// 🛡️ [STRICT LOCAL LOCK]
+// We use a Proxy to ensure 'supabase' and 'cloudSupabase' are always available and resolve dynamically
+export const cloudSupabase = new Proxy({}, {
+    get: (target, prop) => {
+        return getClient()[prop];
     }
 });
 
-// 🛡️ [STRICT LOCAL LOCK]
-// We use a Proxy to ensure 'supabase' is always available and 'cloudSupabase' also points local
-export const cloudSupabase = client;
-export const supabase = new Proxy(client, {
+export const supabase = new Proxy({}, {
     get: (target, prop) => {
-        return target[prop];
+        return getClient()[prop];
     }
 });
 
 export const isLocalInstance = () => isStrictlyLocal;
 export const resolveSupabaseUrl = (url) => url;
-export const initSupabase = async () => ({ isLocal: true, url: localUrl });
+export const initSupabase = async () => ({ isLocal: true, url: getLocalUrl() });
 
 /**
  * Legacy support for components expecting getSupabase
