@@ -23,7 +23,7 @@ const ManagerDashboard = () => {
   const location = useLocation();
   
   const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const initialTab = useMemo(() => queryParams.get('tab') || location.state?.initialTab || 'sales', [queryParams, location.state]);
+  const initialTab = useMemo(() => queryParams.get('tab') || location.state?.initialTab || 'orders', [queryParams, location.state]);
   
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchTerm, setSearchTerm] = useState('');
@@ -155,7 +155,7 @@ const ManagerDashboard = () => {
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="h-full flex flex-col"
           >
-            {activeTab === 'sales' && <SalesDashboard />}
+            {activeTab === 'orders' && <SalesDashboard />}
             {activeTab === 'reports' && (
               <WeeklyReport 
                 initialWeekOffset={
@@ -165,10 +165,7 @@ const ManagerDashboard = () => {
                 } 
               />
             )}
-            {activeTab === 'inventory' && <InventoryScreen />}
-            {activeTab === 'tasks' && <TasksManager />}
-            {activeTab === 'employees' && <EmployeeManager />}
-            {activeTab === 'diagnostics' && <SystemDiagnostics />}
+            {activeTab === 'settings' && <EmployeeManager />}
           </motion.div>
         </AnimatePresence>
       </main>

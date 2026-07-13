@@ -428,7 +428,7 @@ const ModeSelectionScreen = () => {
                     {/* 5. Advanced Data - Manager/Owner/Staff Only */}
                     {(isManager || isStaff) && (
                         <button
-                            onClick={() => handleModeSelect('dexie-admin')}
+                            onClick={() => handleModeSelect('manager')}
                             className="hidden md:block group relative bg-white rounded-2xl p-5 hover:bg-cyan-50 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-right overflow-hidden border-2 border-transparent hover:border-cyan-100"
                         >
                             <div className="absolute top-0 left-0 w-20 h-20 bg-cyan-100 rounded-br-full -translate-x-5 -translate-y-5 group-hover:scale-110 transition-transform" />
@@ -436,9 +436,9 @@ const ModeSelectionScreen = () => {
                                 <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center text-white mb-3 shadow-lg group-hover:rotate-6 transition-transform">
                                     <BarChart3 size={20} strokeWidth={2.5} />
                                 </div>
-                                <h2 className="text-xl font-black text-slate-900 mb-1">מידע מתקדם</h2>
+                                <h2 className="text-xl font-black text-slate-900 mb-1">מידע מתקדם (קוקפיט)</h2>
                                 <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                                    לקוחות, תפריט וסנכרון
+                                    דוחות מכירות, רשימת הזמנות והגדרות
                                 </p>
                             </div>
                         </button>

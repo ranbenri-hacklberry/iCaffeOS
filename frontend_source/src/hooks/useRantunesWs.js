@@ -64,8 +64,23 @@ export function useRantunesWs() {
         const url = getWsUrl();
         console.log(`🔌 [useRantunesWs] Connecting to ${url}...`);
 
-        const ws = new WebSocket(url);
-        wsRef.current = ws;
+        let ws;
+        try {
+            ws = new WebSocket(url);
+            wsRef.current = ws;
+        } catch (err) {
+            console.error('❌ [useRantunesWs] Failed to create WebSocket:', err);
+            setConnectionError(err.message || 'WebSocket creation failed');
+            setIsConnected(false);
+            
+            // Reconnect backup loop
+            const delay = reconnectDelayRef.current;
+            reconnectTimerRef.current = setTimeout(() => {
+                if (mountedRef.current) connect();
+            }, delay);
+            reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+            return;
+        }
 
         ws.onopen = () => {
             if (!mountedRef.current) return;

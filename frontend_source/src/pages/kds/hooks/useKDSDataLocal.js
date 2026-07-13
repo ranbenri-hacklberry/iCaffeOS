@@ -472,7 +472,7 @@ export const useKDSDataLocal = () => {
                 const paidAmount = order.paid_amount || 0;
                 const unpaidAmount = totalAmount - paidAmount;
                 const isOrderPaid = order.is_paid === true;
-                const isEffectivelyUnpaid = !isOrderPaid || unpaidAmount > 0.01;
+                const isEffectivelyUnpaid = !isOrderPaid && unpaidAmount > 0.01;
 
                 // 🎯 NEW KDS FILTERING LOGIC (USER REQUESTED): 
                 // An order is "Active" if it has ANY item that is NOT 'completed', 'shipped', or 'cancelled'.
@@ -523,7 +523,8 @@ export const useKDSDataLocal = () => {
                         const effectiveLogic = item.kds_routing_logic || kdsLogic;
 
                         let isPrepRequired = true;
-                        if (isPrep) isPrepRequired = true;
+                        if (hasOverride) isPrepRequired = true;
+                        else if (isPrep) isPrepRequired = true;
                         // 🚀 HERO: If explicitly set to MADE_TO_ORDER by clerk/modal, it ALWAYS needs prep
                         else if (effectiveLogic === 'MADE_TO_ORDER') isPrepRequired = true;
                         else if (effectiveLogic === 'GRAB_AND_GO') isPrepRequired = false;
@@ -1369,6 +1370,78 @@ export const useKDSDataLocal = () => {
         };
         loadStations();
     }, [businessId]);
+
+    // Auto-complete orders that have only completed/terminal items and are fully paid
+    useEffect(() => {
+        if (!activeOrders || !orderItems || !menuItems) return;
+
+        // Group items by order
+        const itemsByOrder = new Map();
+        orderItems.forEach(item => {
+            if (!item.order_id) return;
+            const oid = String(item.order_id);
+            if (!itemsByOrder.has(oid)) itemsByOrder.set(oid, []);
+            itemsByOrder.get(oid).push(item);
+        });
+
+        const ordersToAutoComplete = [];
+
+        activeOrders.forEach(order => {
+            if (order.order_status !== 'in_progress') return;
+
+            const items = itemsByOrder.get(String(order.id)) || order.order_items || order.items || order.items_detail || [];
+            if (items.length === 0) return;
+
+            const hasNonTerminalItems = items.some(i => {
+                const menuItem = menuItems.get(i.menu_item_id);
+                const isPrep = isKitchenPrep(i);
+                const kdsLogic = menuItem?.kds_routing_logic || 'MADE_TO_ORDER';
+
+                let hasOverride = false;
+                const mods = i.mods;
+                if (typeof mods === 'string' && (mods.includes('__KDS_OVERRIDE__') || mods.includes('__KDS_OVER_RIDE__'))) hasOverride = true;
+                else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVER_REIDE__'))) hasOverride = true;
+                else if (Array.isArray(mods) && mods.some(m => String(m).includes('__KDS_OVERRIDE__'))) hasOverride = true;
+
+                const effectiveLogic = i.kds_routing_logic || kdsLogic;
+
+                let isPrepRequired = true;
+                if (isPrep) isPrepRequired = true;
+                else if (effectiveLogic === 'MADE_TO_ORDER') isPrepRequired = true;
+                else if (effectiveLogic === 'GRAB_AND_GO') isPrepRequired = false;
+                else if (effectiveLogic === 'prep_override') isPrepRequired = false;
+                else if (effectiveLogic === 'CONDITIONAL') isPrepRequired = hasOverride;
+
+                return isPrepRequired && !['completed', 'shipped', 'cancelled'].includes(i.item_status || i.status || 'new');
+            });
+
+            // Calculate paid status
+            const allItems = items.filter(i => (i.item_status || i.status) !== 'cancelled');
+            const calculatedTotal = allItems.reduce((sum, i) => {
+                const menuItem = menuItems.get(i.menu_item_id);
+                return sum + (menuItem?.price || 0) * (i.quantity || 1);
+            }, 0);
+
+            const totalAmount = order.total_amount || calculatedTotal;
+            const paidAmount = order.paid_amount || 0;
+            const unpaidAmount = totalAmount - paidAmount;
+            const isOrderPaid = order.is_paid === true;
+            const isEffectivelyUnpaid = !isOrderPaid && unpaidAmount > 0.01;
+
+            if (!hasNonTerminalItems && !isEffectivelyUnpaid) {
+                ordersToAutoComplete.push(order);
+            }
+        });
+
+        if (ordersToAutoComplete.length > 0) {
+            console.log(`🤖 [KDS Auto-Complete] Auto-completing ${ordersToAutoComplete.length} orders:`, ordersToAutoComplete.map(o => o.order_number));
+            ordersToAutoComplete.forEach(o => {
+                updateOrderStatus(o.id, o.order_status, 'completed').catch(err => {
+                    console.error(`❌ [KDS Auto-Complete] Failed to complete order ${o.id}:`, err);
+                });
+            });
+        }
+    }, [activeOrders, orderItems, menuItems, updateOrderStatus]);
 
     const result = useMemo(() => ({
         currentOrders: processedOrders.current || [],

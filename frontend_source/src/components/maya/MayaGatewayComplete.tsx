@@ -267,9 +267,24 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
                     </p>
                   </div>
                 </div>
-                {!hideClose && (
-                  <button onClick={() => { if (!forceOpen) { setIsOpen(false); mayaAuth.reset(); } }} className="p-2 hover:bg-white/10 rounded-lg text-white">×</button>
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const currentIp = localStorage.getItem('kds_server_ip') || '192.168.1.10';
+                      const newIp = prompt('הזן את כתובת ה-IP של שרת ה-iCaffeOS:', currentIp);
+                      if (newIp !== null && newIp.trim() !== '') {
+                        localStorage.setItem('kds_server_ip', newIp.trim());
+                        window.location.reload();
+                      }
+                    }}
+                    className="px-2.5 py-1 text-[10px] font-bold bg-white/10 hover:bg-white/20 text-cyan-300 rounded-lg border border-cyan-400/30 transition-colors"
+                  >
+                    הגדרת שרת ({localStorage.getItem('kds_server_ip') || '192.168.1.10'})
+                  </button>
+                  {!hideClose && (
+                    <button onClick={() => { if (!forceOpen) { setIsOpen(false); mayaAuth.reset(); } }} className="p-2 hover:bg-white/10 rounded-lg text-white">×</button>
+                  )}
+                </div>
               </div>
 
               <div className="p-4 sm:p-8 min-h-[400px] sm:min-h-[500px] flex justify-center overflow-y-auto">

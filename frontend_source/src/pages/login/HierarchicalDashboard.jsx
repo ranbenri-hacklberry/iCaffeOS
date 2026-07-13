@@ -9,11 +9,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboardLiveData } from '../../hooks/useDashboardLiveData';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Coffee, Monitor, ChefHat, Package, BarChart3, Palette,
     Lock, ShieldAlert, Settings, LogOut, AlertTriangle, UserCircle,
-    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database, Brain, Hotel, Building
+    Clock, CheckCircle, MonitorPlay, Smartphone, Layout, Music, Database, QrCode, Hotel, Building
 } from 'lucide-react';
 import HeroCard from '../../components/HeroCard';
 import { PosWireframe, KdsWireframe } from '../../components/DashboardWireframes';
@@ -28,6 +28,8 @@ const HierarchicalDashboard = () => {
     const [pinModal, setPinModal] = useState({ isOpen: false, targetRoute: null, featureName: '' });
     const [sudoAccess, setSudoAccess] = useState(null); // Temporary admin access
     const [isMobile, setIsMobile] = useState(false);
+    const [showQrModal, setShowQrModal] = useState(false);
+    const [qrPayload, setQrPayload] = useState('');
 
     // Detect mobile screen
     useEffect(() => {
@@ -50,6 +52,33 @@ const HierarchicalDashboard = () => {
         return currentUser.visible_apps.includes(appId);
     };
 
+    const showQrCode = async () => {
+        try {
+            // Fetch the fully resolved QR payload dynamically from the backend server!
+            const response = await fetch('/api/system/qr-payload');
+            const data = await response.json();
+            
+            if (data && data.tenant_id && data.local_url && data.remote_url) {
+                setQrPayload(JSON.stringify(data));
+                setShowQrModal(true);
+                return;
+            }
+        } catch (err) {
+            console.error('Failed to fetch dynamic QR payload from server:', err);
+        }
+
+        // Fallback in case of server failure
+        const tenant_id = localStorage.getItem('business_id') || '11111111-1111-1111-1111-111111111111';
+        const savedIp = localStorage.getItem('kds_server_ip') || '192.168.1.10';
+        const configPayload = {
+            tenant_id,
+            local_url: `http://${savedIp}:4028`,
+            remote_url: 'https://icaffeos.tail9a5357.ts.net'
+        };
+        setQrPayload(JSON.stringify(configPayload));
+        setShowQrModal(true);
+    };
+
     const handleNavigation = (route, modeName) => {
         setMode(modeName || route.replace('/', ''));
         navigate(route);
@@ -66,8 +95,10 @@ const HierarchicalDashboard = () => {
 
     const handlePinSuccess = (manager) => {
         setSudoAccess(manager);
-        // Navigate to the requested feature
-        if (pinModal.targetRoute) {
+        
+        if (pinModal.targetRoute === 'show_qr') {
+            showQrCode();
+        } else if (pinModal.targetRoute) {
             handleNavigation(pinModal.targetRoute, pinModal.modeName);
         }
         // Clear sudo access after 5 minutes
@@ -316,10 +347,10 @@ const HierarchicalDashboard = () => {
                         </motion.button>
                     )}
 
-                    {/* Advanced Info - Open to all employees */}
+                    {/* Advanced Info - PIN Protected */}
                     {isAppVisible('manager') && (
                         <motion.button
-                            onClick={() => handleNavigation('/dexie-admin', 'dexie-admin')}
+                            onClick={() => handleAdminFeature('/data-manager-interface', 'הקוקפיט (מידע מתקדם)', 'manager')}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.5, duration: 0.5 }}
@@ -327,6 +358,15 @@ const HierarchicalDashboard = () => {
                             whileTap={{ scale: 0.96 }}
                             className={`relative bg-gradient-to-br from-teal-50 via-white to-cyan-50 rounded-3xl ${isMobile ? 'p-4 min-h-[90px]' : 'p-5 min-h-[140px]'} shadow-md overflow-hidden border border-teal-100/60 group transition-all duration-300 hover:shadow-xl hover:shadow-teal-200/30`}
                         >
+
+                            {/* Lock Icon for Non-Admin */}
+                            {!isAdmin && !sudoAccess && (
+                                <div className="absolute top-3 left-3 z-20">
+                                    <div className="w-6 h-6 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-md shadow-amber-300/40">
+                                        <Lock size={12} className="text-white" />
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Playful bubbles */}
                             <div className="absolute -top-3 -right-3 w-14 h-14 bg-teal-200/40 rounded-full group-hover:scale-125 transition-transform duration-500" />
@@ -424,14 +464,20 @@ const HierarchicalDashboard = () => {
                         </motion.button>
                     )}
 
-                    {/* Cortex AI */}
+                    {/* QR Code Settings - Admin Only with PIN */}
                     <motion.button
-                        onClick={() => navigate('/cortex')}
+                        onClick={() => {
+                            if (isAdmin || sudoAccess) {
+                                showQrCode();
+                            } else {
+                                setPinModal({ isOpen: true, targetRoute: 'show_qr', featureName: 'הגדרות רשת QR' });
+                            }
+                        }}
                         whileTap={{ scale: 0.95 }}
-                        className="w-12 h-12 bg-indigo-500/20 backdrop-blur-sm border border-indigo-400/30 rounded-xl flex items-center justify-center"
-                        title="Cortex AI"
+                        className="w-12 h-12 bg-indigo-500/20 backdrop-blur-sm border border-indigo-400/30 rounded-xl flex items-center justify-center transition-all hover:bg-indigo-500/30 active:scale-95"
+                        title="QR Code הגדרות רשת"
                     >
-                        <Brain size={20} className="text-indigo-400" />
+                        <QrCode size={20} className="text-indigo-400" />
                     </motion.button>
 
                     {/* Hotel Staff Dashboard */}
@@ -485,6 +531,49 @@ const HierarchicalDashboard = () => {
                 onSuccess={handlePinSuccess}
                 featureName={pinModal.featureName}
             />
+
+            {/* QR Code Modal */}
+            <AnimatePresence>
+                {showQrModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                        onClick={() => setShowQrModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="w-full max-w-[400px] bg-slate-900 border border-cyan-500/30 rounded-3xl p-6 text-center shadow-2xl shadow-cyan-500/10"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <h3 className="text-xl font-bold text-white mb-2">QR קוד הגדרות מכשיר</h3>
+                            <p className="text-xs text-slate-400 mb-6">סרוק את ה-QR קוד באמצעות אפליקציית הטאבלט/טלפון כדי להגדיר חיבור רשת אוטומטי לעסק.</p>
+                            
+                            <div className="bg-white p-4 rounded-2xl inline-block mb-6 shadow-lg">
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrPayload)}`}
+                                    alt="QR Code Settings"
+                                    className="w-[200px] h-[200px]"
+                                />
+                            </div>
+                            
+                            <div className="bg-slate-950 p-3 rounded-xl text-left font-mono text-[10px] text-cyan-400 overflow-x-auto mb-6">
+                                <pre>{JSON.stringify(JSON.parse(qrPayload), null, 2)}</pre>
+                            </div>
+                            
+                            <button
+                                onClick={() => setShowQrModal(false)}
+                                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold rounded-xl transition-colors"
+                            >
+                                סגור
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

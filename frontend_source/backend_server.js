@@ -3,7 +3,7 @@ import os from 'os';
 import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -149,6 +149,72 @@ app.get('/api/admin/inventory/duplicate-names-report', async (req, res) => {
     res.json({ success: true, message: 'Direct route works!' });
 });
 
+function getTailscaleInfo() {
+    try {
+        const paths = [
+            '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+            '/usr/local/bin/tailscale',
+            '/usr/bin/tailscale'
+        ];
+        
+        let binPath = null;
+        for (const p of paths) {
+            try {
+                if (fs.existsSync(p)) {
+                    binPath = p;
+                    break;
+                }
+            } catch (err) {}
+        }
+        
+        if (!binPath) binPath = 'tailscale';
+
+        const stdout = execSync(`${binPath} status --json`, { encoding: 'utf8', timeout: 2000 });
+        const data = JSON.parse(stdout);
+        
+        // 1. Try to find node 'icaffeos' (which is the server in production)
+        const peers = data.Peer ? Object.values(data.Peer) : [];
+        const icaffeosNode = peers.find(p => p.HostName === 'icaffeos');
+        
+        if (icaffeosNode) {
+            const dns = icaffeosNode.DNSName ? icaffeosNode.DNSName.replace(/\.$/, '') : null;
+            const ip = icaffeosNode.TailscaleIPs ? icaffeosNode.TailscaleIPs[0] : null;
+            return { dns, ip };
+        }
+        
+        // 2. If this is icaffeos itself
+        if (data.Self && data.Self.HostName === 'icaffeos') {
+            const dns = data.Self.DNSName ? data.Self.DNSName.replace(/\.$/, '') : null;
+            const ip = data.Self.TailscaleIPs ? data.Self.TailscaleIPs[0] : null;
+            return { dns, ip };
+        }
+
+        // 3. Fallback to Self
+        if (data.Self) {
+            const dns = data.Self.DNSName ? data.Self.DNSName.replace(/\.$/, '') : null;
+            const ip = data.Self.TailscaleIPs ? data.Self.TailscaleIPs[0] : null;
+            return { dns, ip };
+        }
+    } catch (e) {
+        console.warn('[Tailscale] status query failed:', e.message);
+    }
+    return { dns: null, ip: null };
+}
+
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const devName in interfaces) {
+        const iface = interfaces[devName];
+        for (let i = 0; i < iface.length; i++) {
+            const alias = iface[i];
+            if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+                return alias.address;
+            }
+        }
+    }
+    return '192.168.1.10';
+}
+
 // 🆕 Aggregated Health Endpoint
 app.get('/api/system/health', async (req, res) => {
     const results = {
@@ -205,8 +271,48 @@ app.get('/api/system/health', async (req, res) => {
     res.json({
         status: Object.values(results).every(v => v === 'online') ? 'healthy' : 'degraded',
         services: results,
+        local_ip: getLocalIp(),
         timestamp: new Date().toISOString()
     });
+});
+
+app.get('/api/system/qr-payload', async (req, res) => {
+    try {
+        let tenant_id = '11111111-1111-1111-1111-111111111111';
+        
+        let idsString = process.env.LOCAL_BUSINESS_IDS || process.env.VITE_BUSINESS_ID || '';
+        let ids = idsString.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        
+        if (ids.length > 0) {
+            tenant_id = ids[0];
+        } else if (supabase) {
+            try {
+                const { data: syncSetting } = await supabase
+                    .from('sync_settings')
+                    .select('value')
+                    .eq('key', 'business_id')
+                    .single();
+                if (syncSetting?.value) {
+                    tenant_id = syncSetting.value;
+                }
+            } catch (e) {}
+        }
+
+        const localIp = getLocalIp();
+        const local_url = `http://${localIp}:4028`;
+
+        const tsInfo = getTailscaleInfo();
+        const remoteHost = tsInfo.dns || tsInfo.ip || '100.67.107.59';
+        const remote_url = `https://${remoteHost}`;
+
+        res.json({
+            tenant_id,
+            local_url,
+            remote_url
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 /**
@@ -2243,6 +2349,47 @@ app.get("/api/sms/balance", async (req, res) => {
     } catch (err) {
         console.error('❌ SMS Balance check failed:', err.message);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// === SMS LOGS API (For lazy loading inside SalesDashboard) ===
+app.get("/api/admin/sms-logs", async (req, res) => {
+    try {
+        const { phone, date } = req.query;
+        if (!supabase) {
+            return res.json({ success: true, logs: [] });
+        }
+        
+        let startOfDay, endOfDay;
+        if (date && date.includes('-')) {
+            const [year, month, day] = date.split('-').map(Number);
+            startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+            endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+        } else {
+            startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            endOfDay = new Date(startOfDay);
+            endOfDay.setHours(23, 59, 59, 999);
+        }
+        
+        let query = supabase
+            .from('sms_queue')
+            .select('id, phone, message, status, error, created_at, sent_at')
+            .gte('created_at', startOfDay.toISOString())
+            .lte('created_at', endOfDay.toISOString());
+            
+        if (phone) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            query = query.or(`phone.eq.${cleanPhone},phone.eq.${phone}`);
+        }
+        
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        
+        res.json({ success: true, logs: data || [] });
+    } catch (e) {
+        console.error('❌ Failed to fetch SMS logs:', e.message);
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 

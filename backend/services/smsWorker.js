@@ -85,20 +85,33 @@ async function processSmsRow(id) {
         await sendSmsToProvider(sms.phone_number || sms.phone, sms.message, sms.business_id);
         
         await supabase.from('sms_queue').update({
-            status: 'sent',
-            processed_at: new Date().toISOString(),
-            error_log: null
+            status: 'success',
+            sent_at: new Date().toISOString(),
+            error: null
         }).eq('id', id);
         
         console.log(`✅ [WORKER] SMS ${id} marked as SENT`);
     } catch (err) {
+        // Detect offline/network error
+        const isNetworkError = 
+            err.code === 'ENOTFOUND' || 
+            err.code === 'ETIMEDOUT' || 
+            err.code === 'ECONNRESET' ||
+            (err.message && (
+                err.message.includes('timeout') || 
+                err.message.includes('Network Error')
+            ));
+            
+        const errorStatus = isNetworkError ? 'offline' : 'failed';
+        const errorMessage = isNetworkError ? 'No internet connection on local node' : (err.message || 'Failed to send');
+
         await supabase.from('sms_queue').update({
-            status: 'failed',
-            processed_at: new Date().toISOString(),
-            error_log: err.message
+            status: errorStatus,
+            sent_at: new Date().toISOString(),
+            error: errorMessage
         }).eq('id', id);
         
-        console.warn(`⚠️ [WORKER] SMS ${id} failed: ${err.message}`);
+        console.warn(`⚠️ [WORKER] SMS ${id} failed: ${errorMessage}`);
     }
 }
 
