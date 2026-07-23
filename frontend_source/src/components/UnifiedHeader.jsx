@@ -108,7 +108,7 @@ const UnifiedHeader = ({
                     )}
 
                     {!useDarkMusicTheme && headerTabs && headerTabs.length > 0 && (
-                        <div className={`flex items-center gap-2 shrink-0 ${isLTR ? 'ml-auto' : 'mr-auto'}`}>
+                        <div className={`flex items-center gap-2 shrink-0 ${isLTR ? 'ml-4' : 'mr-4'}`}>
                             <div className="flex bg-slate-100/80 p-0.5 rounded-xl md:rounded-2xl gap-0.5 border border-slate-200 shadow-inner h-9 md:h-10 overflow-hidden items-center">
                                 {headerTabs.map(tab => {
                                     const activeColor = tab.colorClass || 'text-blue-600';
