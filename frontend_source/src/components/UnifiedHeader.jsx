@@ -80,10 +80,10 @@ const UnifiedHeader = ({
 
     return (
         <header className={`${headerBg} backdrop-blur-2xl border-b px-4 md:px-6 h-[50px] md:h-[65px] z-50 shrink-0 sticky top-0 flex items-center ${className}`}>
-            <div className={`flex items-center justify-between w-full h-full ${isLTR ? 'flex-row' : 'flex-row-reverse'}`}>
+            <div className="flex items-center justify-between w-full h-full flex-row">
 
                 {/* START (Home button side) */}
-                <div className={`flex items-center gap-4 flex-1 min-w-0 ${isLTR ? 'flex-row' : 'flex-row-reverse'}`}>
+                <div className="flex items-center gap-4 flex-1 min-w-0 flex-row">
                     <button
                         onClick={handleHome}
                         className={`shrink-0 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center border rounded-2xl transition-all active:scale-95 shadow-sm ${buttonBg}`}
@@ -102,7 +102,7 @@ const UnifiedHeader = ({
 
 
                     {!useDarkMusicTheme && rightContent && (
-                        <div className={`flex items-center gap-3 shrink-0 ${isLTR ? 'flex-row' : 'flex-row-reverse'}`}>
+                        <div className="flex items-center gap-3 shrink-0 flex-row">
                             {rightContent}
                         </div>
                     )}
@@ -144,13 +144,13 @@ const UnifiedHeader = ({
                 </div>
 
                 {/* END (Tools side) — hidden on mobile */}
-                <div className={`hidden md:flex items-center gap-3 justify-end flex-1 min-w-0 ${isLTR ? 'flex-row' : 'flex-row-reverse'}`}>
+                <div className="hidden md:flex items-center gap-3 justify-end flex-1 min-w-0 flex-row">
                     {showMusicPlayer && (
                         <MiniMusicPlayer forceDark={forceMusicDark} className="shrink-0" />
                     )}
 
                     {!useDarkMusicTheme && children && (
-                        <div className={`flex items-center gap-2 ${isLTR ? 'flex-row' : 'flex-row-reverse'}`}>
+                        <div className="flex items-center gap-2 flex-row">
                             {showMusicPlayer && (
                                 <div className={`hidden lg:block shrink-0 w-px h-6 mx-2 ${forceMusicDark ? 'bg-white/10' : 'bg-slate-200'}`} />
                             )}
