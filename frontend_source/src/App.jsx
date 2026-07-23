@@ -11,12 +11,23 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/auth/Login';
 import MusicPage from './pages/music';
 import YouTubePage from './pages/youtube';
+import StampaPortal from './pages/stampa/StampaPortal';
+import { useTranslation } from 'react-i18next';
 import './i18n';
 
 const isStandaloneRanTunes = import.meta.env.VITE_STANDALONE_RANTUNES === 'true';
+const isCustomerStampaApp = import.meta.env.VITE_CUSTOMER_STAMPA_APP === 'true' || import.meta.env.VITE_CUSTOMER_LOYALTY_APP === 'true';
 
 function AppContent() {
   const { isDarkMode } = useTheme();
+  const { i18n } = useTranslation();
+
+  useEffect(() => {
+    const currentLang = i18n.language || 'he';
+    const isRtl = currentLang === 'he';
+    document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
+    document.documentElement.lang = currentLang;
+  }, [i18n.language]);
 
   useEffect(() => {
     const handleError = (e) => {
@@ -77,7 +88,9 @@ function AppContent() {
 
   return (
     <div className={`${isDarkMode ? 'dark' : ''} font-inter`} dir="ltr">
-      {isStandaloneRanTunes ? (
+      {isCustomerStampaApp ? (
+        <StampaPortal />
+      ) : isStandaloneRanTunes ? (
         <HashRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -121,7 +134,7 @@ function App() {
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center font-inter" dir="rtl">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-6"></div>
-          <h3 className="text-lg font-bold text-white mb-2">מתחבר לשרת iCaffeOS...</h3>
+          <h3 className="text-lg font-bold text-white mb-2">מתחבר לשרת Stampa...</h3>
           <p className="text-xs text-white/50">מזהה רשת ומאמת הגדרות חיבור</p>
         </div>
       </div>

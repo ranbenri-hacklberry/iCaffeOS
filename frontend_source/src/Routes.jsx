@@ -25,6 +25,7 @@ import AbraInspector from "./components/abrakadabra/shared/AbraInspector";
 import LoginScreen from "./pages/login/LoginScreen";
 import ModeSelectionScreen from "./pages/login/ModeSelectionScreen";
 import HierarchicalDashboard from "./pages/login/HierarchicalDashboard";
+import ConnectPage from "./pages/login/ConnectPage";
 import MenuOrderingInterface from './pages/menu-ordering-interface';
 import KdsScreen from './pages/kds';
 import DataManagerInterface from './pages/data-manager-interface';
@@ -218,6 +219,7 @@ const AppRoutes = () => {
     <RouterRoutes location={location}>
       {/* Public Routes */}
       <Route path="/login" element={<PageTransition><LoginGateway /></PageTransition>} />
+      <Route path="/connect" element={<ConnectPage />} />
       <Route path="/complete-profile" element={<CompleteProfile />} />
       <Route path="/face-scanner-test" element={<PageTransition><FaceScannerTest /></PageTransition>} />
       <Route path="/admin/enroll-face" element={<PageTransition><EnrollFace /></PageTransition>} />

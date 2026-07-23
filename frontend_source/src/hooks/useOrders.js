@@ -625,11 +625,14 @@ export function useOrders({ businessId, filters = {} } = {}) {
                     .and(o => ['new', 'in_progress', 'pending'].includes(o.order_status))
                     .toArray();
 
-                const allItems = await db.order_items.toArray();
+                if (activeOrders.length === 0) return;
+
+                const activeOrderIds = activeOrders.map(o => String(o.id));
+                const activeItems = await db.order_items.where('order_id').anyOf(activeOrderIds).toArray();
 
                 let healedCount = 0;
                 for (const order of activeOrders) {
-                    const orderItems = allItems.filter(i => String(i.order_id) === String(order.id));
+                    const orderItems = activeItems.filter(i => String(i.order_id) === String(order.id));
                     if (orderItems.length === 0) continue;
 
                     let correctStatus = order.order_status;
