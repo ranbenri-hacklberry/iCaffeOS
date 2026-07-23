@@ -104,6 +104,7 @@
     "dev:lite": "VITE_APP_MODE=lite vite --host --port 2102",
     "start": "vite",
     "build": "vite build",
+    "build:loyalty": "VITE_CUSTOMER_LOYALTY_APP=true vite build",
     "preview": "vite preview",
     "serve": "vite preview",
     "test": "vitest",

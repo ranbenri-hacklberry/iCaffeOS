@@ -593,13 +593,20 @@ export const syncOrders = async (businessId) => {
             if (itemsToPut.length > 0) await db.order_items.bulkPut(itemsToPut);
 
 
-            // 2. AGGRESSIVE PRUNING: Only for CURRENT business to avoid loading whole DB
-            const allLocalOrders = await db.orders.where('business_id').equals(businessId).toArray();
+            // 2. AGGRESSIVE PRUNING: Only query local orders within our sync window to avoid loading whole DB
+            const fromDateISO = fromDate.toISOString();
+            const allLocalOrders = await db.orders
+                .where('created_at')
+                .aboveOrEqual(fromDateISO)
+                .toArray();
 
             // 🛡️ SAFETY: If the server returned ZERO orders, it's highly suspicious (potential network/RPC error).
             // We SKIP pruning in this case to avoid accidentally wiping all local data.
             if (orders.length > 0) {
                 const ordersToDelete = allLocalOrders.filter(o => {
+                    // 1. Only prune orders belonging to the current business
+                    if (o.business_id !== businessId) return false;
+
                     const orderDate = new Date(o.created_at);
 
                     // 1. Only prune within our 3-day sync window

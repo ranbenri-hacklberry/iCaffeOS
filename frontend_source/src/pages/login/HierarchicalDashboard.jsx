@@ -79,6 +79,17 @@ const HierarchicalDashboard = () => {
         setShowQrModal(true);
     };
 
+    const getConnectUrl = (payloadStr) => {
+        try {
+            if (!payloadStr) return '';
+            const config = JSON.parse(payloadStr);
+            const base = config.remote_url || window.location.origin;
+            return `${base}/connect?tenant_id=${encodeURIComponent(config.tenant_id)}&local_url=${encodeURIComponent(config.local_url)}&remote_url=${encodeURIComponent(config.remote_url)}`;
+        } catch (e) {
+            return payloadStr;
+        }
+    };
+
     const handleNavigation = (route, modeName) => {
         setMode(modeName || route.replace('/', ''));
         navigate(route);
@@ -554,14 +565,14 @@ const HierarchicalDashboard = () => {
                             
                             <div className="bg-white p-4 rounded-2xl inline-block mb-6 shadow-lg">
                                 <img
-                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrPayload)}`}
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getConnectUrl(qrPayload))}`}
                                     alt="QR Code Settings"
                                     className="w-[200px] h-[200px]"
                                 />
                             </div>
                             
-                            <div className="bg-slate-950 p-3 rounded-xl text-left font-mono text-[10px] text-cyan-400 overflow-x-auto mb-6">
-                                <pre>{JSON.stringify(JSON.parse(qrPayload), null, 2)}</pre>
+                            <div className="bg-slate-950 p-3 rounded-xl text-left font-mono text-[10px] text-cyan-400 overflow-x-auto mb-6" dir="ltr">
+                                <pre className="text-cyan-400 text-left">{JSON.stringify(JSON.parse(qrPayload), null, 2)}</pre>
                             </div>
                             
                             <button

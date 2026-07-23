@@ -290,41 +290,43 @@ export const useKDSDataLocal = () => {
 
         console.log('🔍 [KDS] Querying orders for businessId:', businessId, 'since:', businessDayStart.toISOString());
 
-        // Get orders that are active AND from current business day
+        // ⚡ PERFORMANCE FIX: Use the created_at index above businessDayStart to fetch only today's orders.
+        // This avoids loading years of historical orders for the business from IndexedDB.
         const orders = await db.orders
-            .where('business_id')
-            .equals(businessId)
-            .filter(o => {
-                const orderDate = new Date(o.created_at);
-                const isFromToday = orderDate >= businessDayStart;
-
-                // 🛡️ Apply recent local update mask to prevent jumps during sync
-                const localUpdate = recentLocalUpdates.current.get(o.id);
-                if (localUpdate && Date.now() - localUpdate.timestamp < 30000) {
-                    if (o.order_status !== localUpdate.status) {
-                        console.log(`🛡️ [KDS-MASK] Protective mask applied to ${o.order_number}: ${o.order_status} -> ${localUpdate.status}`);
-                        o.order_status = localUpdate.status;
-                    }
-                }
-
-                const isTerminal = ['archived', 'cancelled'].includes(o.order_status);
-                if (isTerminal) return false;
-
-                const isActive = ['in_progress', 'ready', 'new', 'pending', 'preparing', 'fired'].includes(o.order_status);
-                const isDone = ['completed', 'shipped'].includes(o.order_status);
-                const isUnpaidDone = isDone && (!o.is_paid || (o.total_amount - (o.paid_amount || 0) > 0.01));
-                const isPending = o.pending_sync === true;
-
-                // 🎯 KDS INCLUSIVITY FIX: Include 'completed' and 'shipped' orders from today
-                // so the memoized item-level filtering can decide if they still have active items.
-                return (isActive) || (isFromToday && (isDone || isUnpaidDone || isPending));
-            })
+            .where('created_at')
+            .aboveOrEqual(businessDayStart.toISOString())
             .toArray();
 
-        console.log(`📊 [KDS] Found ${orders.length} active orders from business day`);
+        // Filter in-memory for business_id and active/recent completed statuses
+        const filteredOrders = orders.filter(o => {
+            if (o.business_id !== businessId) return false;
+
+            // 🛡️ Apply recent local update mask to prevent jumps during sync
+            const localUpdate = recentLocalUpdates.current.get(o.id);
+            if (localUpdate && Date.now() - localUpdate.timestamp < 30000) {
+                if (o.order_status !== localUpdate.status) {
+                    console.log(`🛡️ [KDS-MASK] Protective mask applied to ${o.order_number}: ${o.order_status} -> ${localUpdate.status}`);
+                    o.order_status = localUpdate.status;
+                }
+            }
+
+            const isTerminal = ['archived', 'cancelled'].includes(o.order_status);
+            if (isTerminal) return false;
+
+            const isActive = ['in_progress', 'ready', 'new', 'pending', 'preparing', 'fired'].includes(o.order_status);
+            const isDone = ['completed', 'shipped'].includes(o.order_status);
+            const isUnpaidDone = isDone && (!o.is_paid || (o.total_amount - (o.paid_amount || 0) > 0.01));
+            const isPending = o.pending_sync === true;
+
+            // 🎯 KDS INCLUSIVITY FIX: Include 'completed' and 'shipped' orders from today
+            // so the memoized item-level filtering can decide if they still have active items.
+            return isActive || isDone || isUnpaidDone || isPending;
+        });
+
+        console.log(`📊 [KDS] Found ${filteredOrders.length} active orders from business day`);
 
         // 🛠️ SORT: Oldest first (will be on the RIGHT in RTL)
-        return orders.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        return filteredOrders.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     }, [businessId]);
 
     // Get all order items for active orders
@@ -367,23 +369,53 @@ export const useKDSDataLocal = () => {
         return map;
     }, []);
 
-    // Get customers for active orders to resolve names
-    // 🔍 ENHANCEMENT: Also map by phone for unlinked guest orders
     const { activeCustomers, activeCustomersByPhone } = useLiveQuery(async () => {
         const idMap = new Map();
         const phoneMap = new Map();
         
         try {
-            // Fetch all customers for current business for better resolution
-            const customers = await db.customers.toArray();
-            customers.forEach(c => {
-                if (c.id) idMap.set(String(c.id), c);
-                const phone = c.phone_number || c.phone;
+            if (!activeOrders || activeOrders.length === 0) {
+                return { activeCustomers: idMap, activeCustomersByPhone: phoneMap };
+            }
+
+            // Extract active customer IDs and clean phone numbers to restrict IndexedDB lookup
+            const customerIds = new Set();
+            const customerPhones = new Set();
+
+            activeOrders.forEach(o => {
+                if (o.customer_id) customerIds.add(String(o.customer_id));
+                const phone = o.customer_phone || o.phone_number || o.phone;
                 if (phone) {
                     const cleanPhone = String(phone).replace(/\D/g, '');
-                    if (cleanPhone) phoneMap.set(cleanPhone, c);
+                    if (cleanPhone) customerPhones.add(cleanPhone);
                 }
             });
+
+            // ⚡ PERFORMANCE FIX: Query ONLY the specific customers associated with the current active orders
+            // Prevents loading all customers into RAM and building large memory maps on every state update.
+            if (customerIds.size > 0) {
+                const customersById = await db.customers.where('id').anyOf(Array.from(customerIds)).toArray();
+                customersById.forEach(c => {
+                    if (c.id) idMap.set(String(c.id), c);
+                    const phone = c.phone_number || c.phone;
+                    if (phone) {
+                        const cleanPhone = String(phone).replace(/\D/g, '');
+                        if (cleanPhone) phoneMap.set(cleanPhone, c);
+                    }
+                });
+            }
+
+            if (customerPhones.size > 0) {
+                const customersByPhone = await db.customers.where('phone_number').anyOf(Array.from(customerPhones)).toArray();
+                customersByPhone.forEach(c => {
+                    if (c.id) idMap.set(String(c.id), c);
+                    const phone = c.phone_number || c.phone;
+                    if (phone) {
+                        const cleanPhone = String(phone).replace(/\D/g, '');
+                        if (cleanPhone) phoneMap.set(cleanPhone, c);
+                    }
+                });
+            }
         } catch (e) { console.error('Failed to load customers for KDS mapping:', e); }
 
         return { activeCustomers: idMap, activeCustomersByPhone: phoneMap };
