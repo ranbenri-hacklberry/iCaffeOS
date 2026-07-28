@@ -1,11 +1,23 @@
 import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { randomUUID } from 'crypto';
+
+for (const envPath of ['./.env.local', '../.env.local', '../../.env.local']) {
+    const resolved = path.resolve(envPath);
+    if (fs.existsSync(resolved)) {
+        dotenv.config({ path: resolved, override: true });
+        console.log(`🔑 Loaded env variables from ${resolved}`);
+    }
+}
+
+import jwt from 'jsonwebtoken';
 import os from 'os';
 import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { exec, execSync } from 'child_process';
-import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { SerialPort } from 'serialport';
@@ -19,6 +31,128 @@ import { getYouTubeApiKey as getYTKeyFromSecrets, getSecrets, getSmsApiKey } fro
 import ocrRoutes from './backend/api/ocrRoutes.js';
 import RantunesWsServer from './backend/services/rantunesWsServer.js';
 import { DriveWatcher } from './backend/services/driveWatcher.js';
+import { sendRegionalPromotion } from './backend/services/pushNotificationService.js';
+import https from 'https';
+import { v2 } from '@google-cloud/translate';
+const { Translate } = v2;
+
+// ==========================================
+// Unified SMS Gateway & Teltonika RUT950 API
+// ==========================================
+async function sendSmsSecure(to, text, specificSmsKey = null, specificSenderId = null, skipBridge = false) {
+    const cleanPhone = to.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10 || !cleanPhone.startsWith('05')) {
+        console.warn(`🚫 [SMS] Invalid phone number skipped: ${to}`);
+        return { success: false, error: 'Invalid phone number' };
+    }
+
+    const allowHebrew = process.env.ALLOW_HEBREW_VIA_MODEM === 'true';
+    const hasHebrew = /[\u0590-\u05FF]/.test(text);
+    
+    let tryModem = true;
+    if (hasHebrew && !allowHebrew) {
+        console.log(`⚠️ [SMS Gateway] Message contains Hebrew and ALLOW_HEBREW_VIA_MODEM is false. Bypassing modem.`);
+        tryModem = false;
+    }
+
+    // 1. Try Teltonika RUT950 Modem First (available at 192.168.1.1:4433 in production)
+    try {
+        if (!tryModem) {
+            throw new Error('Hebrew message bypass');
+        }
+        console.log(`📡 [SMS Gateway] Trying Teltonika RUT950 local router for ${cleanPhone}...`);
+        const modemUrl = `https://192.168.1.1:4433/cgi-bin/sms_send?username=icaffeos&password=Nati1111&number=${cleanPhone}&text=${encodeURIComponent(text)}`;
+        
+        const result = await new Promise((resolve, reject) => {
+            const req = https.get(modemUrl, { rejectUnauthorized: false, timeout: 5000 }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(data.trim());
+                    } else {
+                        reject(new Error(`Modem responded with HTTP ${res.statusCode}: ${data}`));
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Teltonika connection timeout'));
+            });
+        });
+        
+        console.log(`✅ [SMS Gateway] Sent via Teltonika Modem: ${result}`);
+        return { success: true, provider: 'teltonika', result };
+    } catch (modemErr) {
+        console.log(`⚠️ [SMS Gateway] Teltonika Modem failed: ${modemErr.message}.`);
+
+        // ── Try Network Bridge to production server if configured ──
+        const bridgeUrl = process.env.MODEM_BRIDGE_URL;
+        if (!skipBridge && bridgeUrl) {
+            console.log(`🔌 [SMS Gateway] Routing SMS via network bridge: ${bridgeUrl}`);
+            try {
+                const bridgeKey = process.env.MODEM_BRIDGE_KEY || 'icaffeos_modem_secure_bridge_key_2026_xyz';
+                const bridgeRes = await fetch(`${bridgeUrl.replace(/\/$/, '')}/api/hardware/send-modem-sms`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-api-key': bridgeKey 
+                    },
+                    body: JSON.stringify({
+                        phone: cleanPhone,
+                        message: text,
+                        apiKey: bridgeKey
+                    })
+                });
+
+                if (bridgeRes.ok) {
+                    const bridgeData = await bridgeRes.json();
+                    console.log('✅ [SMS Gateway] Sent via production network bridge:', bridgeData);
+                    return { success: true, provider: 'modem-bridge', result: bridgeData.result || 'ok' };
+                } else {
+                    const errText = await bridgeRes.text();
+                    console.warn(`⚠️ [SMS Gateway] Bridge responded with error: ${errText}`);
+                }
+            } catch (bridgeErr) {
+                console.warn(`⚠️ [SMS Gateway] Bridge routing failed: ${bridgeErr.message}`);
+            }
+        }
+    }
+
+    // 2. Fallback to GlobalSMS REST API
+    const smsKey = specificSmsKey || '5v$YW#4k2Dn@w96306$H#S7cMp@8t$6R';
+    const smsSenderId = specificSenderId || '0548317887';
+    
+    try {
+        const GLOBAL_SMS_URL = 'https://sapi.itnewsletter.co.il/api/restApiSms/sendSmsToRecipients';
+        console.log(`📨 [SMS Gateway] Fallback: Sending to ${cleanPhone} via GlobalSMS...`);
+        const response = await fetch(GLOBAL_SMS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ApiKey: smsKey,
+                txtOriginator: smsSenderId,
+                destinations: cleanPhone,
+                txtSMSmessage: text,
+                dteToDeliver: '',
+                txtAddInf: ''
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            console.log(`✅ [SMS Gateway] Sent via GlobalSMS`);
+            return { success: true, provider: 'globalsms', result: result.result || 'ok' };
+        } else {
+            console.error('❌ [SMS Gateway] GlobalSMS Provider Error:', result);
+            throw new Error(result.errDesc || 'GlobalSMS error');
+        }
+    } catch (smsErr) {
+        console.error('❌ [SMS Gateway] Both Teltonika and GlobalSMS failed:', smsErr.message);
+        return { success: false, error: smsErr.message };
+    }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +193,8 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
+app.use('/cafe-images', express.static(path.join(process.cwd(), 'public/cafe-images')));
+app.use('/images', express.static(path.join(process.cwd(), 'public/images')));
 
 // Request logger
 app.use((req, res, next) => {
@@ -136,6 +272,12 @@ app.get('/health', (req, res) => {
         status: 'ok',
         hostname: hostname || 'N150'
     });
+});
+
+// Serve APK with correct MIME type
+app.get('/pos_new.apk', (req, res) => {
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.sendFile('/Users/icaffeos/icaffeos/frontend_source/dist/pos_new.apk');
 });
 
 // 🧪 DEBUG: Direct Inventory Routes
@@ -1041,40 +1183,557 @@ app.post('/api/sms/send', async (req, res) => {
             smsSenderId = biz?.sms_sender_id || smsSenderId;
         }
 
-        if (!smsKey) {
-            return res.status(400).json({ error: 'Missing Global SMS API Key for business' });
-        }
-
-        // Send via Global SMS API
-        const GLOBAL_SMS_URL = 'https://sapi.itnewsletter.co.il/api/restApiSms/sendSmsToRecipients';
-
-        console.log(`📨 [GlobalSMS] Sending to ${to}...`);
-
-        const response = await fetch(GLOBAL_SMS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ApiKey: smsKey,
-                txtOriginator: smsSenderId,
-                destinations: to.replace(/\D/g, ''),
-                txtSMSmessage: text,
-                dteToDeliver: '',
-                txtAddInf: ''
-            })
-        });
-
-        const result = await response.json();
+        const result = await sendSmsSecure(to, text, smsKey, smsSenderId);
 
         if (result.success) {
-            res.json({ success: true, messageId: result.result || 'ok' });
+            res.json({ success: true, messageId: result.result || 'ok', provider: result.provider });
         } else {
-            console.error('❌ Global SMS Provider Error:', result);
-            res.status(500).json({ error: result.errDesc || 'Provider error' });
+            res.status(500).json({ error: result.error || 'Provider error' });
         }
 
     } catch (err) {
         console.error('❌ SMS Failed:', err);
         res.status(500).json({ error: 'Failed to send SMS' });
+    }
+});
+
+
+// === PUBLIC REGISTRATION HANDLER ===
+app.post('/api/public/register', async (req, res) => {
+    const { businessName, ownerName, phone, clubType, businessLink } = req.body;
+
+    if (!businessName || !ownerName || !phone || !businessLink) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        if (!supabase) {
+            return res.status(500).json({ error: 'Database connection offline' });
+        }
+
+        const newBusinessId = randomUUID();
+        const trialStart = new Date().toISOString();
+        const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        const hasStamps = !clubType.includes('הטבות');
+        const brandColor = hasStamps ? '#1c1a19' : '#15803d';
+        const stampIcon = hasStamps ? 'coffee-cup' : 'percent';
+
+        // 1. Insert Business (starts as approved automatically)
+        const { error: bizError } = await supabase.from('businesses').insert({
+            id: newBusinessId,
+            name: businessName,
+            brand_color: brandColor,
+            has_stamps: hasStamps,
+            stamp_limit: 10,
+            stamp_icon: stampIcon,
+            settings: {
+                status: 'approved',
+                trial_start: trialStart,
+                trial_end: trialEnd,
+                owner_name: ownerName,
+                phone: phone,
+                club_type: clubType,
+                business_link: businessLink
+            },
+            created_at: trialStart
+        });
+
+        if (bizError) throw bizError;
+
+        // 2. Insert Default Admin Employee
+        const newEmployeeId = randomUUID();
+        const employeeData = {
+            id: newEmployeeId,
+            name: ownerName,
+            pin_code: '1234',
+            access_level: 'Manager',
+            business_id: newBusinessId,
+            is_admin: true,
+            email: `${phone.replace(/\D/g, '')}@icaffeos.com`,
+            phone: phone.replace(/\D/g, '')
+        };
+
+        const { error: empError } = await supabase.from('employees').insert(employeeData);
+
+        if (empError) throw empError;
+
+        console.log(`🎉 Registered new business: ${businessName} (ID: ${newBusinessId})`);
+
+        // 3. Notify Admin (Rani) via Pushover
+        const pushoverAppToken = process.env.PUSHOVER_APP_TOKEN || 'u8fpoxbwcax8fifun88c31r8p7f5pp';
+        const pushoverUserKey = process.env.PUSHOVER_USER_KEY;
+
+        if (pushoverUserKey) {
+            try {
+                const pushoverResponse = await fetch('https://api.pushover.net/1/messages.json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: pushoverAppToken,
+                        user: pushoverUserKey,
+                        title: '🎉 עסק חדש נרשם והופעל אוטומטית!',
+                        message: `שם העסק: ${businessName}\nבעלים: ${ownerName}\nטלפון: ${phone}\nסוג מועדון: ${clubType}\nקישור: ${businessLink}`,
+                        priority: 1,
+                        sound: 'cashregister'
+                    })
+                });
+                
+                if (pushoverResponse.ok) {
+                    console.log('📱 [Pushover] Admin notified of registration successfully');
+                } else {
+                    const errorText = await pushoverResponse.text();
+                    console.error('❌ [Pushover] Failed to send notification:', errorText);
+                }
+            } catch (pErr) {
+                console.error('❌ [Pushover] Notification dispatch error:', pErr.message || pErr);
+            }
+        } else {
+            console.warn('⚠️ [Pushover] PUSHOVER_USER_KEY not set in env, skipping notification');
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            businessId: newBusinessId,
+            employee: null
+        });
+    } catch (err) {
+        console.error('❌ Public registration failed:', err.message || err);
+        res.status(500).json({ error: 'Registration failed. Please try again.' });
+    }
+});
+
+
+// === QUICK BUSINESS APPROVAL ENDPOINT ===
+app.get('/api/public/approve-business', async (req, res) => {
+    const { id, key } = req.query;
+    const serverKey = process.env.MODEM_BRIDGE_KEY || 'icaffeos_modem_secure_bridge_key_2026_xyz';
+
+    if (!id || !key) {
+        return res.status(400).send('<h3>פרטים חסרים (מזהה עסק או מפתח אבטחה)</h3>');
+    }
+
+    if (key !== serverKey) {
+        return res.status(401).send('<h3>מפתח אבטחה שגוי!</h3>');
+    }
+
+    try {
+        if (!supabase) {
+            return res.status(500).send('<h3>חיבור לבסיס הנתונים לא זמין</h3>');
+        }
+
+        // 1. Fetch current settings
+        const { data: business, error: fetchErr } = await supabase
+            .from('businesses')
+            .select('name, settings')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr || !business) {
+            return res.status(404).send(`<h3>העסק לא נמצא או שגיאה בטעינה: ${fetchErr?.message}</h3>`);
+        }
+
+        const currentSettings = business.settings || {};
+        const updatedSettings = {
+            ...currentSettings,
+            status: 'approved'
+        };
+
+        // 2. Update status in database
+        const { error: updateErr } = await supabase
+            .from('businesses')
+            .update({ settings: updatedSettings })
+            .eq('id', id);
+
+        if (updateErr) {
+            return res.status(500).send(`<h3>שגיאה בעדכון הסטטוס: ${updateErr.message}</h3>`);
+        }
+
+        // 3. Notify the client that their business was approved!
+        const clientPhone = business.settings?.phone;
+        if (clientPhone) {
+            // A. Try WhatsApp
+            try {
+                const status = whatsAppManager.getStatus('default');
+                if (status && status.status === 'connected') {
+                    const clientWaMsg = `🎉 איזה כיף! החשבון של "${business.name}" אושר בהצלחה! 🚀\n\nמעכשיו אתם יכולים להתחבר למערכת ולהתחיל להגדיר את מועדון הלקוחות שלכם.\n\n🔗 התחברות בקישור: https://www.icaffeos.com/login\n🔑 קוד ה-PIN הזמני שלכם להתחברות לקופה הוא: 1234\n\nשיהיה המון בהצלחה,\nצוות icaffeOS! ☕✨`;
+                    await whatsAppManager.sendText('default', clientPhone, clientWaMsg);
+                    console.log(`📱 [WhatsApp] Client notified of approval`);
+                }
+            } catch (waErr) {
+                console.error('❌ Failed to send client WA notification:', waErr.message || waErr);
+            }
+
+            // B. Try SMS via our unified sendSmsSecure helper
+            try {
+                const clientSmsText = `🎉 החשבון של "${business.name}" אושר בהצלחה! 🚀\nמעכשיו ניתן להתחבר בקישור: https://www.icaffeos.com/login\nקוד ה-PIN הזמני שלכם הוא: 1234`;
+                sendSmsSecure(clientPhone, clientSmsText).catch(err => {
+                    console.error('❌ Failed to send client SMS notification:', err.message || err);
+                });
+            } catch (smsErr) {
+                console.error('❌ Client SMS dispatcher failure:', smsErr.message || smsErr);
+            }
+        }
+
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 50px; direction: rtl; background-color: #121110; color: #f4f1ed; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div style="background-color: #181715; border: 1px solid #292524; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 400px; text-align: center;">
+                    <span style="font-size: 50px; display: block; margin-bottom: 10px;">🚀</span>
+                    <h2 style="color: #f59e0b; margin-top: 10px; margin-bottom: 15px;">העסק אושר בהצלחה!</h2>
+                    <p style="font-size: 16px; color: #a8a29e; line-height: 1.6; margin-bottom: 25px;">
+                        העסק <strong>"${business.name}"</strong> אושר ומצב החשבון שונה ל-<strong>Approved</strong>.<br>
+                        הלקוח קיבל כעת הודעת עדכון (SMS/WhatsApp) עם פרטי ההתחברות וקישור ישיר.
+                    </p>
+                    <div style="margin-top: 30px; font-size: 12px; color: #78716c; border-top: 1px solid #292524; padding-top: 15px;">iCaffeOS System Admin</div>
+                </div>
+            </div>
+        `);
+    } catch (err) {
+        res.status(500).send(`<h3>שגיאת שרת: ${err.message}</h3>`);
+    }
+});
+
+
+// === PASSWORDLESS PHONE OTP AUTH HANDLER ===
+const inMemoryOtps = new Map();
+
+// 1. Send OTP Code
+app.post('/api/auth/otp/send', async (req, res) => {
+    const { phone, businessId = '11111111-1111-1111-1111-111111111111' } = req.body;
+
+    if (!phone) {
+        return res.status(400).json({ error: 'Missing phone number' });
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes expiration
+
+    // Always store in memory cache first for 100% reliability
+    inMemoryOtps.set(cleanPhone, { code, expires_at: new Date(Date.now() + 5 * 60 * 1000) });
+
+    try {
+        if (supabase) {
+            // Attempt to store in Supabase DB asynchronously
+            supabase.from('phone_otps').upsert({ phone: cleanPhone, code, expires_at: expiresAt })
+                .then(({ error }) => { if (error) console.warn('⚠️ Supabase OTP upsert warning:', error.message); })
+                .catch(err => console.warn('⚠️ Supabase OTP upsert network error:', err.message));
+        }
+
+        console.log(`🔑 [OTP] Code ${code} generated for phone ${cleanPhone}`);
+
+        // Send OTP Code to owner/admin via Pushover for development/testing convenience
+        const pushoverUserKey = process.env.PUSHOVER_USER_KEY;
+        const pushoverAppToken = process.env.PUSHOVER_APP_TOKEN;
+        if (pushoverUserKey && pushoverAppToken) {
+            try {
+                await fetch('https://api.pushover.net/1/messages.json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: pushoverAppToken,
+                        user: pushoverUserKey,
+                        title: '🔑 קוד אימות iCaffeOS',
+                        message: `קוד האימות עבור ${cleanPhone} הוא: ${code}`,
+                        sound: 'classical'
+                    })
+                });
+                console.log(`📱 [Pushover] Sent OTP code ${code} to admin via push notification`);
+            } catch (pErr) {
+                console.error('❌ [Pushover] Failed to send OTP code to admin:', pErr.message || pErr);
+            }
+        }
+
+        // Dispatch SMS via the local SMS utility / GlobalSMS logic
+        const smsKey = await getSmsApiKey(businessId);
+        let smsSenderId = '0548317887';
+        
+        try {
+            const { data: biz } = await supabase
+                .from('businesses')
+                .select('sms_sender_id')
+                .eq('id', businessId)
+                .single();
+            if (biz?.sms_sender_id) {
+                smsSenderId = biz.sms_sender_id;
+            }
+        } catch (bizErr) {
+            // Non-blocking business query fallback
+        }
+
+        if (!smsKey) {
+            const bridgeUrl = process.env.MODEM_BRIDGE_URL;
+            if (bridgeUrl) {
+                const rawMessage = `Your iCaffeOS verification code is: ${code}`;
+                const sanitizedMsg = sanitizeForModem(rawMessage);
+                
+                console.log(`🔌 [Modem Bridge Client] Redirecting OTP SMS to production bridge: ${bridgeUrl}`);
+                try {
+                    const bridgeKey = process.env.MODEM_BRIDGE_KEY;
+                    const bridgeRes = await fetch(`${bridgeUrl.replace(/\/$/, '')}/api/hardware/send-modem-sms`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'x-api-key': bridgeKey 
+                        },
+                        body: JSON.stringify({
+                            phone: cleanPhone,
+                            message: sanitizedMsg,
+                            apiKey: bridgeKey
+                        })
+                    });
+                    
+                    if (!bridgeRes.ok) {
+                        const errText = await bridgeRes.text();
+                        throw new Error(`Bridge server returned ${bridgeRes.status}: ${errText}`);
+                    }
+                    
+                    const bridgeData = await bridgeRes.json();
+                    console.log('✅ [Modem Bridge Client] SMS sent via production bridge:', bridgeData);
+                    return res.json({
+                        success: true,
+                        bridgeMode: true,
+                        message: `SMS routed via network bridge: ${sanitizedMsg}`
+                    });
+                } catch (bridgeErr) {
+                    console.error('❌ [Modem Bridge Client] Network bridge dispatch failed:', bridgeErr.message);
+                }
+            }
+
+            console.warn('⚠️ No SMS API key found. Bypassing sending SMS in dev mode.');
+            return res.json({ 
+                success: true, 
+                devMode: true, 
+                message: `SMS API key missing. Code logged: ${code}` 
+            });
+        }
+
+        const smsText = `קוד האימות החד-פעמי שלך ל-iCaffeOS הוא: ${code}`;
+        const result = await sendSmsSecure(cleanPhone, smsText, smsKey, smsSenderId);
+
+        if (result.success) {
+            return res.json({ success: true, messageId: result.result || 'ok', provider: result.provider });
+        } else {
+            console.error('❌ OTP SMS Dispatch Failed:', result.error);
+            // Non-blocking fallback for development
+            return res.json({ 
+                success: true, 
+                devMode: true, 
+                message: `SMS failed to deliver. Code logged: ${code}` 
+            });
+        }
+
+    } catch (err) {
+        console.error('❌ OTP Send handler error:', err);
+        res.status(500).json({ error: 'Internal server error while sending OTP' });
+    }
+});
+
+// 2. Verify OTP Code & Generate JWT Session
+app.post('/api/auth/otp/verify', async (req, res) => {
+    const { phone, code } = req.body;
+
+    if (!phone || !code) {
+        return res.status(400).json({ error: 'Missing phone number or verification code' });
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    try {
+        let record = inMemoryOtps.get(cleanPhone);
+
+        if (!record && supabase) {
+            // Retrieve OTP record from DB if not in memory
+            const { data } = await supabase
+                .from('phone_otps')
+                .select('*')
+                .eq('phone', cleanPhone)
+                .maybeSingle();
+            if (data) record = data;
+        }
+
+        if (!record) {
+            return res.status(400).json({ error: 'לא נמצא קוד אימות פעיל לטלפון זה' });
+        }
+
+        // Validate code & expiration
+        if (record.code !== code) {
+            return res.status(400).json({ error: 'קוד האימות שהוזן אינו תקין' });
+        }
+
+        if (new Date(record.expires_at) < new Date()) {
+            inMemoryOtps.delete(cleanPhone);
+            return res.status(400).json({ error: 'קוד האימות פג תוקף' });
+        }
+
+        // OTP is valid! Clean it up
+        inMemoryOtps.delete(cleanPhone);
+        if (supabase) {
+            try { await supabase.from('phone_otps').delete().eq('phone', cleanPhone); } catch (e) {}
+        }
+
+        // Retrieve or create auth user
+        let userId;
+        let formattedPhone = cleanPhone;
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+972' + formattedPhone.substring(1);
+        } else if (!formattedPhone.startsWith('+')) {
+            formattedPhone = '+972' + formattedPhone;
+        }
+
+        // Check if user has an active profile
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, phone')
+            .in('phone', [formattedPhone, cleanPhone, `+${cleanPhone}`]);
+
+        const profile = profiles && profiles.length > 0 ? profiles[0] : null;
+
+        if (profile) {
+            userId = profile.id;
+        } else {
+            // Create user in auth.users using Admin SDK
+            const { data: authUser, error: createErr } = await supabase.auth.admin.createUser({
+                phone: formattedPhone,
+                phone_confirm: true,
+                user_metadata: { name: 'לקוח נאמנות' }
+            });
+
+            if (createErr) {
+                console.error('❌ Failed to create auth user:', createErr.message);
+                
+                // Fallback: Check if user exists in auth but doesn't have a profile yet
+                if (createErr.message.includes('already registered') || createErr.message.includes('already exists') || createErr.message.includes('Phone number already registered')) {
+                    const { data: listData, error: listErr } = await supabase.auth.admin.listUsers();
+                    if (!listErr && listData && listData.users) {
+                        const existingUser = listData.users.find(u => {
+                            if (!u.phone) return false;
+                            const d1 = u.phone.replace(/\D/g, '');
+                            const d2 = formattedPhone.replace(/\D/g, '');
+                            return d1 === d2 || (d1.length >= 9 && d2.length >= 9 && d1.slice(-9) === d2.slice(-9));
+                        });
+                        if (existingUser) {
+                            userId = existingUser.id;
+                            // Ensure profile entry exists
+                            await supabase.from('profiles').upsert({ id: userId, phone: formattedPhone, name: 'לקוח נאמנות' });
+                        }
+                    }
+                }
+
+                if (!userId) {
+                    return res.status(500).json({ error: 'שגיאה בסנכרון פרטי המשתמש' });
+                }
+            } else {
+                userId = authUser.user.id;
+            }
+        }
+
+        // Generate central session JWT signed with Supabase JWT Secret
+        const jwtSecret = process.env.SUPABASE_JWT_SECRET || 'super-secret-jwt-key-with-at-least-32-characters-long';
+        const tokenPayload = {
+            aud: 'authenticated',
+            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7), // Valid for 7 days
+            sub: userId,
+            phone: cleanPhone,
+            role: 'authenticated',
+            app_metadata: {
+                provider: 'phone',
+                providers: ['phone']
+            },
+            user_metadata: {
+                name: 'לקוח נאמנות'
+            }
+        };
+
+        const token = jwt.sign(tokenPayload, jwtSecret);
+
+        return res.json({
+            session: {
+                access_token: token,
+                token_type: 'bearer',
+                expires_in: 604800,
+                user: {
+                    id: userId,
+                    phone: cleanPhone
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error('❌ OTP Verification error:', err);
+        res.status(500).json({ error: 'שגיאה פנימית במהלך אימות הקוד' });
+    }
+});
+
+
+// === TARGETED REGIONAL COMMERCIAL PUSH TRIGGER ===
+app.post('/api/promotions/send-regional', async (req, res) => {
+    const { storeId, title, body, data } = req.body;
+
+    if (!storeId || !title || !body) {
+        return res.status(400).json({ error: 'Missing storeId, title, or body' });
+    }
+
+    try {
+        const result = await sendRegionalPromotion(storeId, { title, body, data });
+        return res.json(result);
+    } catch (err) {
+        console.error('❌ Regional push dispatch failed:', err);
+        return res.status(500).json({ error: err.message || 'Failed to dispatch regional pushes' });
+    }
+});
+
+
+// === STRICT MODEM SMS SANITIZER ===
+function sanitizeForModem(text) {
+    if (typeof text !== 'string') return '';
+    // Allow space (32) and printable ASCII up to tilde (126)
+    return text
+        .split('')
+        .filter(char => {
+            const code = char.charCodeAt(0);
+            return code >= 32 && code <= 126;
+        })
+        .join('');
+}
+
+
+// === PRODUCTION HARDWARE MODEM BRIDGE RECEIVER ===
+app.post('/api/hardware/send-modem-sms', async (req, res) => {
+    const { phone, message, apiKey } = req.body;
+    const clientKey = req.headers['x-api-key'] || apiKey;
+    const serverKey = process.env.MODEM_BRIDGE_KEY;
+
+    if (!serverKey) {
+        console.error('❌ [Modem Bridge] MODEM_BRIDGE_KEY not configured on server');
+        return res.status(500).json({ error: 'MODEM_BRIDGE_KEY is not configured on the server' });
+    }
+
+    if (!clientKey || clientKey !== serverKey) {
+        console.warn('⚠️ [Modem Bridge] Unauthorized bridge access attempt');
+        return res.status(401).json({ error: 'Unauthorized: Invalid MODEM_BRIDGE_KEY' });
+    }
+
+    if (!phone || !message) {
+        return res.status(400).json({ error: 'Missing phone or message' });
+    }
+
+    try {
+        console.log(`🔌 [Modem Bridge] Dispatching SMS for ${phone}...`);
+
+        // Use our unified sendSmsSecure helper!
+        // It will try Teltonika RUT950 router first, and if that fails, it will fall back to GlobalSMS.
+        const result = await sendSmsSecure(phone, message, null, null, true);
+
+        if (result.success) {
+            return res.json({ success: true, provider: result.provider, result: result.result });
+        } else {
+            throw new Error(result.error || 'Failed to dispatch SMS');
+        }
+    } catch (err) {
+        console.error('❌ [Modem Bridge] Dispatch failed:', err.message);
+        return res.status(502).json({ error: 'Failed to dispatch SMS', details: err.message });
     }
 });
 
@@ -5651,7 +6310,6 @@ app.listen(PORT, '0.0.0.0', () => {
 // === 8. AI ONBOARDING: LIVE GENERATION (COMFYUI BRIDGE) ===
 // ------------------------------------------------------------------
 import WebSocket from 'ws';
-import { randomUUID } from 'crypto';
 
 const COMFYUI_URL = 'http://127.0.0.1:8188';
 const ONBOARDING_OUTPUT_DIR = path.resolve(__dirname, 'public/assets/generated');
@@ -6136,6 +6794,112 @@ app.post('/api/onboarding/upload-seed', upload.single('image'), async (req, res)
     } catch (error) {
         console.error('Seed upload failed:', error.message);
         res.status(500).json({ error: 'Upload failed', details: error.message });
+    }
+});
+
+// ---------------------------------------------------------
+// 🆕 UPLOAD BUSINESS LOGO
+// ---------------------------------------------------------
+app.post('/api/public/upload-logo', upload.single('image'), async (req, res) => {
+    try {
+        const { businessId } = req.body;
+        if (!req.file || !businessId) {
+            return res.status(400).json({ error: 'Missing file or businessId' });
+        }
+
+        const businessDir = path.join(ONBOARDING_OUTPUT_DIR, String(businessId));
+        if (!fs.existsSync(businessDir)) fs.mkdirSync(businessDir, { recursive: true });
+
+        let ext = '.png';
+        if (req.file.originalname) {
+            const originalExt = path.extname(req.file.originalname).toLowerCase();
+            if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(originalExt)) {
+                ext = originalExt;
+            }
+        }
+
+        const filename = `logo_${Date.now()}${ext}`;
+        const localPath = path.join(businessDir, filename);
+        fs.writeFileSync(localPath, req.file.buffer);
+
+        const publicUrl = `/assets/generated/${businessId}/${filename}`;
+        console.log(`🖼️ [Logo Upload] Successfully uploaded logo for business ${businessId}: ${publicUrl}`);
+        res.json({ success: true, url: publicUrl });
+
+    } catch (error) {
+        console.error('Logo upload failed:', error.message);
+        res.status(500).json({ error: 'Upload failed', details: error.message });
+    }
+});
+
+// ---------------------------------------------------------
+// 🆕 DYNAMIC CONTENT TRANSLATION ENDPOINT
+// ---------------------------------------------------------
+let googleTranslateClient = null;
+try {
+    googleTranslateClient = new Translate();
+} catch (e) {
+    console.error('⚠️ [Translate] Failed to initialize Google Translate client:', e.message);
+}
+
+app.post('/api/translate', async (req, res) => {
+    try {
+        const { texts, targetLanguage } = req.body;
+        if (!texts || !Array.isArray(texts) || texts.length === 0) {
+            return res.status(400).json({ error: 'Missing or invalid texts array' });
+        }
+        if (!targetLanguage) {
+            return res.status(400).json({ error: 'Missing targetLanguage' });
+        }
+
+        if (!googleTranslateClient) {
+            console.warn('⚠️ [Translate] Google Translate client not initialized, trying free MyMemory fallback...');
+            const results = [];
+            for (const text of texts) {
+                try {
+                    const pair = targetLanguage === 'en' ? 'he|en' : 'en|he';
+                    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${pair}`);
+                    const json = await response.json();
+                    if (json && json.responseData && json.responseData.translatedText) {
+                        results.push(json.responseData.translatedText);
+                    } else {
+                        results.push(text);
+                    }
+                } catch (e) {
+                    console.error('⚠️ [Translate] MyMemory fallback failed:', e.message);
+                    results.push(text);
+                }
+            }
+            return res.json({ success: true, translations: results });
+        }
+
+        const [translations] = await googleTranslateClient.translate(texts, targetLanguage);
+        const results = Array.isArray(translations) ? translations : [translations];
+
+        res.json({ success: true, translations: results });
+
+    } catch (error) {
+        console.error('❌ [Translate] Translation API failed, trying MyMemory fallback:', error.message);
+        try {
+            const results = [];
+            for (const text of req.body.texts || []) {
+                try {
+                    const pair = req.body.targetLanguage === 'en' ? 'he|en' : 'en|he';
+                    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${pair}`);
+                    const json = await response.json();
+                    if (json && json.responseData && json.responseData.translatedText) {
+                        results.push(json.responseData.translatedText);
+                    } else {
+                        results.push(text);
+                    }
+                } catch (e) {
+                    results.push(text);
+                }
+            }
+            res.json({ success: true, translations: results });
+        } catch (innerError) {
+            res.json({ success: true, translations: req.body.texts || [] });
+        }
     }
 });
 
