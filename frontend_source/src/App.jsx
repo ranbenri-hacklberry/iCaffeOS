@@ -33,11 +33,9 @@ function AppContent() {
     const handleError = (e) => {
       console.error('🔥 GLOBAL_CRASH:', e);
       const errorMsg = e.message || (e.reason && e.reason.message) || 'Unknown Crash';
+      const errorStack = (e.error && e.error.stack) || (e.reason && e.reason.stack) || '';
 
-      if (
-        errorMsg.includes('ResizeObserver loop completed with undelivered notifications') ||
-        errorMsg.includes('ResizeObserver loop limit exceeded')
-      ) {
+      if (errorMsg.toLowerCase().includes('resizeobserver')) {
         return;
       }
 
@@ -45,12 +43,15 @@ function AppContent() {
         const overlay = document.createElement('div');
         overlay.id = 'crash-overlay';
         overlay.style.cssText =
-          'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.95);color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10000;font-family:Inter,sans-serif;text-align:center;direction:ltr;backdrop-blur:10px;';
+          'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.95);color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10000;font-family:Inter,sans-serif;text-align:center;direction:ltr;backdrop-filter:blur(10px);';
         overlay.innerHTML = `
-          <div style="background:#1e293b;padding:40px;border-radius:24px;border:1px solid #334155;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
-            <h3 style="font-size:24px;font-weight:900;margin-bottom:16px;">⚠️ Application Error</h3>
-            <p style="color:#94a3b8;margin-bottom:24px;max-width:400px;">${errorMsg}</p>
-            <button onclick="window.location.reload()" style="background:#f97316;color:white;border:none;padding:12px 32px;border-radius:12px;font-weight:bold;cursor:pointer;transition:transform 0.2s;">Reload System</button>
+          <div style="background:#1e293b;padding:30px;border-radius:24px;border:1px solid #334155;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);max-width:90%;max-height:90%;overflow-y:auto;text-align:left;">
+            <h3 style="font-size:20px;font-weight:900;margin-bottom:12px;color:#ef4444;text-align:center;">⚠️ Application Error</h3>
+            <p style="color:#f1f5f9;margin-bottom:12px;font-weight:bold;font-size:14px;word-break:break-all;">${errorMsg}</p>
+            ${errorStack ? `<pre style="background:#0f172a;color:#cbd5e1;padding:12px;border-radius:8px;font-size:10px;overflow-x:auto;max-height:300px;margin-bottom:16px;white-space:pre-wrap;word-break:break-all;">${errorStack}</pre>` : ''}
+            <div style="text-align:center;">
+              <button onclick="window.location.reload()" style="background:#f97316;color:white;border:none;padding:12px 32px;border-radius:12px;font-weight:bold;cursor:pointer;transition:transform 0.2s;">Reload System</button>
+            </div>
           </div>
         `;
         if (!document.getElementById('crash-overlay')) {
@@ -134,7 +135,7 @@ function App() {
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center font-inter" dir="rtl">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-6"></div>
-          <h3 className="text-lg font-bold text-white mb-2">מתחבר לשרת Stampa...</h3>
+          <h3 className="text-lg font-bold text-white mb-2">מתחבר לשרת iCaffeOS...</h3>
           <p className="text-xs text-white/50">מזהה רשת ומאמת הגדרות חיבור</p>
         </div>
       </div>

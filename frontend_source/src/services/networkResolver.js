@@ -28,7 +28,7 @@ export async function initActiveEndpoint() {
 
     try {
         // Trust the local_url exactly as provided in the JSON payload
-        await axios.get(`${config.local_url}/api/system/health`, { timeout: 1500 });
+        await axios.get(`${config.local_url}/health`, { timeout: 1500 });
         console.log("⚡ Connected directly to store Wi-Fi network");
         activeEndpoint = config.local_url;
     } catch (error) {
