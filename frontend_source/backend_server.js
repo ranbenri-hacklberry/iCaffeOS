@@ -6322,6 +6322,15 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
 
+// Helper static server on port 8082 for serving images to old Capacitor client builds directly
+const staticApp = express();
+staticApp.use(cors());
+staticApp.use('/cafe-images', express.static(path.join(process.cwd(), 'public/cafe-images')));
+staticApp.use('/images', express.static(path.join(process.cwd(), 'public/images')));
+staticApp.listen(8082, '0.0.0.0', () => {
+    console.log('✅ Static helper server listening on port 8082');
+});
+
 // ------------------------------------------------------------------
 // === 8. AI ONBOARDING: LIVE GENERATION (COMFYUI BRIDGE) ===
 // ------------------------------------------------------------------
