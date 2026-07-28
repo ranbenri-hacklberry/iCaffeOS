@@ -253,7 +253,7 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
               initial="initial"
               animate="animate"
               exit="exit"
-              className={`w-full max-w-[500px] ${mayaAuth.authState === 'CLOCK_IN_REQUIRED' ? 'sm:max-w-[800px]' : ''} max-h-[90vh] rounded-3xl overflow-hidden backdrop-blur-xl bg-slate-900/90 border-2 border-cyan-400/30 shadow-2xl shadow-cyan-500/20`}
+              className={`w-full max-w-[500px] ${mayaAuth.authState === 'CLOCK_IN_REQUIRED' ? 'sm:max-w-[800px]' : ''} max-h-[95vh] sm:max-h-[90vh] rounded-3xl overflow-hidden backdrop-blur-xl bg-slate-900/90 border-2 border-cyan-400/30 shadow-2xl shadow-cyan-500/20 flex flex-col`}
             >
               <div className="h-14 sm:h-16 px-4 sm:px-6 flex items-center justify-between bg-gradient-to-r from-purple-600/50 to-pink-600/50 border-b border-white/10">
                 <div className="flex items-center gap-3">
@@ -287,7 +287,7 @@ export const MayaGateway: React.FC<MayaGatewayProps> = ({
                 </div>
               </div>
 
-              <div className="p-4 sm:p-8 min-h-[400px] sm:min-h-[500px] flex justify-center overflow-y-auto">
+              <div className="p-4 sm:p-6 flex-1 flex flex-col justify-center overflow-y-auto">
                 <AnimatePresence mode="wait">
                   {mayaAuth.authState === 'SCANNING' && (
                     <motion.div key="scanning" variants={transitionVariants} initial="initial" animate="animate" exit="exit" className="w-full">
