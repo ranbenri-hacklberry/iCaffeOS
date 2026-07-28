@@ -32,6 +32,11 @@ if [ "$APP_TYPE" == "pos" ]; then
   sed -i '' 's/"appId": "[^"]*"/"appId": "com.icaffeos.app"/g' "$CAPACITOR_CONFIG"
   sed -i '' 's/"appName": "[^"]*"/"appName": "iCaffeOS"/g' "$CAPACITOR_CONFIG"
   
+  # Copy POS Launcher Icons
+  echo "Copying POS Launcher Icons..."
+  rm -rf frontend_source/android/app/src/main/res
+  cp -R frontend_source/android/app/src/main/res_pos frontend_source/android/app/src/main/res
+  
   # Build POS Web Assets
   echo "Compiling POS Frontend..."
   (cd frontend_source && npm run build)
@@ -45,6 +50,11 @@ else
   # Set Capacitor Config appId to com.icaffeos.loyalty
   sed -i '' 's/"appId": "[^"]*"/"appId": "com.icaffeos.loyalty"/g' "$CAPACITOR_CONFIG"
   sed -i '' 's/"appName": "[^"]*"/"appName": "iCaffeOS Loyalty"/g' "$CAPACITOR_CONFIG"
+  
+  # Copy Loyalty Launcher Icons
+  echo "Copying Loyalty (Stampa) Launcher Icons..."
+  rm -rf frontend_source/android/app/src/main/res
+  cp -R frontend_source/android/app/src/main/res_stampa frontend_source/android/app/src/main/res
   
   # Build Loyalty Web Assets
   echo "Compiling Loyalty Portal Frontend..."
