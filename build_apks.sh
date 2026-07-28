@@ -113,7 +113,7 @@ REMOTE_PATH="/Users/icaffeos/icaffeos/frontend_source/dist/${REMOTE_FILENAME}"
 echo "Copying to remote server dist folder: ${REMOTE_PATH} on ${SERVER_IP}"
 expect -c "
 set timeout 300
-spawn rsync -avz --progress frontend_source/android/app/build/outputs/apk/debug/app-debug.apk icaffeos@\${SERVER_IP}:\${REMOTE_PATH}
+spawn rsync -avz --progress frontend_source/android/app/build/outputs/apk/debug/app-debug.apk icaffeos@${SERVER_IP}:${REMOTE_PATH}
 expect \"*assword:*\" { send \"1771\r\" }
 expect eof
 "
