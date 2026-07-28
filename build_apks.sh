@@ -31,6 +31,8 @@ if [ "$APP_TYPE" == "pos" ]; then
   # Set Capacitor Config appId to com.icaffeos.posnew
   sed -i '' 's/"appId": "[^"]*"/"appId": "com.icaffeos.posnew"/g' "$CAPACITOR_CONFIG"
   sed -i '' 's/"appName": "[^"]*"/"appName": "iCaffeOS"/g' "$CAPACITOR_CONFIG"
+  # Set Android applicationId in build.gradle to com.icaffeos.posnew
+  sed -i '' 's/applicationId "[^"]*"/applicationId "com.icaffeos.posnew"/g' "frontend_source/android/app/build.gradle"
   
   # Copy POS Launcher Icons
   echo "Copying POS Launcher Icons..."
@@ -39,7 +41,15 @@ if [ "$APP_TYPE" == "pos" ]; then
   
   # Build POS Web Assets
   echo "Compiling POS Frontend..."
+  # Move heavy assets temporarily to optimize APK size
+  mv frontend_source/public/cafe-images ./cafe-images-temp || true
+  mv frontend_source/public/cafe-images-inspection ./cafe-images-inspection-temp || true
+  
   (cd frontend_source && npm run build)
+  
+  # Restore heavy assets
+  mv ./cafe-images-temp frontend_source/public/cafe-images || true
+  mv ./cafe-images-inspection-temp frontend_source/public/cafe-images-inspection || true
   
   APK_NAME="icaffeos-pos-v5.0.4.apk"
   REMOTE_FILENAME="icaffeos.apk"
@@ -50,6 +60,8 @@ else
   # Set Capacitor Config appId to com.icaffeos.loyalty
   sed -i '' 's/"appId": "[^"]*"/"appId": "com.icaffeos.loyalty"/g' "$CAPACITOR_CONFIG"
   sed -i '' 's/"appName": "[^"]*"/"appName": "iCaffeOS Loyalty"/g' "$CAPACITOR_CONFIG"
+  # Set Android applicationId in build.gradle to com.icaffeos.loyalty
+  sed -i '' 's/applicationId "[^"]*"/applicationId "com.icaffeos.loyalty"/g' "frontend_source/android/app/build.gradle"
   
   # Copy Loyalty Launcher Icons
   echo "Copying Loyalty (Stampa) Launcher Icons..."
@@ -58,7 +70,15 @@ else
   
   # Build Loyalty Web Assets
   echo "Compiling Loyalty Portal Frontend..."
+  # Move heavy assets temporarily to optimize APK size
+  mv frontend_source/public/cafe-images ./cafe-images-temp || true
+  mv frontend_source/public/cafe-images-inspection ./cafe-images-inspection-temp || true
+  
   (cd frontend_source && npm run build:loyalty)
+  
+  # Restore heavy assets
+  mv ./cafe-images-temp frontend_source/public/cafe-images || true
+  mv ./cafe-images-inspection-temp frontend_source/public/cafe-images-inspection || true
   
   APK_NAME="icaffeos-loyalty-v5.0.4.apk"
   REMOTE_FILENAME="loyalty.apk"
