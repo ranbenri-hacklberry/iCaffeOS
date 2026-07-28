@@ -90,7 +90,9 @@ echo "Syncing Capacitor assets..."
 
 # 4. Compile the Android APK
 echo "Compiling Android APK..."
+mv frontend_source/android/app/google-services.json ./google-services-temp.json || true
 (cd frontend_source/android && JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew assembleDebug)
+mv ./google-services-temp.json frontend_source/android/app/google-services.json || true
 
 # 5. Move APK to Desktop
 DESKTOP_PATH="/Users/user/Desktop/${APK_NAME}"
