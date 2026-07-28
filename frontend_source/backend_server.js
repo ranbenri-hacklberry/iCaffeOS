@@ -280,6 +280,22 @@ app.get('/pos_new.apk', (req, res) => {
     res.sendFile('/Users/icaffeos/icaffeos/frontend_source/dist/pos_new.apk');
 });
 
+// Temp route for HTTP upload of APK to bypass SCP issues
+app.post('/upload-apk', (req, res) => {
+    const fs = require('fs');
+    const destPath = '/Users/icaffeos/icaffeos/frontend_source/dist/pos_new.apk';
+    const writeStream = fs.createWriteStream(destPath);
+    req.pipe(writeStream);
+    writeStream.on('finish', () => {
+        console.log('✅ APK upload completed via HTTP!');
+        res.status(200).send('Upload completed successfully!');
+    });
+    writeStream.on('error', (err) => {
+        console.error('❌ APK upload failed:', err);
+        res.status(500).send('Upload failed: ' + err.message);
+    });
+});
+
 // 🧪 DEBUG: Direct Inventory Routes
 app.get('/api/admin/inventory/cross-business-report', async (req, res) => {
     console.log('🧪 [Debug] Direct Cross-Business Report hit!');
