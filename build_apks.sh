@@ -79,11 +79,19 @@ rm -f "${DESKTOP_PATH}"
 cp frontend_source/android/app/build/outputs/apk/debug/app-debug.apk "${DESKTOP_PATH}"
 
 # 6. Upload APK to remote server static dist folder
+SERVER_IP="100.67.107.59"
+if ping -c 1 -W 1 192.168.1.10 > /dev/null 2>&1; then
+  echo "⚡ Direct local network detected. Using local IP 192.168.1.10 for ultra-fast transfer."
+  SERVER_IP="192.168.1.10"
+else
+  echo "🌐 Local network unreachable. Routing transfer via Tailscale IP 100.67.107.59."
+fi
+
 REMOTE_PATH="/Users/icaffeos/icaffeos/frontend_source/dist/${REMOTE_FILENAME}"
-echo "Copying to remote server dist folder: ${REMOTE_PATH}"
+echo "Copying to remote server dist folder: ${REMOTE_PATH} on ${SERVER_IP}"
 expect -c "
 set timeout 300
-spawn scp -o StrictHostKeyChecking=no frontend_source/android/app/build/outputs/apk/debug/app-debug.apk icaffeos@100.67.107.59:${REMOTE_PATH}
+spawn scp -o StrictHostKeyChecking=no frontend_source/android/app/build/outputs/apk/debug/app-debug.apk icaffeos@\${SERVER_IP}:${REMOTE_PATH}
 expect \"*assword:*\" { send \"1771\r\" }
 expect eof
 "
