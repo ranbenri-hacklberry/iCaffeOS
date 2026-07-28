@@ -28,8 +28,8 @@ if [ "$APP_TYPE" == "pos" ]; then
   echo "Configuring for POS App..."
   # Set App Name to "iCaffeOS"
   sed -i '' 's/<string name="app_name">.*<\/string>/<string name="app_name">iCaffeOS<\/string>/g' "$STRINGS_FILE"
-  # Set Capacitor Config appId to com.icaffeos.app
-  sed -i '' 's/"appId": "[^"]*"/"appId": "com.icaffeos.app"/g' "$CAPACITOR_CONFIG"
+  # Set Capacitor Config appId to com.icaffeos.posnew
+  sed -i '' 's/"appId": "[^"]*"/"appId": "com.icaffeos.posnew"/g' "$CAPACITOR_CONFIG"
   sed -i '' 's/"appName": "[^"]*"/"appName": "iCaffeOS"/g' "$CAPACITOR_CONFIG"
   
   # Copy POS Launcher Icons
