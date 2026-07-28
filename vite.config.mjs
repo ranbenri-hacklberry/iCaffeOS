@@ -26,6 +26,25 @@ export default defineConfig(async ({ mode }) => {
   const plugins = [
     react(),
     tagger(),
+    {
+      name: 'apk-mime-type',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url && req.url.split('?')[0].endsWith('.apk')) {
+            res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+          }
+          next();
+        });
+      },
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url && req.url.split('?')[0].endsWith('.apk')) {
+            res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+          }
+          next();
+        });
+      }
+    }
   ];
 
   if (!isHeadless) {
