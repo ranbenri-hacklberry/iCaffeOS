@@ -29,7 +29,7 @@ export default defineConfig(async ({ mode }) => {
     {
       name: 'apk-mime-type',
       configureServer(server) {
-        server.middlewares.use((req, res, next) => {
+        const apkMiddleware = (req, res, next) => {
           if (req.url && req.url.split('?')[0].endsWith('.apk')) {
             const originalSetHeader = res.setHeader;
             res.setHeader = function(name, value) {
@@ -41,10 +41,11 @@ export default defineConfig(async ({ mode }) => {
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
           }
           next();
-        });
+        };
+        server.middlewares.stack.unshift({ route: '', handle: apkMiddleware });
       },
       configurePreviewServer(server) {
-        server.middlewares.use((req, res, next) => {
+        const apkMiddleware = (req, res, next) => {
           if (req.url && req.url.split('?')[0].endsWith('.apk')) {
             const originalSetHeader = res.setHeader;
             res.setHeader = function(name, value) {
@@ -56,7 +57,8 @@ export default defineConfig(async ({ mode }) => {
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
           }
           next();
-        });
+        };
+        server.middlewares.stack.unshift({ route: '', handle: apkMiddleware });
       }
     }
   ];
