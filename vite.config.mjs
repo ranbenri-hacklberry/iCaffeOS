@@ -31,6 +31,13 @@ export default defineConfig(async ({ mode }) => {
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
           if (req.url && req.url.split('?')[0].endsWith('.apk')) {
+            const originalSetHeader = res.setHeader;
+            res.setHeader = function(name, value) {
+              if (name.toLowerCase() === 'content-type') {
+                value = 'application/vnd.android.package-archive';
+              }
+              return originalSetHeader.apply(this, [name, value]);
+            };
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
           }
           next();
@@ -39,6 +46,13 @@ export default defineConfig(async ({ mode }) => {
       configurePreviewServer(server) {
         server.middlewares.use((req, res, next) => {
           if (req.url && req.url.split('?')[0].endsWith('.apk')) {
+            const originalSetHeader = res.setHeader;
+            res.setHeader = function(name, value) {
+              if (name.toLowerCase() === 'content-type') {
+                value = 'application/vnd.android.package-archive';
+              }
+              return originalSetHeader.apply(this, [name, value]);
+            };
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
           }
           next();
