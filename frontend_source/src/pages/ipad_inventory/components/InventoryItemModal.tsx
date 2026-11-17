@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Minus, Trash2, Save, Pencil, Check, ChevronDown } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { InventoryItem, Supplier, PackagingLevel } from '@/pages/ipad_inventory/types';
-import { sanitizeNumeric } from '@/pages/ipad_inventory/utils/packagingUtils';
+import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Plus, Minus, Trash2, Save, Pencil, Check, ChevronDown } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { InventoryItem, Supplier, PackagingLevel } from "@/pages/ipad_inventory/types";
+import { sanitizeNumeric } from "@/pages/ipad_inventory/utils/packagingUtils";
 
 const MotionDiv = motion.div as any;
 
 const SelectWrapper: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
-    <div className={`relative ${className || ''}`}>
+    <div className={`relative ${className || ""}`}>
         {children}
         <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
             <ChevronDown size={16} />
@@ -41,38 +41,85 @@ interface FormData {
     supplier_id: string;
     category: string;
     unit: string;
-    weight_per_unit: number | '';
+    current_stock: number | "";
+    weight_per_unit: number | "";
     packaging_levels: PackagingLevel[];
     packaging_countLevel: number;
     count_step: number;
     recipe_step: number;
-    cost_per_unit: number | '';
-    low_stock_threshold_units: number | '';
-    yield_percentage: number | '';
+    cost_per_unit: number | "";
+    low_stock_threshold_units: number | "";
+    target_stock: number | "";
+    yield_percentage: number | "";
     location: string;
-    min_order: number | '';
-    order_step: number | '';
+    min_order: number | "";
+    order_step: number | "";
 }
 
-const UNITS = ['יח׳', 'גרם', 'ק"ג', 'מ"ל', 'מארז', 'שקית', 'חבילה', 'L'];
-const PACKAGING_TYPES = ['קרטון', 'שרוול', 'שקית', 'קופסה', 'חבילה', 'מארז', 'מגש', 'דלי', 'צנצנת', 'פאלט'];
-const CATEGORIES = ['ירקות', 'פירות', 'מוצרי חלב', 'יבשים', 'תבלינים', 'שימורים', 'חד פעמי', 'ממרחים', 'כללי', 'coffee'];
-const PRODUCE_CATEGORIES = ['ירקות', 'פירות'];
-const COUNT_STEPS = [{ label: '1', value: 1 }, { label: '½', value: 0.5 }, { label: '¼', value: 0.25 }];
+const UNITS = [
+    "יח׳",
+    "שקית",
+    "מארז",
+    "חבילה",
+    "קופסה",
+    "בקבוק",
+    "פחית",
+    "קרטון",
+    "דלי",
+    "צנצנת",
+    "ק\"ג",
+    "גרם",
+    "ליטר",
+    "מ\"ל"
+];
 
-// ─── Price helpers ───────────────────────────────────────────────────────────
-// cost_per_unit in DB = cost per ONE of the stated unit (per kg, per unit, etc.)
-// Package price = cost_per_unit × base_qty
+const PACKAGING_TYPES = ["קרטון", "שרוול", "שקית", "קופסה", "חבילה", "מארז", "מגש", "דלי", "צנצנת", "פאלט"];
+const CATEGORIES = ["ירקות", "פירות", "פירות קפואים", "חלבים", "מוצרי חלב", "יבשים", "תבלינים", "שימורים", "חד פעמי", "ממרחים", "מרכיבי פיצה", "מאפים", "שוקולד", "שונות", "כללי", "coffee"];
 
-const isWeightUnit = (u: string) => ['גרם', 'ק"ג', 'מ"ל', 'L', 'grams'].includes(u);
-const isLiquidUnit = (u: string) => ['מ"ל', 'L'].includes(u);
+// ─── Price & Unit helpers ───────────────────────────────────────────────────
 
-const getUnitInputLabel = (u: string) => {
-    if (u === 'ק"ג') return 'ק"ג';
-    if (u === 'גרם' || u === 'grams') return 'גרם';
-    if (u === 'L') return 'ליטר';
-    if (u === 'מ"ל') return 'מ"ל';
-    return 'יח׳';
+const isWeightUnit = (u: string) => ["גרם", "ק\"ג", "מ\"ל", "ליטר", "L", "grams"].includes(u);
+const isLiquidUnit = (u: string) => ["מ\"ל", "ליטר", "L"].includes(u);
+
+const getAvailableCountSteps = (unit: string) => {
+    if (unit === "גרם" || unit === "grams") {
+        return [
+            { label: "100 גרם", value: 100 },
+            { label: "50 גרם", value: 50 },
+            { label: "10 גרם", value: 10 },
+            { label: "1 גרם", value: 1 }
+        ];
+    }
+    if (unit === "ק\"ג" || unit === "ליטר" || unit === "L") {
+        return [
+            { label: "1 שלם", value: 1 },
+            { label: "½ חצי (0.5)", value: 0.5 },
+            { label: "0.1 (100 גרם/מ״ל)", value: 0.1 }
+        ];
+    }
+    return [
+        { label: "1 שלם", value: 1 },
+        { label: "½ חצי", value: 0.5 },
+        { label: "¼ רבע", value: 0.25 }
+    ];
+};
+
+const parseSupplierProductNames = (raw: any): string[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+    if (typeof raw === "string") {
+        const trimmed = raw.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
+            } catch {
+                // ignore
+            }
+        }
+        if (trimmed && trimmed !== "[]") return [trimmed];
+    }
+    return [];
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -89,70 +136,75 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
     // ─── Form State ──────────────────────────────────────────────────────────
     const buildInitialFormData = (): FormData => {
         if (item) {
-            const levels: PackagingLevel[] = item.packaging?.levels?.length
-                ? item.packaging.levels
-                : [{ name: item.unit || item.base_unit || 'יח׳', qty: 1 }];
-            const currentUnit = item.unit || item.base_unit || 'יח׳';
+            const currentUnit = item.unit || (item.base_unit && item.base_unit !== "g" && item.base_unit !== "ml" ? item.base_unit : "יח׳");
+            const pkg = item.packaging || item.settings?.packaging;
+            const levels: PackagingLevel[] = pkg?.levels?.length
+                ? pkg.levels
+                : [{ name: currentUnit, qty: 1, count_step: item.count_step || item.inventory_count_step || 1 }];
             const defaultRecipeStep = isWeightUnit(currentUnit) ? 10 : 1;
             return {
-                name: item.name || '',
-                supplier_product_name: item.supplier_product_name || [],
-                manufacturer_name: item.manufacturer_name || '',
-                supplier_id: item.supplier_id ? String(item.supplier_id) : '',
-                category: item.category || '',
+                name: item.name || "",
+                supplier_product_name: parseSupplierProductNames(item.supplier_product_name),
+                manufacturer_name: item.manufacturer_name || "",
+                supplier_id: item.supplier_id ? String(item.supplier_id) : "",
+                category: item.category || "",
                 unit: currentUnit,
-                weight_per_unit: item.weight_per_unit || '',
+                current_stock: item.current_stock ?? 0,
+                weight_per_unit: item.weight_per_unit || "",
                 packaging_levels: levels,
-                packaging_countLevel: item.packaging?.countLevel ?? 0,
-                count_step: item.count_step ?? 1,
+                packaging_countLevel: pkg?.countLevel ?? 0,
+                count_step: item.count_step ?? item.inventory_count_step ?? 1,
                 recipe_step: item.recipe_step ?? defaultRecipeStep,
-                cost_per_unit: item.cost_per_unit || '',
-                low_stock_threshold_units: item.low_stock_threshold_units || '',
+                cost_per_unit: item.cost_per_unit || "",
+                low_stock_threshold_units: item.low_stock_threshold_units || "",
+                target_stock: item.target_stock || "",
                 yield_percentage: item.yield_percentage ?? 100,
-                location: item.location || '',
-                min_order: item.min_order || '',
-                order_step: item.order_step || '',
+                location: item.location || "",
+                min_order: item.min_order || "",
+                order_step: item.order_step || "",
             };
         }
-        const initialUnit = initialData?.unit || 'יח׳';
+        const initialUnit = initialData?.unit || "יח׳";
         const defaultRecipeStep = isWeightUnit(initialUnit) ? 10 : 1;
         return {
-            name: '',
+            name: "",
             supplier_product_name: initialData?.invoiceName ? [initialData.invoiceName] : [],
-            manufacturer_name: '',
-            supplier_id: initialData?.supplierId || '',
-            category: '',
+            manufacturer_name: "",
+            supplier_id: initialData?.supplierId || "",
+            category: "",
             unit: initialUnit,
-            weight_per_unit: '',
-            packaging_levels: [{ name: initialUnit, qty: 1 }],
+            current_stock: 0,
+            weight_per_unit: "",
+            packaging_levels: [{ name: initialUnit, qty: 1, count_step: 1 }],
             packaging_countLevel: 0,
             count_step: 1,
             recipe_step: defaultRecipeStep,
-            cost_per_unit: initialData?.price || '',
-            low_stock_threshold_units: '',
+            cost_per_unit: initialData?.price || "",
+            low_stock_threshold_units: "",
+            target_stock: "",
             yield_percentage: 100,
-            location: '',
-            min_order: '',
-            order_step: '',
+            location: "",
+            min_order: "",
+            order_step: "",
         };
     };
 
     const [formData, setFormData] = useState<FormData>(buildInitialFormData);
     const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
-    const [newSupplierName, setNewSupplierName] = useState('');
-    const [newTagInput, setNewTagInput] = useState('');
+    const [newSupplierName, setNewSupplierName] = useState("");
+    const [newTagInput, setNewTagInput] = useState("");
     const [isSaving, setIsSaving] = useState(false);
-    const [customCategory, setCustomCategory] = useState('');
+    const [customCategory, setCustomCategory] = useState("");
     const [showCustomCategory, setShowCustomCategory] = useState(false);
 
-    // ─── Tab state (separate from formData to avoid re-renders during price editing) ──
-    const [activeTab, setActiveTab] = useState<'details' | 'advanced'>('details');
+    // ─── Tab state ───────────────────────────────────────────────────────────
+    const [activeTab, setActiveTab] = useState<"details" | "advanced">("details");
 
     // ─── Price editing state ─────────────────────────────────────────────────
     const [isPriceEditing, setIsPriceEditing] = useState(false);
-    const [editPkgPrice, setEditPkgPrice] = useState<number | ''>('');
-    const [editPkgQty, setEditPkgQty] = useState<number | ''>('');
-    const [priceViewMode, setPriceViewMode] = useState<'kg' | 'package' | 'gram' | 'unit'>('kg');
+    const [editPkgPrice, setEditPkgPrice] = useState<number | "">("");
+    const [editPkgQty, setEditPkgQty] = useState<number | "">("");
+    const [priceViewMode, setPriceViewMode] = useState<"kg" | "package" | "gram" | "unit">("unit");
     const [advPillLevel, setAdvPillLevel] = useState<number>(0);
 
     useEffect(() => {
@@ -160,62 +212,41 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
             const initialForm = buildInitialFormData();
             setFormData(initialForm);
             setIsCreatingSupplier(false);
-            setNewSupplierName('');
-            setNewTagInput('');
+            setNewSupplierName("");
+            setNewTagInput("");
             setIsSaving(false);
-            setCustomCategory('');
+            setCustomCategory("");
             setShowCustomCategory(false);
-            setActiveTab('details');
+            setActiveTab("details");
             setIsPriceEditing(false);
-            // Default advanced order level
             const levels = initialForm.packaging_levels;
             setAdvPillLevel(levels.length > 1 ? levels.length - 1 : 0);
-            // Default view mode
             const unit = initialForm.unit;
-            setPriceViewMode(isWeightUnit(unit) ? 'kg' : 'unit');
+            setPriceViewMode(isWeightUnit(unit) ? "kg" : "unit");
         }
     }, [isOpen, item?.id]);
 
     const updateField = (field: keyof FormData, value: any) =>
         setFormData(prev => ({ ...prev, [field]: value }));
 
-    // ─── Produce detection ───────────────────────────────────────────────────
-    const resolvedCategory = showCustomCategory ? customCategory.trim() : formData.category;
-    const isProduceItem = PRODUCE_CATEGORIES.includes(resolvedCategory);
-
-    // When category changes to produce, enforce: unit=kg, reset packaging
     const handleCategoryChange = (cat: string) => {
-        if (cat === '__custom__') {
+        if (cat === "__custom__") {
             setShowCustomCategory(true);
             return;
         }
-        const isProduce = PRODUCE_CATEGORIES.includes(cat);
-        if (isProduce) {
-            setFormData(prev => ({
-                ...prev,
-                category: cat,
-                unit: 'ק"ג',
-                packaging_levels: [{ name: 'ק"ג', qty: 1 }],
-                packaging_countLevel: 0,
-                weight_per_unit: prev.weight_per_unit || '',
-            }));
-            setPriceViewMode('kg');
-        } else {
-            updateField('category', cat);
-        }
+        updateField("category", cat);
     };
 
-    // ─── Price editing ───────────────────────────────────────────────────────
+    // ─── Price calculations ──────────────────────────────────────────────────
 
     const openPriceEdit = () => {
         const cpu = Number(formData.cost_per_unit) || 0;
         const levels = formData.packaging_levels;
-        // Main package = highest level (last), or base if only one level
         const mainLevel = levels[levels.length - 1];
         const mainQty = mainLevel?.qty || 1;
         const pkgTotal = cpu * mainQty;
-        setEditPkgPrice(pkgTotal > 0 ? pkgTotal : '');
-        setEditPkgQty(cpu > 0 ? mainQty : '');
+        setEditPkgPrice(pkgTotal > 0 ? pkgTotal : "");
+        setEditPkgQty(cpu > 0 ? mainQty : "");
         setIsPriceEditing(true);
     };
 
@@ -226,78 +257,62 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
         const newCostPerUnit = price / qty;
         const roundedQty = Math.max(1, Math.round(qty));
 
-        // Update cost_per_unit + the highest packaging level's qty
-        setFormData(prev => {
-            const lastIdx = prev.packaging_levels.length - 1;
-            const newLevels = prev.packaging_levels.map((lvl, i) =>
-                i === lastIdx ? { ...lvl, qty: roundedQty } : lvl
-            );
-            return {
-                ...prev,
-                cost_per_unit: newCostPerUnit,
-                packaging_levels: newLevels,
-            };
-        });
+        const newLevels = [...formData.packaging_levels];
+        if (newLevels.length > 1) {
+            newLevels[newLevels.length - 1] = { ...newLevels[newLevels.length - 1], qty: roundedQty };
+        } else if (roundedQty > 1) {
+            newLevels.push({ name: "מארז", qty: roundedQty, count_step: 1 });
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            cost_per_unit: Number(newCostPerUnit.toFixed(4)),
+            packaging_levels: newLevels,
+        }));
         setIsPriceEditing(false);
     };
 
-    // Packaging summary for closed state
-    const packagingSummary = (() => {
-        const levels = formData.packaging_levels;
-        if (levels.length <= 1 && levels[0]?.qty <= 1) return '';
-        const cpu = Number(formData.cost_per_unit) || 0;
-        return levels.slice(1).map(l => {
-            const price = cpu * l.qty;
-            return `${l.name} (${l.qty}) ₪${price.toFixed(2)}`;
-        }).join(' • ');
-    })();
-
-    // ─── Price display computation ───────────────────────────────────────────
-
     const computePriceDisplay = () => {
         const cpu = Number(formData.cost_per_unit) || 0;
-        const baseQty = formData.packaging_levels[0]?.qty || 1;
-        const wpu = Number(formData.weight_per_unit) || 0;
         const unit = formData.unit;
         const isWeight = isWeightUnit(unit);
         const isLiquid = isLiquidUnit(unit);
+        const wpu = Number(formData.weight_per_unit) || 0;
+        const levels = formData.packaging_levels;
+        const mainLevel = levels[levels.length - 1];
+        const baseQty = mainLevel?.qty || 1;
         const pkgPrice = cpu * baseQty;
 
         switch (priceViewMode) {
-            case 'kg':
-                if (isWeight) {
-                    // cpu is per stated unit (per kg / per gram / per L / per ml)
-                    if (unit === 'ק"ג' || unit === 'grams') return { price: unit === 'ק"ג' ? cpu : cpu * 1000, label: 'לק"ג' };
-                    if (unit === 'גרם') return { price: cpu * 1000, label: 'לק"ג' };
-                    if (unit === 'L') return { price: cpu, label: 'לליטר' };
-                    if (unit === 'מ"ל') return { price: cpu * 1000, label: 'לליטר' };
-                }
-                // Unit item with weight_per_unit → calculate per kg
-                if (wpu > 0 && cpu > 0) return { price: (cpu / wpu) * 1000, label: 'לק"ג' };
-                return { price: cpu, label: `ל${unit}` };
+            case "kg": {
+                if (unit === "גרם" || unit === "grams") return { price: cpu * 1000, label: "לק\"ג" };
+                if (unit === "מ\"ל") return { price: cpu * 1000, label: "לליטר" };
+                if (isLiquid) return { price: cpu, label: "לליטר" };
+                if (wpu > 0 && !isWeight) return { price: cpu / (wpu / 1000), label: "לק\"ג" };
+                return { price: cpu, label: "לק\"ג" };
+            }
 
-            case 'package': {
+            case "package": {
                 const pkgLabel = (() => {
                     if (baseQty <= 1) return `ל${unit}`;
-                    if ((unit === 'גרם' || unit === 'grams') && baseQty >= 1000)
-                        return `לאריזה (${(baseQty / 1000).toFixed(2)} ק"ג)`;
-                    if (unit === 'מ"ל' && baseQty >= 1000)
+                    if ((unit === "גרם" || unit === "grams") && baseQty >= 1000)
+                        return `לאריזה (${(baseQty / 1000).toFixed(2)} ק\"ג)`;
+                    if (unit === "מ\"ל" && baseQty >= 1000)
                         return `לאריזה (${(baseQty / 1000).toFixed(2)} ליטר)`;
                     return `לאריזה (${baseQty} ${unit})`;
                 })();
                 return { price: pkgPrice, label: pkgLabel };
             }
 
-            case 'gram':
-                if (unit === 'ק"ג') return { price: cpu / 1000, label: 'לגרם' };
-                if (unit === 'גרם' || unit === 'grams') return { price: cpu, label: 'לגרם' };
-                if (unit === 'L') return { price: cpu / 1000, label: 'למ"ל' };
-                if (unit === 'מ"ל') return { price: cpu, label: 'למ"ל' };
-                return { price: cpu, label: 'לגרם' };
+            case "gram":
+                if (unit === "ק\"ג") return { price: cpu / 1000, label: "לגרם" };
+                if (unit === "גרם" || unit === "grams") return { price: cpu, label: "לגרם" };
+                if (unit === "L" || unit === "ליטר") return { price: cpu / 1000, label: "למ\"ל" };
+                if (unit === "מ\"ל") return { price: cpu, label: "למ\"ל" };
+                if (wpu > 0) return { price: cpu / wpu, label: "לגרם" };
+                return { price: cpu, label: "לגרם" };
 
-            case 'unit':
-                return { price: cpu, label: `ל${unit}` };
-
+            case "unit":
             default:
                 return { price: cpu, label: `ל${unit}` };
         }
@@ -307,8 +322,6 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
         const unit = formData.unit;
         const isWeight = isWeightUnit(unit);
         const isLiquid = isLiquidUnit(unit);
-        const cat = (formData.category || '').trim();
-        const isProduceCategory = ['ירקות', 'פירות'].includes(cat);
         const wpu = Number(formData.weight_per_unit) || 0;
         const cpuLocal = Number(formData.cost_per_unit) || 0;
 
@@ -316,23 +329,23 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
         const levels = formData.packaging_levels;
 
         if (isWeight) {
-            modes.push({ key: 'kg', label: isLiquid ? 'ליטר' : 'ק"ג', price: unit === 'ק"ג' ? cpuLocal : cpuLocal * 1000 });
-            // Add all packaging level pills (largest first)
+            modes.push({ key: "kg", label: isLiquid ? "ליטר" : "ק\"ג", price: (unit === "גרם" || unit === "מ\"ל") ? cpuLocal * 1000 : cpuLocal });
             for (let i = levels.length - 1; i >= 1; i--) {
                 const l = levels[i];
                 if (l.name) modes.push({ key: `pkg_${i}`, label: l.name, price: cpuLocal * l.qty, subLabel: `${l.qty} ${levels[0].name}` });
             }
-            modes.push({ key: 'gram', label: isLiquid ? 'מ"ל' : 'גרם', price: unit === 'ק"ג' ? cpuLocal / 1000 : cpuLocal });
-        } else if (isProduceCategory && wpu > 0) {
-            modes.push({ key: 'kg', label: 'ק"ג', price: cpuLocal });
-            modes.push({ key: 'unit', label: `${unit}`, price: cpuLocal * (wpu / 1000) });
+            modes.push({ key: "gram", label: isLiquid ? "מ\"ל" : "גרם", price: (unit === "ק\"ג" || unit === "L" || unit === "ליטר") ? cpuLocal / 1000 : cpuLocal });
         } else {
-            // Dry goods / unit items — show all packaging levels as pills (largest first → unit)
+            // Discrete item (יח׳, שקית, מארז...)
+            modes.push({ key: "unit", label: `ל${unit}`, price: cpuLocal });
             for (let i = levels.length - 1; i >= 1; i--) {
                 const l = levels[i];
                 if (l.name) modes.push({ key: `pkg_${i}`, label: l.name, price: cpuLocal * l.qty, subLabel: `${l.qty} ${levels[0].name}` });
             }
-            modes.push({ key: 'unit', label: `${unit}`, price: cpuLocal });
+            if (wpu > 0 && cpuLocal > 0) {
+                const pricePerKg = cpuLocal / (wpu / 1000);
+                modes.push({ key: "kg", label: "לק\"ג", price: pricePerKg, subLabel: `${wpu} גרם ל${unit}` });
+            }
         }
 
         return modes;
@@ -342,7 +355,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
 
     const addPackagingLevel = () => {
         if (formData.packaging_levels.length >= 3) return;
-        const newLevels = [...formData.packaging_levels, { name: '', qty: 0 }];
+        const newLevels = [...formData.packaging_levels, { name: "", qty: 0, count_step: 1 }];
         setFormData(prev => ({ ...prev, packaging_levels: newLevels, packaging_countLevel: newLevels.length - 1 }));
     };
 
@@ -352,38 +365,55 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
         setFormData(prev => ({ ...prev, packaging_levels: newLevels, packaging_countLevel: Math.min(prev.packaging_countLevel, newLevels.length - 1) }));
     };
 
-    const updatePackagingLevel = (index: number, field: 'name' | 'qty', value: any) => {
+    const updatePackagingLevel = (index: number, field: "name" | "qty", value: any) => {
         const newLevels = [...formData.packaging_levels];
-        newLevels[index] = { ...newLevels[index], [field]: field === 'qty' ? (parseInt(value) || 0) : value };
-        updateField('packaging_levels', newLevels);
+        newLevels[index] = { ...newLevels[index], [field]: field === "qty" ? (parseInt(value) || 0) : value };
+        updateField("packaging_levels", newLevels);
     };
 
     const handleUnitChange = (newUnit: string) => {
-        const isWeight = isWeightUnit(newUnit);
-        const defaultRecipeStep = isWeight ? 10 : 1;
+        const wasWeight = isWeightUnit(formData.unit);
+        const willBeWeight = isWeightUnit(newUnit);
+        const defaultRecipeStep = willBeWeight ? 10 : 1;
         const newLevels = [...formData.packaging_levels];
         newLevels[0] = { ...newLevels[0], name: newUnit };
+        const availableSteps = getAvailableCountSteps(newUnit);
+        const defaultCountStep = availableSteps[0]?.value || 1;
+
+        let adjustedCurrentStock = formData.current_stock;
+        const wpu = Number(formData.weight_per_unit) || 0;
+        if (wasWeight && !willBeWeight && typeof formData.current_stock === "number" && formData.current_stock > 50) {
+            if (wpu > 0) {
+                adjustedCurrentStock = Math.round((formData.current_stock / wpu) * 10) / 10;
+            } else if (formData.current_stock >= 1000) {
+                adjustedCurrentStock = Math.round(formData.current_stock / 1000);
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
             unit: newUnit,
+            current_stock: adjustedCurrentStock,
             packaging_levels: newLevels,
-            recipe_step: defaultRecipeStep
+            recipe_step: defaultRecipeStep,
+            count_step: defaultCountStep
         }));
-        // Reset view mode on unit change
-        setPriceViewMode(isWeight ? 'kg' : 'unit');
+        setPriceViewMode(willBeWeight ? "kg" : "unit");
     };
 
     // ─── Tags ────────────────────────────────────────────────────────────────
 
     const addTag = () => {
         const tag = newTagInput.trim();
-        if (!tag || formData.supplier_product_name.includes(tag)) return;
-        updateField('supplier_product_name', [...formData.supplier_product_name, tag]);
-        setNewTagInput('');
+        const currentTags = parseSupplierProductNames(formData.supplier_product_name);
+        if (!tag || currentTags.includes(tag)) return;
+        updateField("supplier_product_name", [...currentTags, tag]);
+        setNewTagInput("");
     };
 
     const removeTag = (index: number) => {
-        updateField('supplier_product_name', formData.supplier_product_name.filter((_, i) => i !== index));
+        const currentTags = parseSupplierProductNames(formData.supplier_product_name);
+        updateField("supplier_product_name", currentTags.filter((_, i) => i !== index));
     };
 
     // ─── Create Supplier ─────────────────────────────────────────────────────
@@ -391,15 +421,15 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
     const handleCreateSupplier = async () => {
         if (!newSupplierName.trim()) return;
         const { data, error } = await supabase
-            .from('suppliers')
+            .from("suppliers")
             .insert({ name: newSupplierName.trim(), business_id: businessId })
-            .select('id')
+            .select("id")
             .single();
-        if (error) { alert('שגיאה ביצירת ספק: ' + error.message); return; }
+        if (error) { alert("שגיאה ביצירת ספק: " + error.message); return; }
         if (data) {
-            updateField('supplier_id', String(data.id));
+            updateField("supplier_id", String(data.id));
             setIsCreatingSupplier(false);
-            setNewSupplierName('');
+            setNewSupplierName("");
         }
     };
 
@@ -407,7 +437,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
 
     const validatePackaging = (): string | null => {
         const levels = formData.packaging_levels;
-        if (!Number.isInteger(levels[0].qty) || levels[0].qty <= 0) return 'רמת בסיס: הכמות חייבת להיות מספר שלם וחיובי';
+        if (!Number.isInteger(levels[0].qty) || levels[0].qty <= 0) return "רמת בסיס: הכמות חייבת להיות מספר שלם וחיובי";
         for (let i = 1; i < levels.length; i++) {
             if (!levels[i].name.trim()) return `רמה ${i + 1}: יש להזין שם`;
             if (!Number.isInteger(levels[i].qty) || levels[i].qty <= 0) return `רמה ${i + 1}: הכמות חייבת להיות מספר שלם וחיובי`;
@@ -418,75 +448,72 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
     // ─── Save ────────────────────────────────────────────────────────────────
 
     const handleSave = async () => {
-        if (!formData.name.trim()) { alert('יש להזין שם פריט'); return; }
+        if (!formData.name.trim()) { alert("יש להזין שם פריט"); return; }
 
-        // Produce validation: weight_per_unit must be >= 1
-        if (isProduceItem) {
-            const wpu = Number(formData.weight_per_unit) || 0;
-            if (wpu < 1) {
-                alert('ירקות/פירות: יש להזין משקל ממוצע ליחידה (לפחות 1 גרם)');
-                return;
-            }
-        }
+        const packagingError = validatePackaging();
+        if (packagingError) { alert(packagingError); return; }
 
-        if (!isProduceItem) {
-            const packagingError = validatePackaging();
-            if (packagingError) { alert(packagingError); return; }
-        }
-
-        console.log('💾 [InventoryModal] Starting save...');
-
+        console.log("💾 [InventoryModal] Starting save...");
         setIsSaving(true);
+
         try {
-            const levels = isProduceItem
-                ? [{ name: 'ק"ג', qty: 1 }]
-                : formData.packaging_levels;
-            const packaging = isProduceItem
-                ? null
-                : (levels.length > 1
-                    ? { levels, countLevel: formData.packaging_countLevel }
-                    : (levels[0].qty !== 1 ? { levels, countLevel: 0 } : null));
+            const levels = formData.packaging_levels;
+            const packaging = levels.length > 1
+                ? { levels, countLevel: formData.packaging_countLevel }
+                : (levels[0].qty !== 1 ? { levels, countLevel: 0 } : null);
 
             const case_quantity = levels.length >= 2 ? levels[1].qty : levels[0].qty;
             const category = showCustomCategory ? customCategory.trim() : formData.category;
 
-            // For produce: unit is always kg, weight_per_unit stored as grams (user input)
+            const selectedSupplierObj = suppliers.find(s => String(s.id) === String(formData.supplier_id));
+            const supplierName = selectedSupplierObj?.name || (item?.supplier_id === formData.supplier_id ? item?.supplier : null);
+
+            const isWeight = isWeightUnit(formData.unit);
+            const isLiquid = isLiquidUnit(formData.unit);
+            const baseUnitVal = isWeight ? "g" : (isLiquid ? "ml" : null);
+
             const payload: any = {
                 name: formData.name.trim(),
-                supplier_id: sanitizeNumeric(formData.supplier_id, null),
-                category: category || 'כללי',
-                unit: isProduceItem ? 'ק"ג' : formData.unit,
+                supplier_id: formData.supplier_id ? String(formData.supplier_id) : null,
+                supplier: supplierName || null,
+                category: category || "כללי",
+                unit: formData.unit,
+                base_unit: baseUnitVal,
+                current_stock: sanitizeNumeric(formData.current_stock, 0),
                 weight_per_unit: sanitizeNumeric(formData.weight_per_unit),
                 case_quantity,
                 packaging,
                 count_step: sanitizeNumeric(formData.count_step, 1),
+                inventory_count_step: sanitizeNumeric(formData.count_step, 1),
                 recipe_step: sanitizeNumeric(formData.recipe_step, 10),
                 cost_per_unit: sanitizeNumeric(formData.cost_per_unit),
                 low_stock_threshold_units: sanitizeNumeric(formData.low_stock_threshold_units),
+                target_stock: sanitizeNumeric(formData.target_stock, 0),
                 yield_percentage: sanitizeNumeric(formData.yield_percentage, 100),
                 location: formData.location || null,
                 min_order: sanitizeNumeric(formData.min_order, 1),
                 order_step: sanitizeNumeric(formData.order_step, 1),
                 manufacturer_name: formData.manufacturer_name || null,
-                supplier_product_name: formData.supplier_product_name.filter(Boolean),
+                supplier_product_name: parseSupplierProductNames(formData.supplier_product_name).length > 0
+                    ? JSON.stringify(parseSupplierProductNames(formData.supplier_product_name))
+                    : null,
                 business_id: businessId,
             };
 
             if (isEditMode && item) {
-                const { error } = await supabase.from('inventory_items').update(payload).eq('id', item.id);
+                const { error } = await supabase.from("inventory_items").update(payload).eq("id", item.id);
                 if (error) throw error;
             } else {
-                payload.current_stock = 0;
-                const { error } = await supabase.from('inventory_items').insert(payload);
+                const { error } = await supabase.from("inventory_items").insert(payload);
                 if (error) throw error;
             }
 
-            console.log('✅ [InventoryModal] Save successful');
+            console.log("✅ [InventoryModal] Save successful");
             onSaved();
             onClose();
         } catch (err: any) {
-            console.error('❌ [InventoryModal] Save error:', err);
-            alert('שגיאה בשמירה: ' + (err?.message || 'שגיאה לא ידועה'));
+            console.error("❌ [InventoryModal] Save error:", err);
+            alert("שגיאה בשמירה: " + (err?.message || "שגיאה לא ידועה"));
         } finally {
             setIsSaving(false);
         }
@@ -498,12 +525,12 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
         if (!item) return;
         if (!window.confirm(`האם למחוק את "${item.name}" מהמלאי? פעולה זו בלתי הפיכה.`)) return;
         try {
-            const { error } = await supabase.from('inventory_items').delete().eq('id', item.id);
+            const { error } = await supabase.from("inventory_items").delete().eq("id", item.id);
             if (error) throw error;
             onSaved();
             onClose();
         } catch (err: any) {
-            alert('שגיאה במחיקה: ' + err.message);
+            alert("שגיאה במחיקה: " + err.message);
         }
     };
 
@@ -511,57 +538,36 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
 
     // ─── Computed helpers ────────────────────────────────────────────────────
 
-    // weight_per_unit only relevant for produce (handled by dedicated field above)
-    const unitNeedsWeight = false;
     const { price: displayPrice, label: displayLabel } = computePriceDisplay();
     const viewModes = getAvailableViewModes();
 
-    // Helper hints
     const yieldNum = Number(formData.yield_percentage) || 100;
     const yieldHint = yieldNum < 100
-        ? `${100 - yieldNum}% פחת — מ-1 ק"ג תשתמש ב-${yieldNum * 10} גרם`
-        : 'ללא פחת — 100% מהמוצר בשימוש';
+        ? `${100 - yieldNum}% פחת — מ-1 ק\"ג תשתמש ב-${yieldNum * 10} גרם`
+        : "ללא פחת — 100% מהמוצר בשימוש";
+
     const isWeight = isWeightUnit(formData.unit);
     const recipeSteps = isWeight
-        ? [{ label: '1 גרם', value: 1 }, { label: '5 גרם', value: 5 }, { label: '10 גרם', value: 10 }]
+        ? [{ label: "1 גרם", value: 1 }, { label: "5 גרם", value: 5 }, { label: "10 גרם", value: 10 }]
         : [{ label: `1 ${formData.unit}`, value: 1 }, { label: `0.5 ${formData.unit}`, value: 0.5 }, { label: `0.25 ${formData.unit}`, value: 0.25 }];
-    const countStepHint = `ספירה תעלה/תרד ב-${formData.count_step === 0.5 ? 'חצי' : formData.count_step === 0.25 ? 'רבע' : '1'} יחידה`;
+
+    const countStepHint = `ספירה באייפד תעלה/תרד בקפיצות של ${formData.count_step} ${formData.unit}`;
     const recipeStepHint = isWeight
         ? `מתכונים יחשבו בקפיצות של ${formData.recipe_step} גרם`
         : `מתכונים יחשבו בקפיצות של ${formData.recipe_step} ${formData.unit}`;
-    const thresholdNum = Number(formData.low_stock_threshold_units) || 0;
-    const thresholdHint = thresholdNum > 0 ? `תקבל התראה כשהמלאי יורד מתחת ל-${thresholdNum}` : 'לא תוגדר התראת מלאי נמוך';
 
-    // Produce weight hint
     const wpuNum = Number(formData.weight_per_unit) || 0;
+    const cpu = Number(formData.cost_per_unit) || 0;
     const wpuHint = (() => {
-        if (!isProduceItem) return '';
-        if (wpuNum <= 0) return 'חובה — ללא משקל לא ניתן לחשב מחיר ליחידה';
-        const cpu = Number(formData.cost_per_unit) || 0;
-        const pricePerUnit = cpu * (wpuNum / 1000);
-        if (cpu > 0) return `כ-${(1000 / wpuNum).toFixed(1)} יחידות בק"ג • ₪${pricePerUnit.toFixed(2)} ליחידה`;
-        return `כ-${(1000 / wpuNum).toFixed(1)} יחידות בק"ג`;
+        if (wpuNum <= 0) return "💡 הגדר משקל/תכולה ליחידה לצורך דיוק בפודקוסט ובמתכונים";
+        if (cpu > 0) {
+            const pricePerKg = cpu / (wpuNum / 1000);
+            const agorotPerGram = (pricePerKg / 1000) * 100;
+            return `💡 משקל יחידה: ${wpuNum} ${isLiquidUnit(formData.unit) ? "מ״ל" : "גרם"} • = ₪${pricePerKg.toFixed(2)} לק\"ג (${agorotPerGram.toFixed(1)} אג׳ לגרם)`;
+        }
+        return `💡 משקל יחידה: ${wpuNum} ${isLiquidUnit(formData.unit) ? "מ״ל" : "גרם"} (הספירה עצמה מתבצעת ב${formData.unit})`;
     })();
 
-    // Package price hint (always shown under price display)
-    const mainPkgLevel = formData.packaging_levels[formData.packaging_levels.length - 1];
-    const mainPkgQty = mainPkgLevel?.qty || 1;
-    const cpu = Number(formData.cost_per_unit) || 0;
-    const pkgPrice = cpu * mainPkgQty;
-    const mainPkgName = mainPkgLevel?.name || '';
-    const formatQtyLabel = (qty: number, unit: string) => {
-        if ((unit === 'גרם' || unit === 'grams') && qty >= 1000)
-            return `${(qty / 1000).toFixed(2)} ק"ג`;
-        if (unit === 'מ"ל' && qty >= 1000)
-            return `${(qty / 1000).toFixed(2)} ליטר`;
-        return `${qty} ${unit}`;
-    };
-    const priceHint = (() => {
-        if (!cpu) return '';
-        if (mainPkgQty > 1 && mainPkgName) return `₪${pkgPrice.toFixed(2)} ל${mainPkgName} (${formatQtyLabel(mainPkgQty, formData.unit)})`;
-        if (mainPkgQty > 1) return `₪${pkgPrice.toFixed(2)} לאריזה של ${formatQtyLabel(mainPkgQty, formData.unit)}`;
-        return '';
-    })();
     // ─── Render helpers ──────────────────────────────────────────────────────
 
     const renderPricePills = () => {
@@ -572,7 +578,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                     <button
                         key={m.key}
                         onClick={() => setPriceViewMode(m.key as any)}
-                        className={`flex flex-col items-center px-3 py-1 rounded-xl transition min-w-0 ${priceViewMode === m.key ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        className={`flex flex-col items-center px-3 py-1 rounded-xl transition min-w-0 ${priceViewMode === m.key ? "bg-emerald-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
                     >
                         <span className="text-xs font-bold leading-tight">{m.label}</span>
                         {priceViewMode === m.key && m.subLabel && (
@@ -592,35 +598,39 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
 
     // ─── Advanced tab calculations ───────────────────────────────────────────
     const levels = formData.packaging_levels;
-    const currentLvl = levels[advPillLevel] || levels[0] || { name: 'יח׳', qty: 1 };
-    const maxLvl = levels[levels.length - 1] || levels[0] || { name: 'יח׳', qty: 1 };
-    
-    // 1. Low stock threshold
+    const currentLvl = levels[advPillLevel] || levels[0] || { name: formData.unit || "יח׳", qty: 1 };
+    const maxLvl = levels[levels.length - 1] || levels[0] || { name: formData.unit || "יח׳", qty: 1 };
+
     const countLvlIdx = formData.packaging_countLevel || 0;
     const countLvlQty = levels[countLvlIdx]?.qty || 1;
+
     const rawThreshold = Number(formData.low_stock_threshold_units) || 0;
     const thresholdInBase = rawThreshold * countLvlQty;
     const displayedThreshold = thresholdInBase / currentLvl.qty;
     const handleThresholdChange = (val: number) => {
         const baseVal = val * currentLvl.qty;
-        updateField('low_stock_threshold_units', baseVal / countLvlQty);
+        updateField("low_stock_threshold_units", baseVal / countLvlQty);
     };
 
-    // 2. Min Order
+    const rawTarget = Number(formData.target_stock) || 0;
+    const targetInBase = rawTarget * countLvlQty;
+    const displayedTarget = targetInBase / currentLvl.qty;
+    const handleTargetChange = (val: number) => {
+        const baseVal = val * currentLvl.qty;
+        updateField("target_stock", baseVal / countLvlQty);
+    };
+
     const rawMinOrder = Number(formData.min_order) || 0;
     const displayedMinOrder = rawMinOrder / maxLvl.qty;
     const handleMinOrderChange = (val: number) => {
-        updateField('min_order', val * maxLvl.qty);
+        updateField("min_order", val * maxLvl.qty);
     };
 
-    // 3. Order Step
     const rawOrderStep = Number(formData.order_step) || 0;
     const displayedOrderStep = rawOrderStep / maxLvl.qty;
     const handleOrderStepChange = (val: number) => {
-        updateField('order_step', val * maxLvl.qty);
+        updateField("order_step", val * maxLvl.qty);
     };
-
-    // ─── Render ──────────────────────────────────────────────────────────────
 
     return (
         <AnimatePresence>
@@ -643,17 +653,15 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                     >
                         {/* ─── Sticky Header ───────────────────────────── */}
                         <div className="sticky top-0 z-10 bg-white border-b border-slate-100 shadow-sm shrink-0 px-4 md:px-5 pt-3 md:pt-4 pb-3">
-                            {/* Row 1: Name + Price/Pills (desktop) + Close */}
                             <div className="flex items-center gap-2 mb-1">
                                 <input
                                     type="text"
                                     value={formData.name}
-                                    onChange={e => updateField('name', e.target.value)}
-                                    placeholder={isEditMode ? 'שם הפריט' : 'שם הפריט החדש *'}
+                                    onChange={e => updateField("name", e.target.value)}
+                                    placeholder={isEditMode ? "שם הפריט" : "שם הפריט החדש *"}
                                     className="flex-1 text-lg md:text-xl font-black text-slate-900 bg-transparent border-none outline-none placeholder:text-slate-300 min-w-0"
                                     autoFocus={!isEditMode}
                                 />
-                                {/* Price pills on desktop (md and up) */}
                                 <div className="hidden md:block">
                                     {renderPricePills()}
                                 </div>
@@ -662,114 +670,110 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                 </button>
                             </div>
 
-                            {/* Row 2: Price pills on mobile (below md) */}
                             {!isPriceEditing && cpu > 0 && (
                                 <div className="block md:hidden mb-3.5 mt-0">
                                     {renderPricePills()}
                                 </div>
                             )}
 
-                            {/* Inline price + packaging editor (slides in below name row) */}
                             {isPriceEditing && (
                                 <div className="mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-3">
-                                    {/* Primary Package */}
                                     <div>
-                                        <span className="text-xs font-black text-emerald-700 block mb-2">אריזה ראשית</span>
+                                        <span className="text-xs font-black text-emerald-700 block mb-2">מחיר קנייה ואריזה ראשית</span>
                                         <div className="grid grid-cols-3 gap-2">
                                             <div>
-                                                <label className="block text-[10px] font-bold text-emerald-600 mb-1">סוג</label>
+                                                <label className="block text-[10px] font-bold text-emerald-600 mb-1">סוג אריזה</label>
                                                 <SelectWrapper>
                                                     <select
-                                                        value={formData.packaging_levels.length > 1 ? (formData.packaging_levels[formData.packaging_levels.length - 1]?.name || '') : ''}
+                                                        value={formData.packaging_levels.length > 1 ? (formData.packaging_levels[formData.packaging_levels.length - 1]?.name || "") : ""}
                                                         onChange={e => {
                                                             const val = e.target.value;
                                                             if (formData.packaging_levels.length <= 1) {
-                                                                // Add a new level at the end
-                                                                const newLevels = [...formData.packaging_levels, { name: val, qty: Number(editPkgQty) || 0 }];
-                                                                updateField('packaging_levels', newLevels);
+                                                                const newLevels = [...formData.packaging_levels, { name: val, qty: Number(editPkgQty) || 0, count_step: 1 }];
+                                                                updateField("packaging_levels", newLevels);
                                                             } else {
-                                                                updatePackagingLevel(formData.packaging_levels.length - 1, 'name', val);
+                                                                updatePackagingLevel(formData.packaging_levels.length - 1, "name", val);
                                                             }
                                                         }}
-                                                        className="w-full h-10 bg-white border border-emerald-200 rounded-lg pr-2 pl-8 text-sm font-bold text-slate-700 focus:outline-none focus:border-emerald-400 appearance-none"
+                                                        className="w-full h-10 bg-white border border-emerald-300 rounded-lg pr-2 pl-8 text-sm font-bold text-slate-700 focus:outline-none focus:border-emerald-500 appearance-none"
                                                     >
-                                                        <option value="">בחר...</option>
+                                                        <option value="">ללא אריזת אב</option>
                                                         {PACKAGING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                                     </select>
                                                 </SelectWrapper>
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-bold text-emerald-600 mb-1">מחיר ₪</label>
-                                                <div className="relative">
-                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-sm">₪</span>
-                                                    <input
-                                                        type="number" inputMode="decimal"
-                                                        value={editPkgPrice}
-                                                        onChange={e => setEditPkgPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                                                        placeholder="0" autoFocus
-                                                        className="w-full h-10 bg-white border border-emerald-200 rounded-lg pr-7 pl-2 text-base font-black text-emerald-700 [appearance:textfield] focus:outline-none focus:border-emerald-400"
-                                                    />
-                                                </div>
+                                                <label className="block text-[10px] font-bold text-emerald-600 mb-1">כמות ב{formData.unit}</label>
+                                                <input
+                                                    type="number"
+                                                    inputMode="numeric"
+                                                    value={editPkgQty}
+                                                    onChange={e => {
+                                                        const val = e.target.value === "" ? "" : Number(e.target.value);
+                                                        setEditPkgQty(val);
+                                                        if (formData.packaging_levels.length > 1) {
+                                                            updatePackagingLevel(formData.packaging_levels.length - 1, "qty", val || 0);
+                                                        }
+                                                    }}
+                                                    placeholder="1"
+                                                    className="w-full h-10 bg-white border border-emerald-300 rounded-lg px-3 text-sm font-bold text-slate-700 [appearance:textfield] focus:outline-none focus:border-emerald-500"
+                                                />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-bold text-emerald-600 mb-1">כמות ({getUnitInputLabel(formData.unit)})</label>
+                                                <label className="block text-[10px] font-bold text-emerald-600 mb-1">מחיר לאריזה (₪)</label>
                                                 <input
-                                                    type="number" inputMode="numeric"
-                                                    value={editPkgQty}
-                                                    onChange={e => setEditPkgQty(e.target.value === '' ? '' : Number(e.target.value))}
-                                                    placeholder=""
-                                                    className="w-full h-10 bg-white border border-emerald-200 rounded-lg px-2 text-base font-black text-slate-700 [appearance:textfield] focus:outline-none focus:border-emerald-400"
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    value={editPkgPrice}
+                                                    onChange={e => setEditPkgPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                                                    placeholder="0.00"
+                                                    className="w-full h-10 bg-white border border-emerald-300 rounded-lg px-3 text-sm font-bold text-slate-700 [appearance:textfield] focus:outline-none focus:border-emerald-500"
                                                 />
                                             </div>
                                         </div>
                                         {Number(editPkgPrice) > 0 && Number(editPkgQty) > 0 && (
                                             <p className="text-xs text-emerald-600 font-medium mt-1">
-                                                = ₪{(Number(editPkgPrice) / Number(editPkgQty)).toFixed(2)} ל{getUnitInputLabel(formData.unit)}
-                                                {isWeightUnit(formData.unit) && formData.unit === 'ק"ג' && ` (${((Number(editPkgPrice) / Number(editPkgQty)) / 1000 * 100).toFixed(1)} אג׳ לגרם)`}
+                                                = ₪{(Number(editPkgPrice) / Number(editPkgQty)).toFixed(2)} ל{formData.unit}
                                             </p>
                                         )}
                                     </div>
 
-                                    {/* Sub-packages section */}
-                                    {!isProduceItem && (
-                                        <div className="border-t border-emerald-200 pt-3">
-                                            <span className="text-xs font-black text-teal-700 block mb-2">תת-אריזות</span>
-                                            {formData.packaging_levels.slice(1, -1).map((level, idx) => {
-                                                const realIdx = idx + 1;
-                                                const cpu = Number(formData.cost_per_unit) || (Number(editPkgPrice) / (Number(editPkgQty) || 1));
-                                                const subPrice = cpu * level.qty;
-                                                return (
-                                                    <div key={realIdx} className="grid grid-cols-3 gap-2 mb-2 items-center">
-                                                        <SelectWrapper>
-                                                            <select value={level.name} onChange={e => updatePackagingLevel(realIdx, 'name', e.target.value)} className="w-full h-10 bg-white border border-teal-200 rounded-lg pr-2 pl-8 text-sm font-bold text-slate-700 focus:outline-none focus:border-teal-400 appearance-none">
-                                                                <option value="">בחר...</option>
-                                                                {PACKAGING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                                                            </select>
-                                                        </SelectWrapper>
-                                                        <div className="flex items-center gap-1">
-                                                            <input type="number" inputMode="numeric" value={level.qty || ''} onChange={e => updatePackagingLevel(realIdx, 'qty', e.target.value)} placeholder="כמות" className="w-full h-10 bg-white border border-teal-200 rounded-lg px-2 text-sm font-bold text-slate-700 [appearance:textfield] focus:outline-none focus:border-teal-400" />
-                                                            <span className="text-[10px] text-slate-400 shrink-0">{formData.packaging_levels[0]?.name}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            {level.qty > 0 && cpu > 0 && <span className="text-xs font-bold text-emerald-600">₪{subPrice.toFixed(2)}</span>}
-                                                            <button onClick={() => removePackagingLevel(realIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 mr-auto shrink-0"><X size={14} /></button>
-                                                        </div>
+                                    <div className="border-t border-emerald-200 pt-3">
+                                        <span className="text-xs font-black text-teal-700 block mb-2">תת-אריזות (אופציונלי)</span>
+                                        {formData.packaging_levels.slice(1, -1).map((level, idx) => {
+                                            const realIdx = idx + 1;
+                                            const cpu = Number(formData.cost_per_unit) || (Number(editPkgPrice) / (Number(editPkgQty) || 1));
+                                            const subPrice = cpu * level.qty;
+                                            return (
+                                                <div key={realIdx} className="grid grid-cols-3 gap-2 mb-2 items-center">
+                                                    <SelectWrapper>
+                                                        <select value={level.name} onChange={e => updatePackagingLevel(realIdx, "name", e.target.value)} className="w-full h-10 bg-white border border-teal-200 rounded-lg pr-2 pl-8 text-sm font-bold text-slate-700 focus:outline-none focus:border-teal-400 appearance-none">
+                                                            <option value="">בחר...</option>
+                                                            {PACKAGING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </select>
+                                                    </SelectWrapper>
+                                                    <div className="flex items-center gap-1">
+                                                        <input type="number" inputMode="numeric" value={level.qty || ""} onChange={e => updatePackagingLevel(realIdx, "qty", e.target.value)} placeholder="כמות" className="w-full h-10 bg-white border border-teal-200 rounded-lg px-2 text-sm font-bold text-slate-700 [appearance:textfield] focus:outline-none focus:border-teal-400" />
+                                                        <span className="text-[10px] text-slate-400 shrink-0">{formData.packaging_levels[0]?.name}</span>
                                                     </div>
-                                                );
-                                            })}
-                                            {formData.packaging_levels.length < 4 && (
-                                                <button onClick={() => {
-                                                    // Insert before the last level (primary package)
-                                                    const newLevels = [...formData.packaging_levels];
-                                                    const insertIdx = Math.max(1, newLevels.length - 1);
-                                                    newLevels.splice(insertIdx, 0, { name: '', qty: 0 });
-                                                    updateField('packaging_levels', newLevels);
-                                                }} className="w-full h-8 flex items-center justify-center gap-1.5 text-teal-600 font-bold text-xs bg-teal-50 hover:bg-teal-100 rounded-lg border border-dashed border-teal-200 transition">
-                                                    <Plus size={14} /> הוסף תת-אריזה
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
+                                                    <div className="flex items-center gap-1">
+                                                        {level.qty > 0 && cpu > 0 && <span className="text-xs font-bold text-emerald-600">₪{subPrice.toFixed(2)}</span>}
+                                                        <button onClick={() => removePackagingLevel(realIdx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 mr-auto shrink-0"><X size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {formData.packaging_levels.length < 4 && (
+                                            <button onClick={() => {
+                                                const newLevels = [...formData.packaging_levels];
+                                                const insertIdx = Math.max(1, newLevels.length - 1);
+                                                newLevels.splice(insertIdx, 0, { name: "", qty: 0, count_step: 1 });
+                                                updateField("packaging_levels", newLevels);
+                                            }} className="w-full h-8 flex items-center justify-center gap-1.5 text-teal-600 font-bold text-xs bg-teal-50 hover:bg-teal-100 rounded-lg border border-dashed border-teal-200 transition">
+                                                <Plus size={14} /> הוסף תת-אריזה
+                                            </button>
+                                        )}
+                                    </div>
 
                                     <div className="flex gap-2 pt-1">
                                         <button onClick={confirmPriceEdit} className="h-9 px-4 bg-emerald-600 text-white rounded-lg font-black text-sm flex items-center gap-1.5 hover:bg-emerald-700 transition">
@@ -780,17 +784,16 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                 </div>
                             )}
 
-                            {/* Segmented Tab Control */}
                             <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
                                 <button
-                                    onClick={() => setActiveTab('details')}
-                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'details' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    onClick={() => setActiveTab("details")}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === "details" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50"}`}
                                 >
                                     פרטים
                                 </button>
                                 <button
-                                    onClick={() => setActiveTab('advanced')}
-                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'advanced' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    onClick={() => setActiveTab("advanced")}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === "advanced" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50"}`}
                                 >
                                     מתקדם
                                 </button>
@@ -800,13 +803,13 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                         {/* ─── Content ──────────────────────────────────── */}
                         <div className="flex-1 overflow-y-auto px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4 pb-24">
 
-                            {activeTab === 'details' ? (
+                            {activeTab === "details" ? (
                                 /* ═══ DETAILS TAB ═══ */
                                 <>
                                     {/* Supplier product names */}
                                     <FieldLabel label="שמות בתעודות ספק" helper="כדי לזהות את הפריט אוטומטית מתעודות משלוח">
                                         <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                            {formData.supplier_product_name.map((tag, i) => (
+                                            {parseSupplierProductNames(formData.supplier_product_name).map((tag, i) => (
                                                 <span key={i} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full text-xs font-bold border border-indigo-100">
                                                     {tag}
                                                     <button onClick={() => removeTag(i)} className="hover:text-rose-500 transition"><X size={12} /></button>
@@ -814,7 +817,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                             ))}
                                         </div>
                                         <div className="flex gap-1.5">
-                                            <input type="text" value={newTagInput} onChange={e => setNewTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} placeholder="הוסף שם..." className="modal-input flex-1 !h-10 text-xs" />
+                                            <input type="text" value={newTagInput} onChange={e => setNewTagInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addTag())} placeholder="הוסף שם..." className="modal-input flex-1 !h-10 text-xs" />
                                             <button onClick={addTag} className="h-10 px-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-100 transition shrink-0"><Plus size={14} /></button>
                                         </div>
                                     </FieldLabel>
@@ -824,7 +827,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                         <FieldLabel label="ספק">
                                             {!isCreatingSupplier ? (
                                                 <SelectWrapper>
-                                                    <select value={formData.supplier_id} onChange={e => { if (e.target.value === '__new__') { setIsCreatingSupplier(true); return; } updateField('supplier_id', e.target.value); }} className="modal-input appearance-none pr-4 pl-10">
+                                                    <select value={formData.supplier_id} onChange={e => { if (e.target.value === "__new__") { setIsCreatingSupplier(true); return; } updateField("supplier_id", e.target.value); }} className="modal-input appearance-none pr-4 pl-10">
                                                         <option value="">ללא ספק</option>
                                                         {suppliers.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
                                                         <option value="__new__">+ הוסף ספק חדש</option>
@@ -832,7 +835,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                                 </SelectWrapper>
                                             ) : (
                                                 <div className="flex gap-1.5">
-                                                    <input type="text" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreateSupplier()} placeholder="שם הספק..." className="modal-input flex-1" autoFocus />
+                                                    <input type="text" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreateSupplier()} placeholder="שם הספק..." className="modal-input flex-1" autoFocus />
                                                     <button onClick={handleCreateSupplier} className="h-12 px-4 bg-amber-500 text-white rounded-xl font-black text-sm shrink-0">צור</button>
                                                     <button onClick={() => setIsCreatingSupplier(false)} className="h-12 px-2 text-slate-400 rounded-xl text-sm shrink-0">✕</button>
                                                 </div>
@@ -856,79 +859,111 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                         </FieldLabel>
                                     </div>
 
-                                    {/* Unit selector — hidden for produce */}
-                                    {!isProduceItem ? (
-                                        <FieldLabel label="יחידת בסיס">
-                                            <SelectWrapper className="w-full md:w-48">
-                                                <select value={formData.unit} onChange={e => handleUnitChange(e.target.value)} className="modal-input appearance-none pr-4 pl-10">
+                                    {/* Row: Basic Unit + Weight / Volume per unit */}
+                                    <div className="grid grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm">
+                                        <FieldLabel label="יחידת ספירה" helper="היחידה בה נספר המלאי באייפד">
+                                            <SelectWrapper>
+                                                <select
+                                                    value={formData.unit}
+                                                    onChange={e => handleUnitChange(e.target.value)}
+                                                    className="modal-input appearance-none pr-4 pl-10 font-black text-slate-800"
+                                                >
                                                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                                 </select>
                                             </SelectWrapper>
                                         </FieldLabel>
-                                    ) : (
-                                        /* ─── Produce: locked unit + weight per piece ─── */
-                                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <span className="text-sm">🥬</span>
-                                                <span className="text-sm font-black text-amber-700">ירק/פרי — יחידת בסיס: ק"ג</span>
-                                            </div>
-                                            <FieldLabel label="משקל ממוצע ליחידה בודדת (גרם)" helper={wpuHint}>
+
+                                        <FieldLabel
+                                            label="משקל / תכולה ליחידה"
+                                            helper={isLiquidUnit(formData.unit) ? "במ״ל (לחישוב פודקוסט)" : "בגרמים (לחישוב פודקוסט)"}
+                                        >
+                                            <div className="relative">
                                                 <input
                                                     type="number"
-                                                    inputMode="numeric"
+                                                    inputMode="decimal"
                                                     value={formData.weight_per_unit}
-                                                    onChange={e => updateField('weight_per_unit', e.target.value === '' ? '' : Number(e.target.value))}
-                                                    placeholder="למשל: 150 לעגבניה"
-                                                    className="modal-input [appearance:textfield] w-full text-lg font-black text-amber-800 bg-white border-amber-200 focus:border-amber-400"
+                                                    onChange={e => updateField("weight_per_unit", e.target.value === "" ? "" : Number(e.target.value))}
+                                                    placeholder={formData.unit === "שקית" ? "1000" : "150"}
+                                                    className="modal-input [appearance:textfield] font-black text-slate-800 pr-3 pl-12"
                                                 />
-                                            </FieldLabel>
-                                        </div>
-                                    )}
-
-
-
-                                    {/* Counting Steps */}
-                                    <div className="bg-white rounded-2xl p-1">
-                                        {formData.packaging_levels.length > 1 ? (
-                                            <div className="space-y-3">
-                                                {formData.packaging_levels.slice(1).map((level, idx) => {
-                                                    const realIdx = idx + 1;
-                                                    if (!level.name) return null;
-                                                    const currentLvlStep = level.count_step || 1;
-                                                    return (
-                                                        <div key={realIdx}>
-                                                            <label className="block text-xs font-bold text-slate-500 mb-1">קפיצת ספירה ל{level.name}</label>
-                                                            <div className="flex gap-1.5">
-                                                                {COUNT_STEPS.map(s => (
-                                                                    <button
-                                                                        key={s.value}
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const newLevels = [...formData.packaging_levels];
-                                                                            newLevels[realIdx] = { ...newLevels[realIdx], count_step: s.value };
-                                                                            updateField('packaging_levels', newLevels);
-                                                                        }}
-                                                                        className={`flex-1 h-10 rounded-xl text-sm font-black transition ${currentLvlStep === s.value ? 'bg-violet-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                                                                    >
-                                                                        {s.label}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400 select-none">
+                                                    {isLiquidUnit(formData.unit) ? "מ״ל" : "גרם"}
+                                                </span>
                                             </div>
-                                        ) : (
-                                            <FieldLabel label="קפיצת ספירה" helper={countStepHint}>
-                                                <div className="flex gap-1.5">
-                                                    {COUNT_STEPS.map(s => (
-                                                        <button key={s.value} type="button" onClick={() => updateField('count_step', s.value)} className={`flex-1 h-10 rounded-xl text-base font-black transition ${formData.count_step === s.value ? 'bg-violet-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                                                            {s.label}
-                                                        </button>
-                                                    ))}
+                                        </FieldLabel>
+                                    </div>
+
+                                    {/* Foodcost helper info banner */}
+                                    <p className="text-[11.5px] text-slate-500 font-medium px-1">
+                                        {wpuHint}
+                                    </p>
+
+                                    {/* Counting Steps Steppers */}
+                                    <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-600">קפיצת ספירה באייפד</span>
+                                            <span className="text-[11px] font-bold text-indigo-600">
+                                                {countStepHint}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {getAvailableCountSteps(formData.unit).map(s => (
+                                                <button
+                                                    key={s.value}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        updateField("count_step", s.value);
+                                                        const newLevels = [...formData.packaging_levels];
+                                                        if (newLevels.length > 0) {
+                                                            newLevels[0] = { ...newLevels[0], count_step: s.value };
+                                                            updateField("packaging_levels", newLevels);
+                                                        }
+                                                    }}
+                                                    className={`flex-1 py-2.5 rounded-xl text-xs md:text-sm font-black transition-all ${formData.count_step === s.value ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-200" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                                                >
+                                                    {s.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Row: Current Stock & Location */}
+                                    <div className="grid grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm">
+                                        <FieldLabel label="מלאי נוכחי בספירה" helper="ניתן לערוך ישירות או לאפס">
+                                            <div className="flex items-center gap-2">
+                                                <div className="relative flex-1">
+                                                    <input
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        value={formData.current_stock === "" ? "" : formData.current_stock}
+                                                        onChange={e => updateField("current_stock", e.target.value === "" ? "" : Number(e.target.value))}
+                                                        placeholder="0"
+                                                        className="modal-input [appearance:textfield] font-black text-slate-800 text-lg pr-3 pl-10"
+                                                    />
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400 select-none">
+                                                        {formData.unit}
+                                                    </span>
                                                 </div>
-                                            </FieldLabel>
-                                        )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateField("current_stock", 0)}
+                                                    className="h-12 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 rounded-xl font-bold text-xs transition"
+                                                    title="אפס מלאי ל-0"
+                                                >
+                                                    איפוס
+                                                </button>
+                                            </div>
+                                        </FieldLabel>
+
+                                        <FieldLabel label="מיקום במחסן">
+                                            <input
+                                                type="text"
+                                                value={formData.location}
+                                                onChange={e => updateField("location", e.target.value)}
+                                                placeholder="מקרר 1, מקפיא פירות, מדף יבשים..."
+                                                className="modal-input font-medium"
+                                            />
+                                        </FieldLabel>
                                     </div>
                                 </>
                             ) : (
@@ -938,75 +973,78 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                                         <FieldLabel label="קפיצת מתכון" helper={recipeStepHint}>
                                             <div className="flex gap-1 flex-wrap">
                                                 {recipeSteps.map(s => (
-                                                    <button key={s.value} type="button" onClick={() => updateField('recipe_step', s.value)} className={`flex-1 min-w-[40px] h-10 rounded-xl text-xs font-black transition ${formData.recipe_step === s.value ? 'bg-violet-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                                    <button key={s.value} type="button" onClick={() => updateField("recipe_step", s.value)} className={`flex-1 min-w-[40px] h-10 rounded-xl text-xs font-black transition ${formData.recipe_step === s.value ? "bg-indigo-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                                                         {s.label}
                                                     </button>
                                                 ))}
                                             </div>
                                         </FieldLabel>
                                         <FieldLabel label="אחוז ניצולת %" helper={yieldHint}>
-                                            <input type="number" inputMode="decimal" value={formData.yield_percentage} onChange={e => updateField('yield_percentage', e.target.value)} placeholder="100" className="modal-input [appearance:textfield]" />
+                                            <input type="number" inputMode="decimal" value={formData.yield_percentage} onChange={e => updateField("yield_percentage", e.target.value)} placeholder="100" className="modal-input [appearance:textfield]" />
                                         </FieldLabel>
                                     </div>
 
-                                    <FieldLabel label="מיקום במחסן">
-                                        <input type="text" value={formData.location} onChange={e => updateField('location', e.target.value)} placeholder="מקרר 1, מדף יבשים, מקפיא..." className="modal-input" />
-                                    </FieldLabel>
-
-                                        {/* Row 1: Low stock threshold stepper + inline unit selector */}
-                                        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                                            <div className="grid grid-cols-2 gap-3 items-end">
-                                                <div className="w-full">
-                                                    <StepperInput
-                                                        label="מלאי מינימום (להתראת מלאי נמוך)"
-                                                        value={displayedThreshold}
-                                                        onChange={handleThresholdChange}
-                                                        step={1}
-                                                        min={0}
-                                                        suffix={currentLvl.name}
-                                                    />
+                                    {/* Row 1: Low stock threshold & Target Stock (Par Level) */}
+                                    <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-3">
+                                        {formData.packaging_levels.length > 1 && (
+                                            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                                                <span className="text-xs font-bold text-slate-500">יחידת מידה להגדרות מלאי</span>
+                                                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                                                    {formData.packaging_levels.map((level, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => setAdvPillLevel(idx)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${advPillLevel === idx ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-200"}`}
+                                                        >
+                                                            {level.name || `רמה ${idx + 1}`}
+                                                        </button>
+                                                    ))}
                                                 </div>
-                                                {formData.packaging_levels.length > 1 ? (
-                                                    <div className="flex flex-col gap-1.5 w-full">
-                                                        <span className="text-xs font-bold text-slate-500">יחידת מידה</span>
-                                                        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl h-12 items-center w-full justify-between">
-                                                            {formData.packaging_levels.map((level, idx) => (
-                                                                <button
-                                                                    key={idx}
-                                                                    type="button"
-                                                                    onClick={() => setAdvPillLevel(idx)}
-                                                                    className={`flex-1 h-10 rounded-lg text-xs font-bold transition-all ${advPillLevel === idx ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
-                                                                >
-                                                                    {level.name || `רמה ${idx + 1}`}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="w-full" />
-                                                )}
                                             </div>
-                                        </div>
-
-                                        {/* Row 2: Min order and Order step steppers */}
-                                        <div className="grid grid-cols-2 gap-3 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                                        )}
+                                        <div className="grid grid-cols-2 gap-3">
                                             <StepperInput
-                                                label="מינימום הזמנה מספק"
-                                                value={displayedMinOrder}
-                                                onChange={handleMinOrderChange}
+                                                label="מלאי מינימום (סף התראה)"
+                                                value={displayedThreshold}
+                                                onChange={handleThresholdChange}
                                                 step={1}
                                                 min={0}
-                                                suffix={maxLvl.name}
+                                                suffix={currentLvl.name || formData.unit}
                                             />
                                             <StepperInput
-                                                label="קפיצת הזמנה (מכפיל)"
-                                                value={displayedOrderStep}
-                                                onChange={handleOrderStepChange}
+                                                label="מלאי יעד להשלמה (Par Level)"
+                                                value={displayedTarget}
+                                                onChange={handleTargetChange}
                                                 step={1}
-                                                min={1}
-                                                suffix={maxLvl.name}
+                                                min={0}
+                                                suffix={currentLvl.name || formData.unit}
                                             />
                                         </div>
+                                        <p className="text-[11px] text-slate-400 font-medium">
+                                            💡 מלאי היעד ישמש להפקת הזמנות רכש אוטומטיות מול הספק לפי ספירת המלאי (כמות להזמנה = יעד פחות מלאי נוכחי והזמנות פתוחות).
+                                        </p>
+                                    </div>
+
+                                    {/* Row 2: Min order and Order step steppers */}
+                                    <div className="grid grid-cols-2 gap-3 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                                        <StepperInput
+                                            label="מינימום הזמנה מספק"
+                                            value={displayedMinOrder}
+                                            onChange={handleMinOrderChange}
+                                            step={1}
+                                            min={0}
+                                            suffix={maxLvl.name || formData.unit}
+                                        />
+                                        <StepperInput
+                                            label="קפיצת הזמנה (מכפיל)"
+                                            value={displayedOrderStep}
+                                            onChange={handleOrderStepChange}
+                                            step={1}
+                                            min={1}
+                                            suffix={maxLvl.name || formData.unit}
+                                        />
+                                    </div>
                                 </>
                             )}
                         </div>
@@ -1023,7 +1061,7 @@ const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                             <button onClick={onClose} className="h-10 px-4 text-slate-500 rounded-xl font-bold text-sm hover:bg-slate-100 transition">ביטול</button>
                             <button onClick={handleSave} disabled={isSaving} className="h-10 px-6 bg-indigo-600 text-white rounded-xl font-black text-sm hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm active:scale-95 disabled:opacity-50">
                                 {isSaving ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}
-                                {isEditMode ? 'שמור' : 'צור פריט'}
+                                {isEditMode ? "שמור" : "צור פריט"}
                             </button>
                         </div>
                     </MotionDiv>
@@ -1050,9 +1088,9 @@ const StepperInput: React.FC<{
     step?: number;
     min?: number;
     suffix?: string;
-}> = ({ label, value, onChange, step = 1, min = 0, suffix = '' }) => {
+}> = ({ label, value, onChange, step = 1, min = 0, suffix = "" }) => {
     const formatValue = (val: number) => {
-        if (val === 0) return '0';
+        if (val === 0) return "0";
         return val % 1 === 0 ? val.toString() : parseFloat(val.toFixed(2)).toString();
     };
 
@@ -1071,7 +1109,7 @@ const StepperInput: React.FC<{
                     <input
                         type="number"
                         inputMode="decimal"
-                        value={value === 0 ? '' : formatValue(value)}
+                        value={value === 0 ? "" : formatValue(value)}
                         onChange={e => {
                             const parsed = parseFloat(e.target.value);
                             onChange(isNaN(parsed) ? 0 : Math.max(min, parsed));

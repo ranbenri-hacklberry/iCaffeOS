@@ -29,8 +29,8 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
         const sessionItems: ReceivingSessionItem[] = [
             ...itemsList.map((ocrItem: any) => {
                 const name = ocrItem.name || ocrItem.description || 'פריט ללא שם';
-                const invoicedQty = ocrItem.quantity || ocrItem.amount || 0;
-                const unitPrice = ocrItem.price || ocrItem.cost_per_unit || 0;
+                const invoicedQty = Number(ocrItem.quantity || ocrItem.amount || 0);
+                const unitPrice = Number(ocrItem.price || ocrItem.cost_per_unit || 0);
 
                 const matchedItem = items.find(inv =>
                     inv.id === ocrItem.inventory_item_id ||
@@ -46,8 +46,8 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     id: ocrItem.id || `temp-${Date.now()}-${Math.random()}`,
                     name,
                     unit: ocrItem.unit || matchedItem?.unit || 'יח׳',
-                    invoicedQty,
-                    orderedQty: invoicedQty, // If from OCR, we assume invoiced = ordered for matching
+                    invoicedQty: invoicedQty,
+                    orderedQty: invoicedQty,
                     actualQty: invoicedQty,
                     unitPrice,
                     countStep: matchedItem?.count_step || 1,
@@ -55,13 +55,14 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     catalogItemId: matchedItem?.catalog_item_id || null,
                     isNew: !matchedItem,
                     matchedItem,
-                    caseQuantity: parseCaseQuantityFromName(name, matchedItem)
+                    caseQuantity: parseCaseQuantityFromName(name, matchedItem),
+                    checked: true
                 };
             }),
             ...unmatchedList.map((ocrItem: any) => {
                 const name = ocrItem.raw_name || ocrItem.name || 'פריט חדש';
-                const invoicedQty = ocrItem.quantity || ocrItem.amount || 0;
-                const unitPrice = ocrItem.price || ocrItem.cost_per_unit || 0;
+                const invoicedQty = Number(ocrItem.quantity || ocrItem.amount || 0);
+                const unitPrice = Number(ocrItem.price || ocrItem.cost_per_unit || 0);
 
                 const matchedItem = items.find(inv =>
                     inv.name.toLowerCase() === name.toLowerCase() ||
@@ -76,7 +77,7 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     id: ocrItem.id || `temp-unmatched-${Date.now()}-${Math.random()}`,
                     name,
                     unit: ocrItem.unit || matchedItem?.unit || 'יח׳',
-                    invoicedQty,
+                    invoicedQty: invoicedQty,
                     orderedQty: invoicedQty,
                     actualQty: invoicedQty,
                     unitPrice,
@@ -85,7 +86,8 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     catalogItemId: matchedItem?.catalog_item_id || null,
                     isNew: !matchedItem,
                     matchedItem,
-                    caseQuantity: parseCaseQuantityFromName(name, matchedItem)
+                    caseQuantity: parseCaseQuantityFromName(name, matchedItem),
+                    checked: true
                 };
             })
         ];
@@ -95,7 +97,7 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
             orderId,
             supplierId: supplierId || ocrData.supplier_id || null,
             hasInvoice: true,
-            totalInvoiced: ocrData.total_amount || sessionItems.reduce((sum, i) => sum + (i.invoicedQty! * i.unitPrice), 0)
+            totalInvoiced: ocrData.total_amount || sessionItems.reduce((sum, i) => sum + ((i.invoicedQty || 0) * i.unitPrice), 0)
         });
     }, [items]);
 
@@ -104,32 +106,37 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
 
         const sessionItems: ReceivingSessionItem[] = order.items.map((orderItem: any, idx: number) => {
             const matchedItem = items.find(inv =>
+                (orderItem.inventory_item_id && String(inv.id) === String(orderItem.inventory_item_id)) ||
                 inv.name.toLowerCase() === (orderItem.name || '').toLowerCase()
             );
 
+            const orderedQty = Number(orderItem.ordered_qty ?? orderItem.qty ?? orderItem.quantity ?? 0);
+            const unitPrice = Number(orderItem.unit_price ?? orderItem.price ?? matchedItem?.cost_per_unit ?? 0);
+
             return {
-                id: orderItem.id || `order-item-${idx}-${Date.now()}`,
-                name: orderItem.name || 'פריט ללא שם',
+                id: orderItem.id ? String(orderItem.id) : `order-item-${idx}-${Date.now()}`,
+                name: orderItem.name || matchedItem?.name || 'פריט ללא שם',
                 unit: orderItem.unit || matchedItem?.unit || 'יח׳',
-                invoicedQty: null,
-                orderedQty: orderItem.qty || 0,
-                actualQty: orderItem.qty || 0,
-                unitPrice: orderItem.price || matchedItem?.cost_per_unit || 0,
+                invoicedQty: orderedQty, // Default to ordered quantity
+                orderedQty: orderedQty,
+                actualQty: orderedQty,   // Default to ordered quantity
+                unitPrice: unitPrice,
                 countStep: matchedItem?.count_step || 1,
-                inventoryItemId: matchedItem?.id || null,
+                inventoryItemId: matchedItem?.id || (orderItem.inventory_item_id ? String(orderItem.inventory_item_id) : null),
                 catalogItemId: matchedItem?.catalog_item_id || null,
                 isNew: !matchedItem,
-                matchedItem
+                matchedItem,
+                checked: true
             };
         });
 
         setSession({
             items: sessionItems,
-            orderId: order.id,
-            supplierId: order.supplier_id || null,
+            orderId: order.id ? String(order.id) : null,
+            supplierId: order.supplier_id ? String(order.supplier_id) : null,
             supplierName: order.supplier_name,
             hasInvoice: false,
-            totalInvoiced: 0
+            totalInvoiced: sessionItems.reduce((sum, i) => sum + (i.orderedQty * i.unitPrice), 0)
         });
     }, [items]);
 
@@ -139,8 +146,48 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
             return {
                 ...prev,
                 items: prev.items.map(item =>
-                    item.id === itemId ? { ...item, actualQty: newQty } : item
+                    item.id === itemId ? { ...item, actualQty: Math.max(0, newQty) } : item
                 )
+            };
+        });
+    };
+
+    const updateInvoicedQty = (itemId: string, newQty: number) => {
+        setSession(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                items: prev.items.map(item =>
+                    item.id === itemId ? { ...item, invoicedQty: Math.max(0, newQty) } : item
+                )
+            };
+        });
+    };
+
+    const toggleItemChecked = (itemId: string) => {
+        setSession(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                items: prev.items.map(item =>
+                    item.id === itemId ? { ...item, checked: !(item.checked ?? true) } : item
+                )
+            };
+        });
+    };
+
+    const toggleAllChecked = (forceState?: boolean) => {
+        setSession(prev => {
+            if (!prev) return null;
+            const targetState = forceState !== undefined 
+                ? forceState 
+                : !prev.items.every(i => i.checked !== false);
+            return {
+                ...prev,
+                items: prev.items.map(item => ({
+                    ...item,
+                    checked: targetState
+                }))
             };
         });
     };
@@ -151,7 +198,7 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
         setIsConfirming(true);
         try {
             const rpcItems = session.items
-                .filter(item => item.actualQty > 0)
+                .filter(item => (item.checked !== false) && item.actualQty > 0)
                 .map(item => {
                     let actualQty = item.actualQty;
                     let invoicedQty = item.invoicedQty ?? item.actualQty;
@@ -160,7 +207,6 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     const dbUnit = item.matchedItem?.unit;
                     let wpu = parseFloat(item.matchedItem?.weight_per_unit as any) || 0;
                     if (wpu === 0 && dbUnit === 'גרם') {
-                        // Try to parse weight from invoice item name (e.g. "עלית שוקולית 850ג" -> 850)
                         const nameLower = (item.name || '').toLowerCase();
                         const matchGrams = nameLower.match(/(\d+)\s*(?:ג|g)\b/);
                         if (matchGrams) {
@@ -174,32 +220,27 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     }
 
                     const invUnit = (item.unit || '').toLowerCase().trim();
-
                     const isKg = invUnit.includes('קג') || invUnit.includes('ק"ג') || invUnit.includes('kg');
                     const isUnit = invUnit.includes('יח') || invUnit.includes('יחיד') || invUnit.includes('unit') || invUnit.includes('מארז') || invUnit.includes('קופס');
 
                     if (dbUnit === 'גרם') {
                         if (isKg) {
-                            // Convert Kg to grams (e.g. 2 kg -> 2000 grams)
                             actualQty = actualQty * 1000;
                             invoicedQty = invoicedQty * 1000;
                             unitPrice = unitPrice / 1000;
                         } else if (isUnit && wpu > 0) {
-                            // Convert Units to grams (e.g. 2 units of 100g -> 200 grams)
                             actualQty = actualQty * wpu;
                             invoicedQty = invoicedQty * wpu;
                             unitPrice = unitPrice / wpu;
                         }
                     } else if (dbUnit === 'יח׳' || dbUnit === 'יחידה' || dbUnit === 'יח') {
                         if (isKg && wpu > 0) {
-                            // Convert Kg to Units (e.g. 2 kg / 0.1 kg per cucumber = 20 cucumbers) and round
                             actualQty = Math.round(actualQty * (1000 / wpu));
                             invoicedQty = Math.round(invoicedQty * (1000 / wpu));
                             unitPrice = unitPrice * (wpu / 1000);
                         } else {
                             const caseQty = parseInt(item.matchedItem?.case_quantity as any) || 1;
                             if (caseQty > 1) {
-                                // Multiply by case quantity (e.g. 1 tray of 30 -> 30 units)
                                 actualQty = actualQty * caseQty;
                                 invoicedQty = invoicedQty * caseQty;
                                 unitPrice = unitPrice / caseQty;
@@ -208,7 +249,7 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     }
 
                     return {
-                        inventory_item_id: item.inventoryItemId || null,
+                        inventory_item_id: item.inventoryItemId || (item.matchedItem?.id ? String(item.matchedItem.id) : null),
                         catalog_item_id: item.catalogItemId || null,
                         actual_qty: actualQty,
                         invoiced_qty: invoicedQty,
@@ -216,31 +257,17 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
                     };
                 });
 
+            const parsedOrderId = session.orderId ? parseInt(String(session.orderId)) : null;
+
             const { data, error } = await supabase.rpc('receive_inventory_shipment', {
                 p_items: rpcItems,
-                p_order_id: session.orderId,
-                p_supplier_id: session.supplierId,
+                p_order_id: parsedOrderId,
+                p_supplier_id: session.supplierId ? String(session.supplierId) : null,
                 p_notes: null,
                 p_business_id: businessId
             });
 
             if (error) throw error;
-
-            // Save matched item names to supplier_product_name aliases in the database
-            try {
-                const mapPromises = session.items
-                    .filter(item => item.inventoryItemId && item.name)
-                    .map(item => 
-                        supabase.rpc('append_supplier_name', {
-                            p_item_id: Number(item.inventoryItemId),
-                            p_new_name: item.name
-                        })
-                    );
-                await Promise.all(mapPromises);
-                console.log('✅ Supplier product mappings successfully saved.');
-            } catch (mapErr) {
-                console.error('⚠️ Warning: Failed to save some supplier product mappings:', mapErr);
-            }
 
             setSession(null);
             return { success: true, data };
@@ -252,17 +279,17 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
         }
     };
 
-    const updateMatchedItem = useCallback((itemId: string, inventoryItemId: number) => {
+    const updateMatchedItem = useCallback((itemId: string, inventoryItemId: string | number) => {
         setSession(prev => {
             if (!prev) return null;
-            const targetInvItem = items.find(inv => inv.id === inventoryItemId);
+            const targetInvItem = items.find(inv => String(inv.id) === String(inventoryItemId));
             return {
                 ...prev,
                 items: prev.items.map(item =>
                     item.id === itemId
                         ? {
                               ...item,
-                              inventoryItemId: inventoryItemId,
+                              inventoryItemId: String(inventoryItemId),
                               catalogItemId: targetInvItem?.catalog_item_id || null,
                               matchedItem: targetInvItem,
                               isNew: false,
@@ -294,9 +321,13 @@ export const useTripleCheckSession = (items: InventoryItem[], businessId?: strin
         initializeSession,
         initializeFromOrder,
         updateActualQty,
+        updateInvoicedQty,
+        toggleItemChecked,
+        toggleAllChecked,
         updateMatchedItem,
         updateCaseQuantity,
         confirmReceipt,
         clearSession: () => setSession(null)
     };
 };
+

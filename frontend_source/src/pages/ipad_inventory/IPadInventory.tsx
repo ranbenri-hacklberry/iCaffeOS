@@ -22,6 +22,7 @@ import IncomingOrdersSidebar from '@/pages/ipad_inventory/components/IncomingOrd
 import TripleCheckSession from '@/pages/ipad_inventory/components/TripleCheckSession';
 import LowStockReportModal from '@/pages/ipad_inventory/components/LowStockReportModal';
 import InventoryItemModal from '@/pages/ipad_inventory/components/InventoryItemModal';
+import SupplierOrderModal from '@/pages/ipad_inventory/components/SupplierOrderModal';
 import { IncomingOrder, InventoryItem } from '@/pages/ipad_inventory/types';
 
 interface IPadInventoryProps {
@@ -37,6 +38,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [showSupplierOrderModal, setShowSupplierOrderModal] = useState(false);
     const [stockDeltas, setStockDeltas] = useState<Record<string, number>>({});
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -60,6 +62,9 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
         initializeSession,
         initializeFromOrder,
         updateActualQty,
+        updateInvoicedQty,
+        toggleItemChecked,
+        toggleAllChecked,
         updateMatchedItem,
         updateCaseQuantity,
         confirmReceipt,
@@ -70,34 +75,75 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const liveItems = useMemo(() => {
+        return items.map(item => {
+            const liveQty = stockDeltas[item.id];
+            if (liveQty !== undefined) {
+                return { ...item, current_stock: liveQty };
+            }
+            return item;
+        });
+    }, [items, stockDeltas]);
+
     // Computed
     const shortagesCount = useMemo(() => {
-        return items.filter(item => {
+        return liveItems.filter(item => {
             const wpu = parseFloat(item.weight_per_unit as any) || 0;
             const thresholdGrams = (parseFloat(item.low_stock_threshold_units as any) || 0) * (wpu || 1);
             return thresholdGrams > 0 && item.current_stock <= thresholdGrams;
         }).length;
-    }, [items]);
+    }, [liveItems]);
 
     const supplierCounts = useMemo(() => {
         const counts: Record<string, number> = {};
-        items.forEach(item => {
+        liveItems.forEach(item => {
             const id = String(item.supplier_id || 'uncategorized');
             counts[id] = (counts[id] || 0) + 1;
         });
         // Count prepared (this is usually dynamic or from menu_items, but for now we mirror ItemsGrid logic)
-        counts['prepared'] = items.filter(i => i.category?.includes('prep')).length;
+        counts['prepared'] = liveItems.filter(i => i.category?.includes('prep')).length;
         return counts;
-    }, [items]);
+    }, [liveItems]);
+
+    const selectedSupplierObj = useMemo(() => {
+        if (!selectedSupplierId || selectedSupplierId === 'prepared') return null;
+        return suppliers.find(s => String(s.id) === String(selectedSupplierId)) || null;
+    }, [suppliers, selectedSupplierId]);
+
+    const supplierShortageCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        // Map pending on-order items from incoming orders
+        const pendingMap: Record<string, number> = {};
+        orders.forEach(order => {
+            (order.items || []).forEach((oi: any) => {
+                const itemId = String(oi.inventory_item_id || oi.id || '');
+                const qty = Number(oi.ordered_quantity_units || oi.quantity || oi.qty || 0);
+                if (itemId && qty > 0) {
+                    pendingMap[itemId] = (pendingMap[itemId] || 0) + qty;
+                }
+            });
+        });
+
+        liveItems.forEach(item => {
+            const supId = String(item.supplier_id || 'uncategorized');
+            const target = Number(item.target_stock) || 0;
+            const current = Number(item.current_stock) || 0;
+            const onOrder = pendingMap[String(item.id)] || 0;
+            if (target > 0 && (current + onOrder) < target) {
+                counts[supId] = (counts[supId] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [liveItems, orders]);
 
     const filteredItems = useMemo(() => {
-        if (!selectedSupplierId) return items; // Return all items for global search
-        return items.filter(i => {
+        if (!selectedSupplierId) return liveItems; // Return all items for global search
+        return liveItems.filter(i => {
             if (selectedSupplierId === 'prepared') return i.category?.includes('prep');
             const supId = String(i.supplier_id || 'uncategorized');
             return supId === String(selectedSupplierId);
         });
-    }, [items, selectedSupplierId]);
+    }, [liveItems, selectedSupplierId]);
 
     // Handlers
     const handleStartScan = () => {
@@ -153,13 +199,12 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
             return;
         }
 
-        const supplierId = session?.supplierId;
-        const parsedSupplierId = (supplierId && !isNaN(Number(supplierId))) ? Number(supplierId) : null;
+        const supplierId = session?.supplierId ? String(session.supplierId) : null;
 
         try {
             // Determine category from existing items of this supplier, default to 'ירקות'
             const existingCategories = items
-                .filter(i => parsedSupplierId && String(i.supplier_id) === String(parsedSupplierId))
+                .filter(i => supplierId && String(i.supplier_id) === supplierId)
                 .map(i => i.category);
             const category = existingCategories[0] || 'ירקות';
 
@@ -171,7 +216,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                     category: category,
                     current_stock: 0,
                     business_id: businessId,
-                    supplier_id: parsedSupplierId,
+                    supplier_id: supplierId,
                     weight_per_unit: unit === 'ק"ג' ? 150 : 0,
                     count_step: 1
                 })
@@ -228,6 +273,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                     selectedSupplierId={selectedSupplierId}
                                     onSelectSupplier={setSelectedSupplierId}
                                     supplierCounts={supplierCounts}
+                                    supplierShortageCounts={supplierShortageCounts}
                                 />
                             </div>
 
@@ -250,6 +296,8 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                             suppliers={suppliers}
                                             supplierCounts={supplierCounts}
                                             onSelectSupplier={setSelectedSupplierId}
+                                            selectedSupplier={selectedSupplierObj}
+                                            onCreateSupplierOrder={() => setShowSupplierOrderModal(true)}
                                         />
                                     </div>
                                     {/* Desktop/iPad: simple placeholder (sidebar is visible) */}
@@ -267,9 +315,12 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                 <InventoryItemsGrid
                                     items={filteredItems}
                                     onUpdateStock={updateStock}
+                                    onStockChange={handleStockDelta}
                                     isLoading={dataLoading}
                                     onEditItem={(item) => { setEditingItem(item); setModalInitialData(undefined); setShowItemModal(true); }}
                                     onSelectSupplier={setSelectedSupplierId}
+                                    selectedSupplier={selectedSupplierObj}
+                                    onCreateSupplierOrder={() => setShowSupplierOrderModal(true)}
                                 />
                             )}
                         </div>
@@ -298,8 +349,11 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                                 <div className="flex-1 h-full bg-slate-50 relative">
                                     <TripleCheckSession
                                         session={session}
-                                        items={items}
+                                        items={liveItems}
                                         onUpdateQty={updateActualQty}
+                                        onUpdateInvoicedQty={updateInvoicedQty}
+                                        onToggleChecked={toggleItemChecked}
+                                        onToggleAllChecked={toggleAllChecked}
                                         onMapItem={updateMatchedItem}
                                         onUpdateCaseQuantity={updateCaseQuantity}
                                         onCreateNewItem={handleCreateNewItem}
@@ -331,7 +385,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 {session && activeTab === 'counts' && (
                     <TripleCheckSession
                         session={session}
-                        items={items}
+                        items={liveItems}
                         onUpdateQty={updateActualQty}
                         onMapItem={updateMatchedItem}
                         onUpdateCaseQuantity={updateCaseQuantity}
@@ -360,7 +414,7 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
             <LowStockReportModal
                 isOpen={showReportModal}
                 onClose={() => setShowReportModal(false)}
-                items={items}
+                items={liveItems}
                 currentStocks={stockDeltas}
                 onUpdateStock={handleStockDelta}
             />
@@ -375,6 +429,20 @@ export const IPadInventory: React.FC<IPadInventoryProps> = ({ onExit }) => {
                 businessId={businessId || ''}
                 onClose={() => { setShowItemModal(false); setEditingItem(null); setModalInitialData(undefined); }}
                 onSaved={() => { refreshData(); showToast('הפריט נשמר בהצלחה'); }}
+            />
+
+            {/* Supplier Smart Order Modal */}
+            <SupplierOrderModal
+                isOpen={showSupplierOrderModal}
+                onClose={() => setShowSupplierOrderModal(false)}
+                supplier={selectedSupplierObj}
+                items={liveItems}
+                incomingOrders={orders}
+                businessName={currentUser?.business_name || 'עגלת קפה'}
+                onOrderCreated={() => {
+                    refreshOrders();
+                    showToast('ההזמנה נשמרה בהצלחה במערכת!');
+                }}
             />
 
             {/* Custom Toast Alert */}

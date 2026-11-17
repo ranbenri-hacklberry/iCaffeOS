@@ -48,11 +48,28 @@ export const useInventoryData = (businessId?: string) => {
             if (itemError) throw itemError;
 
             // Map DB columns to Frontend Interface if needed
-            // (Handle schema drift: low_stock_threshold_units vs low_stock_alert)
-            const itemsData = (itemsRaw || []).map((i: any) => ({
-                ...i,
-                low_stock_threshold_units: i.low_stock_threshold_units ?? i.low_stock_alert ?? 0
-            }));
+            // (Handle schema drift: low_stock_threshold_units vs low_stock_alert, supplier_product_name string vs array)
+            const itemsData = (itemsRaw || []).map((i: any) => {
+                let parsedSpn: string[] = [];
+                if (Array.isArray(i.supplier_product_name)) {
+                    parsedSpn = i.supplier_product_name;
+                } else if (typeof i.supplier_product_name === 'string' && i.supplier_product_name.trim()) {
+                    try {
+                        const json = JSON.parse(i.supplier_product_name);
+                        parsedSpn = Array.isArray(json) ? json : [i.supplier_product_name];
+                    } catch {
+                        parsedSpn = [i.supplier_product_name];
+                    }
+                }
+
+                return {
+                    ...i,
+                    current_stock: parseFloat(i.current_stock) || 0,
+                    low_stock_threshold_units: i.low_stock_threshold_units ?? i.low_stock_alert ?? 0,
+                    target_stock: parseFloat(i.target_stock) || 0,
+                    supplier_product_name: parsedSpn
+                };
+            });
 
             // 3. Fetch Menu Items that need inventory tracking
             const { data: menuItemsData, error: menuError } = await supabase

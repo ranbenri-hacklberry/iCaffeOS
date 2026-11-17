@@ -10,13 +10,15 @@ interface SuppliersListProps {
     selectedSupplierId: string | null;
     onSelectSupplier: (id: string) => void;
     supplierCounts: Record<string, number>;
+    supplierShortageCounts?: Record<string, number>;
 }
 
 const SuppliersList: React.FC<SuppliersListProps> = ({
     suppliers,
     selectedSupplierId,
     onSelectSupplier,
-    supplierCounts
+    supplierCounts,
+    supplierShortageCounts = {}
 }) => {
     // Today/Tomorrow logic
     const today = new Date().getDay(); // 0=Sunday=ראשון
@@ -125,9 +127,16 @@ const SuppliersList: React.FC<SuppliersListProps> = ({
                                     <span className={`font-bold transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-800'}`}>
                                         {supplier.name}
                                     </span>
-                                    <span className="text-xs text-slate-500 font-medium">
-                                        {count} פריטים
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-500 font-medium">
+                                            {count} פריטים
+                                        </span>
+                                        {(supplierShortageCounts[String(supplier.id)] || 0) > 0 && (
+                                            <span className="text-[10px] font-black bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full border border-rose-200">
+                                                📦 {supplierShortageCounts[String(supplier.id)]} להזמנה
+                                            </span>
+                                        )}
+                                    </div>
                                     {info?.status === 'order_today' && (
                                         <span className="text-xs font-bold text-amber-600 mt-0.5">
                                             🚛 אספקה יום {info.deliveryDay} · הזמנה עד {info.cutoff || '—'}

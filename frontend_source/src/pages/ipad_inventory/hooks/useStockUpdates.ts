@@ -8,13 +8,24 @@ export const useStockUpdates = () => {
         setIsUpdating(true);
         try {
             const { data, error } = await supabase.rpc('update_inventory_stock', {
-                p_item_id: itemId,
+                p_item_id: String(itemId),
                 p_new_stock: newStock,
                 p_counted_by: userId || null,
                 p_source: source
             });
 
-            if (error) throw error;
+            if (error) {
+                console.warn('RPC update_inventory_stock failed, falling back to direct table update:', error);
+                const { error: directErr } = await supabase
+                    .from('inventory_items')
+                    .update({
+                        current_stock: newStock,
+                        last_counted_at: new Date().toISOString(),
+                        last_updated: new Date().toISOString()
+                    })
+                    .eq('id', itemId);
+                if (directErr) throw directErr;
+            }
             return { success: true, data };
         } catch (err: any) {
             console.error('Error updating stock:', err);

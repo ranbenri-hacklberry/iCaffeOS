@@ -15,6 +15,7 @@ export interface InventoryItem {
     base_unit: string;
     display_unit?: string | null;
     current_stock: number;
+    target_stock?: number;
     low_stock_threshold_units: number;
     supplier_id: string | null;
     category?: string;
@@ -42,8 +43,16 @@ export interface InventoryItem {
 export interface Supplier {
     id: string;
     name: string;
+    contact_person?: string;
+    phone_number?: string;
+    email?: string;
+    notes?: string;
     delivery_days?: string;
+    delivery_schedule?: any[];
+    delivery_days_arr?: number[];
+    schedule?: any[];
     business_id?: string;
+    min_order_amount?: number;
 }
 
 export interface IncomingOrder {
@@ -67,6 +76,7 @@ export interface ReceivingSessionItem {
     isNew: boolean;
     matchedItem?: InventoryItem;
     caseQuantity?: number;
+    checked?: boolean;
 }
 
 export interface ReceivingSession {
