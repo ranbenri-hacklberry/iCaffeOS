@@ -50,3 +50,13 @@ backend/scratch/
 
 # RanTunes Custom YouTube Playlist Downloader Tool
 youtube_playlist_downloader/
+
+# Credential artifacts (do not commit)
+credentials.json
+drive-token.json
+token.pickle
+.github/workflows/.github_token
+**/.github_token
+service-account*.json
+client_secret*.json
+*.pem
