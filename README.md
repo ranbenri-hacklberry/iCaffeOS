@@ -51,6 +51,18 @@ The system combines a **deterministic transactional core** with an **AI-native e
 | Vendor lock-in | **Open architecture** — extend via natural language prompts |
 | Generic, one-size-fits-all | **AI-adaptive** — the system learns your business |
 
+### Tech Stack
+
+- **Frontend:** React 18, Vite, Tailwind CSS, Redux Toolkit / Zustand, Framer Motion
+- **Offline & data:** Dexie.js (IndexedDB mirror), Supabase + PostgreSQL with RLS and `SECURITY DEFINER` RPCs, background sync
+- **Clients:** Electron desktop app, Capacitor Android, Chromium kiosk mode, KDS / POS terminals
+- **AI:** Maya manager assistant and Cortex RAG; invoice OCR for inventory; optional local inference (Ollama) or cloud fallback
+- **Ops extras:** thermal printing, SMS gateway, WhatsApp (Baileys), Face ID clock-in, loyalty
+
+### Architecture (short)
+
+Two layers: an **immutable transactional core** (PostgreSQL/Supabase atomic functions, Dexie offline mirror, RLS multi-tenant isolation) and a **mutable SDK** (React UI, Maya, Cortex). Terminals keep working offline and sync when the network returns. POS, KDS, kiosk, inventory (including invoice OCR), and the manager dashboard all sit on that core.
+
 ### Your Data, Your Rules
 
 icaffeOS was built on a simple principle: **your business data belongs to you — not to a SaaS vendor, not to a cloud provider, and certainly not to an AI company's training pipeline.**
@@ -236,6 +248,7 @@ icaffeOS dynamically detects available compute resources and adjusts the complex
 |---|---|
 | **POS** | Dynamic point-of-sale with multi-business support, loyalty integration ($BEAN), and instant order submission via `submit_order_v3`. |
 | **KDS** | Real-time Kitchen Display System with state-sync, animated order cards, and dog-style celebration animations. |
+| **Kiosk** | Customer-facing Chromium kiosk mode for self-service ordering, with a dedicated verify-kiosk RPC and offline-capable terminal flow. |
 | **Kanban** | Integrated task management board for staff scheduling and operational workflows. |
 | **rantunes** 🎵 | Local-first audio engine. No Spotify dependency — full control over venue ambiance from any device. Supports external SSD music libraries. |
 | **Menu AI** | Generative photo engine for real-time menu updates. Creates branded item images using local or cloud AI models. |
