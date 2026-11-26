@@ -156,8 +156,8 @@ export const WEEKS_OF_MONTH = [
 
 /** Daily report columns: Jerusalem hour slots. */
 export const HOURS_OF_DAY = [
-  { label: 'עד 09', key: 'h0', fromHour: 0 },
-  { label: '09–12', key: 'h1', fromHour: 9 },
+  { label: '0–9', key: 'h0', fromHour: 0 },
+  { label: '9–12', key: 'h1', fromHour: 9 },
   { label: '12–15', key: 'h2', fromHour: 12 },
   { label: '15–18', key: 'h3', fromHour: 15 },
   { label: '18+', key: 'h4', fromHour: 18 }

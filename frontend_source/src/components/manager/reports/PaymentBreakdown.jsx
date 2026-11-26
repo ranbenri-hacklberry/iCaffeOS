@@ -25,8 +25,8 @@ export const PaymentBreakdown = ({ data, periodLabel }) => {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden" dir="rtl" data-testid="payment-breakdown">
-      <div className="bg-slate-50 border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-        <h3 className="font-black text-gray-800 text-sm sm:text-base flex items-center gap-2">
+      <div className="bg-slate-50 border-b border-gray-100 px-4 sm:px-5 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h3 className="font-black text-gray-800 text-sm sm:text-base flex items-center gap-2 whitespace-nowrap">
           <Wallet size={18} className="text-blue-600" />
           <span>פירוט כספי לפי אמצעי תשלום</span>
         </h3>
@@ -53,7 +53,7 @@ export const PaymentBreakdown = ({ data, periodLabel }) => {
                   <td className="px-3 sm:px-5 py-3 font-bold">
                     <span className="inline-flex items-center gap-2">
                       <span className={`p-1.5 rounded-lg ${empty ? 'bg-gray-50 text-gray-300' : style.color}`}><Icon size={14} /></span>
-                      <span className={empty ? '' : 'text-slate-800'}>{b.label}</span>
+                      <span className={`whitespace-nowrap ${empty ? '' : 'text-slate-800'}`}>{b.label}</span>
                     </span>
                   </td>
                   <td className="px-2 sm:px-4 py-3 text-center font-black">{b.count > 0 ? b.count.toLocaleString('he-IL') : '-'}</td>
@@ -80,7 +80,7 @@ export const PaymentBreakdown = ({ data, periodLabel }) => {
       </div>
 
       {/* Not-received / informational lines */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-slate-50/40 border-t border-gray-100">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 p-3 sm:p-4 bg-slate-50/40 border-t border-gray-100">
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="pay-open">
           <div className="flex items-center gap-1.5 text-[11px] font-black text-amber-800"><Clock size={14} />פתוח / לא שולם</div>
           <div className="text-lg font-black text-amber-900 mt-1" dir="ltr">{fmt(open.amount, 2)}</div>
@@ -89,10 +89,12 @@ export const PaymentBreakdown = ({ data, periodLabel }) => {
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3" data-testid="pay-refunds">
           <div className="flex items-center gap-1.5 text-[11px] font-black text-rose-800"><RotateCcw size={14} />החזרים</div>
           <div className="text-lg font-black text-rose-900 mt-1" dir="ltr">{fmt(refunds.amount, 2)}</div>
-          <div className="text-[10px] text-rose-700">
-            {refunds.count} הזמנות
+          <div className="text-[10px] text-rose-700 flex flex-wrap gap-x-1">
+            <span>{refunds.count} הזמנות</span>
             {Object.keys(refunds.byMethod).length > 0 && (
-              <> · {Object.entries(refunds.byMethod).map(([k, v]) => `${METHOD_LABEL[k] || k} ${fmt(v)}`).join(' · ')}</>
+              <>{Object.entries(refunds.byMethod).map(([k, v]) => (
+                  <span key={k} className="whitespace-nowrap">· {METHOD_LABEL[k] || k} <span dir="ltr">{fmt(v)}</span></span>
+                ))}</>
             )}
           </div>
           <div className="text-[10px] text-rose-600/80">כבר מקוזז מסכום ההזמנה</div>
@@ -113,9 +115,9 @@ export const PaymentBreakdown = ({ data, periodLabel }) => {
       <div className={`flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[11px] sm:text-xs font-bold border-t ${isReconciled ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`} data-testid="pay-reconcile">
         <span className="flex items-center gap-1.5">
           {isReconciled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-          התאמה: התקבל <span dir="ltr">{fmt(received, 2)}</span> + פתוח <span dir="ltr">{fmt(open.amount, 2)}</span> = <span dir="ltr">{fmt(reconciledTotal, 2)}</span>
+          <span className="flex flex-wrap items-center gap-x-1"><span className="whitespace-nowrap">התאמה: התקבל <span dir="ltr">{fmt(received, 2)}</span></span><span className="whitespace-nowrap">+ פתוח <span dir="ltr">{fmt(open.amount, 2)}</span></span><span className="whitespace-nowrap">= <span dir="ltr">{fmt(reconciledTotal, 2)}</span></span></span>
         </span>
-        <span>סה"כ פדיון בדוח: <span dir="ltr">{fmt(revenue, 2)}</span> {isReconciled ? '✓' : '(פער)'}</span>
+        <span className="whitespace-nowrap">סה"כ פדיון בדוח: <span dir="ltr">{fmt(revenue, 2)}</span> {isReconciled ? '✓' : '(פער)'}</span>
       </div>
     </div>
   );

@@ -596,7 +596,7 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
                     <tr className="border-b border-gray-100 text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider bg-slate-50/50">
                       <th className="px-2 sm:px-5 py-3 text-right">שם המנה</th>
                       {currentColumns.map(col => (
-                        <th key={col.key} className="px-1 sm:px-3 py-3 text-center w-8 sm:w-16">{col.label}</th>
+                        <th key={col.key} dir={reportMode === 'daily' ? 'ltr' : undefined} className={`px-1 sm:px-3 py-3 text-center w-8 sm:w-16 ${reportMode === 'daily' ? 'whitespace-nowrap' : ''}`}>{col.label}</th>
                       ))}
                       <th className="px-1 sm:px-4 py-3 text-center w-12 sm:w-24">סה"כ כמות</th>
                       <th className="px-2 sm:px-5 py-3 text-left w-20 sm:w-28">סה"כ פדיון</th>
