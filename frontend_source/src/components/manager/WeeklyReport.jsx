@@ -18,43 +18,42 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-// ── CONFIG & CONSTANTS ──
-// ── CONFIG & CONSTANTS ──
-const DAYS_OF_WEEK = [
-  { index: 0, label: "א׳", key: "sun" },
-  { index: 1, label: "ב׳", key: "mon" },
-  { index: 2, label: "ג׳", key: "tue" },
-  { index: 3, label: "ד׳", key: "wed" },
-  { index: 4, label: "ה׳", key: "thu" },
-  { index: 5, label: "ו׳", key: "fri" }
-];
+import {
+  getReportPeriodRange,
+  getPeriodColumnKey,
+  getColumnsForMode,
+  ALL_COLUMN_KEYS,
+  aggregatePayments,
+  computeKpis,
+  isCancelledOrder,
+  normalizePaymentMethod
+} from './reports/reportAggregation';
+import PaymentBreakdown from './reports/PaymentBreakdown';
 
-const WEEKS_OF_MONTH = [
-  { index: 1, label: "שב׳ 1", key: "w1" },
-  { index: 2, label: "שב׳ 2", key: "w2" },
-  { index: 3, label: "שב׳ 3", key: "w3" },
-  { index: 4, label: "שב׳ 4", key: "w4" },
-  { index: 5, label: "שב׳ 5", key: "w5" }
+const OFFSET_LIMITS = { daily: -90, weekly: -7, monthly: -5 };
+const MONTH_NAMES = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
 ];
-
-const getPeriodColumnKey = (date, periodStart, mode) => {
-  if (mode === 'monthly') {
-    const diffMs = date.getTime() - periodStart.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    const weekNum = Math.floor(diffDays / 7) + 1;
-    return `w${Math.min(5, Math.max(1, weekNum))}`;
-  } else {
-    const dayOfWeek = date.getDay();
-    const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri'];
-    return dayKeys[dayOfWeek] || 'fri';
-  }
+const HEB_WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+const ymdLabel = (ymd) => `${ymd.day}/${ymd.month}`;
+const weekdayOf = (ymd) => new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day)).getUTCDay();
+const emptySalesCells = () => {
+  const cells = { totalQty: 0, totalRev: 0 };
+  ALL_COLUMN_KEYS.forEach(k => { cells[k] = { qty: 0, rev: 0 }; });
+  return cells;
+};
+const emptyTotals = () => {
+  const t = { totalQty: 0, totalRev: 0 };
+  ALL_COLUMN_KEYS.forEach(k => { t[k] = 0; });
+  return t;
 };
 
 export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
   const { currentUser } = useAuth();
   
   // reportMode state - default to weekly initially but switches to last full month as default when switching mode
-  const [reportMode, setReportMode] = useState('weekly'); // 'weekly' | 'monthly'
+  const [reportMode, setReportMode] = useState('weekly'); // 'daily' | 'weekly' | 'monthly'
 
   // Date selection state - default to -1 (last week/last month)
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(-1);
@@ -72,33 +71,7 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
   // Category selection pill filter
   const [selectedCategory, setSelectedCategory] = useState(null);
 
-  // ── REPORT PERIOD CALCULATOR ──
-  const getReportPeriodRange = (offset, mode) => {
-    const today = new Date();
-    if (mode === 'monthly') {
-      const start = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-      start.setHours(0, 0, 0, 0);
-      let end = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
-      end.setHours(23, 59, 59, 999);
-      
-      // If the target month is the current month, cap the end date to today!
-      if (start.getMonth() === today.getMonth() && start.getFullYear() === today.getFullYear()) {
-        end = new Date(today);
-        end.setHours(23, 59, 59, 999);
-      }
-      return { start, end };
-    } else {
-      const day = today.getDay(); // 0 = Sun, 1 = Mon, etc.
-      const sunday = new Date(today);
-      sunday.setDate(today.getDate() - day + (offset * 7));
-      sunday.setHours(0, 0, 0, 0);
-      const friday = new Date(sunday);
-      friday.setDate(sunday.getDate() + 5);
-      friday.setHours(23, 59, 59, 999);
-      return { start: sunday, end: friday };
-    }
-  };
-
+  // ── REPORT PERIOD (Asia/Jerusalem boundaries, see reportAggregation.js) ──
   const periodRange = useMemo(() => getReportPeriodRange(selectedWeekOffset, reportMode), [selectedWeekOffset, reportMode]);
   const activeWeek = periodRange;
 
@@ -106,12 +79,12 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
   const processedData = useMemo(() => {
     // 1. Create a map of menu_item_id -> daily/weekly quantities and total revenues
     const salesMap = {};
-    let totalRevenue = 0;
-    let totalOrders = salesData.length;
+    // Cancelled orders are fetched for the payment breakdown but excluded from KPIs / item matrix
+    const activeOrders = salesData.filter(o => !isCancelledOrder(o));
+    const { totalRevenue, totalOrders, aov } = computeKpis(salesData);
 
-    salesData.forEach(order => {
-      const isOth = order.payment_method === 'oth';
-      totalRevenue += isOth ? 0 : Number(order.total || 0);
+    activeOrders.forEach(order => {
+      const isOth = normalizePaymentMethod(order.payment_method) === 'oth';
 
       (order.order_items || []).forEach(item => {
         const itemName = item.menu_items?.name || item.name;
@@ -124,23 +97,7 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
         const itemId = menuItem.id;
 
         if (!salesMap[itemId]) {
-          salesMap[itemId] = {
-            // For weekly
-            sun: { qty: 0, rev: 0 },
-            mon: { qty: 0, rev: 0 },
-            tue: { qty: 0, rev: 0 },
-            wed: { qty: 0, rev: 0 },
-            thu: { qty: 0, rev: 0 },
-            fri: { qty: 0, rev: 0 },
-            // For monthly
-            w1: { qty: 0, rev: 0 },
-            w2: { qty: 0, rev: 0 },
-            w3: { qty: 0, rev: 0 },
-            w4: { qty: 0, rev: 0 },
-            w5: { qty: 0, rev: 0 },
-            totalQty: 0,
-            totalRev: 0
-          };
+          salesMap[itemId] = emptySalesCells();
         }
 
         const date = new Date(order.created_at);
@@ -168,30 +125,11 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
         categoryMap[catName] = {
           name: catName,
           items: [],
-          totals: {
-            sun: 0, mon: 0, tue: 0, wed: 0, thu: 0, fri: 0,
-            w1: 0, w2: 0, w3: 0, w4: 0, w5: 0,
-            totalQty: 0,
-            totalRev: 0
-          }
+          totals: emptyTotals()
         };
       }
 
-      const sales = salesMap[item.id] || {
-        sun: { qty: 0, rev: 0 },
-        mon: { qty: 0, rev: 0 },
-        tue: { qty: 0, rev: 0 },
-        wed: { qty: 0, rev: 0 },
-        thu: { qty: 0, rev: 0 },
-        fri: { qty: 0, rev: 0 },
-        w1: { qty: 0, rev: 0 },
-        w2: { qty: 0, rev: 0 },
-        w3: { qty: 0, rev: 0 },
-        w4: { qty: 0, rev: 0 },
-        w5: { qty: 0, rev: 0 },
-        totalQty: 0,
-        totalRev: 0
-      };
+      const sales = salesMap[item.id] || emptySalesCells();
 
       categoryMap[catName].items.push({
         id: item.id,
@@ -200,7 +138,7 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
       });
 
       // Add to category totals
-      const currentColumns = reportMode === 'monthly' ? WEEKS_OF_MONTH : DAYS_OF_WEEK;
+      const currentColumns = getColumnsForMode(reportMode);
       currentColumns.forEach(col => {
         categoryMap[catName].totals[col.key] += sales[col.key].qty;
       });
@@ -211,7 +149,6 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
     const categories = Object.values(categoryMap).filter(cat => cat.items.length > 0);
     // Sort categories by total revenue so highest-selling show first
     categories.sort((a, b) => b.totals.totalRev - a.totals.totalRev);
-    const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
     return {
       totalRevenue,
@@ -220,6 +157,22 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
       categories
     };
   }, [salesData, menuItems, reportMode, periodRange]);
+
+  // ── FINANCIAL BREAKDOWN BY PAYMENT METHOD ──
+  const paymentData = useMemo(() => aggregatePayments(salesData), [salesData]);
+
+  const periodLabel = useMemo(() => {
+    const { startYmd, endYmd } = periodRange;
+    if (reportMode === 'daily') {
+      const rel = selectedWeekOffset === 0 ? 'היום' : selectedWeekOffset === -1 ? 'אתמול' : `לפני ${Math.abs(selectedWeekOffset)} ימים`;
+      return `${rel} · יום ${HEB_WEEKDAYS[weekdayOf(startYmd)]} ${ymdLabel(startYmd)}/${startYmd.year}`;
+    }
+    if (reportMode === 'monthly') {
+      return `${MONTH_NAMES[startYmd.month - 1]} ${startYmd.year} (${ymdLabel(startYmd)} - ${ymdLabel(endYmd)})`;
+    }
+    const rel = selectedWeekOffset === 0 ? 'השבוע הנוכחי' : selectedWeekOffset === -1 ? 'שבוע שעבר' : `לפני ${Math.abs(selectedWeekOffset)} שבועות`;
+    return `${rel} (${ymdLabel(startYmd)} - ${ymdLabel(endYmd)})`;
+  }, [periodRange, reportMode, selectedWeekOffset]);
 
   useEffect(() => {
     if (processedData.categories && processedData.categories.length > 0) {
@@ -277,6 +230,10 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
               order_status,
               is_paid,
               payment_method,
+              paid_amount,
+              is_refund,
+              refund_amount,
+              refund_method,
               order_items (
                 id,
                 quantity,
@@ -291,7 +248,6 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
             .eq('business_id', currentUser.business_id)
             .gte('created_at', periodRange.start.toISOString())
             .lte('created_at', periodRange.end.toISOString())
-            .neq('order_status', 'cancelled')
             .range(page * pageSize, (page + 1) * pageSize - 1);
 
           if (salesError) throw salesError;
@@ -328,13 +284,20 @@ export const WeeklyReport = ({ initialWeekOffset = -1 }) => {
     try {
       // Find employee phone number or prompt
       const phone = currentUser?.whatsapp_phone || currentUser?.phone || '0548317887';
-      const startStr = `${activeWeek.start.getDate()}/${activeWeek.start.getMonth() + 1}`;
-      const endStr = `${activeWeek.end.getDate()}/${activeWeek.end.getMonth() + 1}`;
-      
-      const text = `📊 דוח מכירות שבועי (${startStr} - ${endStr})
+      const modeTitle = reportMode === 'daily' ? 'יומי' : reportMode === 'monthly' ? 'חודשי' : 'שבועי';
+      const payLines = paymentData.buckets
+        .filter(b => b.amount !== 0)
+        .map(b => `${b.label}: ₪${b.amount.toLocaleString('he-IL', { maximumFractionDigits: 0 })} (${b.count})`)
+        .join('\n');
+
+      const text = `📊 דוח מכירות ${modeTitle} (${periodLabel})
 סה"כ פדיון: ₪${processedData.totalRevenue.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
 סה"כ הזמנות: ${processedData.totalOrders}
 ממוצע להזמנה: ₪${processedData.aov.toFixed(1)}
+
+💳 פירוט תקבולים:
+${payLines}
+פתוח/לא שולם: ₪${paymentData.open.amount.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
 
 קישור לצפייה בדוח המלא:
 http://${window.location.host}/data-manager-interface?tab=reports&week=${selectedWeekOffset}`;
@@ -373,7 +336,7 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] gap-3">
         <Loader2 className="animate-spin text-blue-600" size={40} />
-        <span className="text-sm font-bold text-gray-500">טוען את המכירות השבועיות ומכין את הדוח...</span>
+        <span className="text-sm font-bold text-gray-500">טוען את המכירות ומכין את הדוח...</span>
       </div>
     );
   }
@@ -394,7 +357,8 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
     );
   }
 
-  const currentColumns = reportMode === 'monthly' ? WEEKS_OF_MONTH : DAYS_OF_WEEK;
+  const currentColumns = getColumnsForMode(reportMode);
+  const offsetLimit = OFFSET_LIMITS[reportMode] ?? -7;
 
   return (
     <div className="flex-1 overflow-y-auto space-y-6 pb-24 p-4 lg:p-6 max-w-7xl mx-auto w-full" dir="rtl">
@@ -431,8 +395,21 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
         }
       `}</style>
 
-      {/* ── MODE SELECTION (שבועי / חודשי) ── */}
+      {/* ── MODE SELECTION (יומי / שבועי / חודשי) ── */}
       <div className="flex justify-center gap-1 bg-gray-100 p-1.5 rounded-2xl w-fit mx-auto print:hidden shadow-sm">
+        <button
+          onClick={() => {
+            setReportMode('daily');
+            setSelectedWeekOffset(0); // default to today (Asia/Jerusalem)
+          }}
+          className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
+            reportMode === 'daily'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-white/50'
+          }`}
+        >
+          דוח יומי
+        </button>
         <button
           onClick={() => {
             setReportMode('weekly');
@@ -465,7 +442,7 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
       <div className="hidden print:block text-center space-y-1 pb-4 border-b border-gray-200">
         <h1 className="text-xl font-black text-gray-900">דוח מכירות - {currentUser?.business_name || 'עגלת הקפה'}</h1>
         <p className="text-sm font-bold text-gray-500">
-          טווח תאריכים: {activeWeek.start.toLocaleDateString('he-IL')} - {activeWeek.end.toLocaleDateString('he-IL')}
+          טווח תאריכים: {periodLabel}
         </p>
       </div>
 
@@ -477,22 +454,22 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
           
           <div className="flex justify-between items-center relative z-10">
             <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-blue-100">
-              {reportMode === 'monthly' ? 'סה"כ פדיון חודשי' : 'סה"כ פדיון שבועי'}
+              {reportMode === 'monthly' ? 'סה"כ פדיון חודשי' : reportMode === 'daily' ? 'סה"כ פדיון יומי' : 'סה"כ פדיון שבועי'}
             </span>
             <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
-              {reportMode === 'monthly' ? 'חודשי' : 'שבועי'}
+              {reportMode === 'monthly' ? 'חודשי' : reportMode === 'daily' ? 'יומי' : 'שבועי'}
             </span>
           </div>
 
           <div className="flex items-center justify-between my-2 relative z-10">
             <button
               onClick={() => {
-                const limit = reportMode === 'monthly' ? -5 : -7;
-                if (selectedWeekOffset > limit) setSelectedWeekOffset(prev => prev - 1);
+                if (selectedWeekOffset > offsetLimit) setSelectedWeekOffset(prev => prev - 1);
               }}
-              disabled={selectedWeekOffset <= (reportMode === 'monthly' ? -5 : -7)}
+              disabled={selectedWeekOffset <= offsetLimit}
+              aria-label="תקופה קודמת"
               className={`p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all active:scale-90 ${
-                selectedWeekOffset <= (reportMode === 'monthly' ? -5 : -7) ? 'opacity-20 cursor-not-allowed' : ''
+                selectedWeekOffset <= offsetLimit ? 'opacity-20 cursor-not-allowed' : ''
               }`}
             >
               <ChevronRight size={20} />
@@ -503,24 +480,7 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
                 ₪{processedData.totalRevenue.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
               </div>
               <div className="text-[11px] text-blue-100 font-bold mt-1">
-                {(() => {
-                  const startStr = `${activeWeek.start.getDate()}/${activeWeek.start.getMonth() + 1}`;
-                  const endStr = `${activeWeek.end.getDate()}/${activeWeek.end.getMonth() + 1}`;
-                  if (reportMode === 'monthly') {
-                    const monthNames = [
-                      'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-                      'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
-                    ];
-                    const targetDate = new Date();
-                    targetDate.setMonth(targetDate.getMonth() + selectedWeekOffset);
-                    const monthLabel = monthNames[targetDate.getMonth()];
-                    const yearLabel = targetDate.getFullYear();
-                    return `${monthLabel} ${yearLabel} (${startStr} - ${endStr})`;
-                  } else {
-                    const label = selectedWeekOffset === 0 ? 'השבוע הנוכחי' : selectedWeekOffset === -1 ? 'שבוע שעבר' : `לפני ${Math.abs(selectedWeekOffset)} שבועות`;
-                    return `${label} (${startStr} - ${endStr})`;
-                  }
-                })()}
+                {periodLabel}
               </div>
             </div>
 
@@ -529,6 +489,7 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
                 if (selectedWeekOffset < 0) setSelectedWeekOffset(prev => prev + 1);
               }}
               disabled={selectedWeekOffset >= 0}
+              aria-label="תקופה הבאה"
               className={`p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all active:scale-90 ${
                 selectedWeekOffset >= 0 ? 'opacity-20 cursor-not-allowed' : ''
               }`}
@@ -538,7 +499,7 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
           </div>
           
           <div className="text-[10px] text-blue-200/80 text-center relative z-10">
-            {reportMode === 'monthly' ? 'ריכוז ימי השבוע לאורך החודש' : 'מכירות ימי ראשון עד שישי כולל'}
+            {reportMode === 'monthly' ? 'ריכוז ימי השבוע לאורך החודש' : reportMode === 'daily' ? 'גבולות יום לפי שעון ישראל (00:00–23:59)' : 'מכירות ימי ראשון עד שישי כולל'}
           </div>
         </div>
 
@@ -561,9 +522,12 @@ http://${window.location.host}/data-manager-interface?tab=reports&week=${selecte
               ₪{processedData.aov.toLocaleString('he-IL', { maximumFractionDigits: 1 })}
             </span>
           </div>
-          <span className="text-[9px] sm:text-[10px] text-gray-450 text-center">סל קניות ממוצע ללקוח בשבוע זה</span>
+          <span className="text-[9px] sm:text-[10px] text-gray-450 text-center">{reportMode === 'daily' ? 'סל קניות ממוצע ללקוח ביום זה' : reportMode === 'monthly' ? 'סל קניות ממוצע ללקוח בחודש זה' : 'סל קניות ממוצע ללקוח בשבוע זה'}</span>
         </div>
       </div>
+
+      {/* ── FINANCIAL BREAKDOWN (דוח פיננסי לפי אמצעי תשלום) ── */}
+      <PaymentBreakdown data={paymentData} periodLabel={periodLabel} />
 
       {/* ── CATEGORY PILLS SELECTOR ── */}
       {processedData.categories && processedData.categories.length > 0 && (
